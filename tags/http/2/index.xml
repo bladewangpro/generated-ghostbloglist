@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>HTTP/2 on prometheus</title><link>https://new.halfrost.com/tags/http/2/</link><description>Recent content in HTTP/2 on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><atom:link href="https://new.halfrost.com/tags/http/2/index.xml" rel="self" type="application/rss+xml"/><item><title>TLS Application-Layer Protocol Negotiation Extension</title><link>https://new.halfrost.com/tls_alpn/</link><pubDate>Sun, 11 Aug 2019 07:43:00 +0000</pubDate><guid>https://new.halfrost.com/tls_alpn/</guid><description>这篇文章我们主要来讨论讨论 Transport Layer Security (TLS) 握手中的 Application-Layer Protocol Negotiation 扩展。对于在同一 TCP 或 UDP 端口上支持多个应用程序协议的实例，此扩展允许应用程序层去协商将在 TLS 连接中使用哪个协议。
+一. Introduction 应用层协议越来越多地封装在 TLS 协议 [RFC5246] 中。这种封装使应用程序可以使用几乎整个全球 IP 基础结构中已经存在的现有安全通信链路的 443 端口。
+当单个服务器端端口号（例如端口 443）上支持多个应用程序协议时，客户端和服务器需要协商用于每个连接的应用程序协议。希望在不增加客户端和服务器之间的网络往返次数的情况下完成此协商，因为每次往返都会降低最终用户的体验。此外，允许基于协商的应用协议来选择证书将是有利的。
+本文指定了 TLS 扩展，该扩展允许应用程序层在 TLS 握手中协商协议的选择。HTTPbis WG 要求进行这项工作，以解决通过 TLS 进行 HTTP/2（[HTTP2]）的协商。但是，ALPN 有助于协商任意应用程序层协议。
+借助 ALPN，客户端会将支持的应用程序协议列表作为 TLS ClientHello 消息的一部分发送。服务器选择一个协议，并将所选协议作为 TLS ServerHello 消息的一部分发送。因此，可以在 TLS 握手中完成应用协议协商，而无需添加网络往返，并且允许服务器根据需要，将不同的证书与每个应用协议相关联。
+二. Application-Layer Protocol Negotiation 1. The Application-Layer Protocol Negotiation Extension 定义了一个新的扩展类型(&amp;ldquo;application_layer_protocol_negotiation(16)&amp;quot;)，客户端可以在其 “ClientHello” 消息中包含该扩展类型。
+enum { application_layer_protocol_negotiation(16), (65535) } ExtensionType; (&amp;ldquo;application_layer_protocol_negotiation(16)&amp;quot;) 扩展名的 &amp;ldquo;extension_data&amp;rdquo; 字段应包含 &amp;ldquo;ProtocolNameList&amp;rdquo; 值。</description></item><item><title>HPACK: Header Compression for HTTP/2</title><link>https://new.halfrost.com/http2_rfc7541/</link><pubDate>Sun, 21 Jul 2019 07:41:00 +0000</pubDate><guid>https://new.halfrost.com/http2_rfc7541/</guid><description>Table of Contents 1. Introduction 1.1. Overview 1.2. Conventions 1.3. Terminology 2. Compression Process Overview 2.1. Header List Ordering 2.2. Encoding and Decoding Contexts 2.3. Indexing Tables 2.3.1. Static Table 2.3.2. Dynamic Table 2.3.3. Index Address Space 2.4. Header Field Representation 3. Header Block Decoding 3.1. Header Block Processing 3.2. Header Field Representation Processing 4. Dynamic Table Management 4.1. Calculating Table Size 4.2. Maximum Table Size 4.</description></item><item><title>HTTP/2 HPACK 实际应用举例</title><link>https://new.halfrost.com/http2-hpack-example/</link><pubDate>Sun, 14 Jul 2019 07:37:00 +0000</pubDate><guid>https://new.halfrost.com/http2-hpack-example/</guid><description>在上篇文章中，具体说明了 HPACK 算法中的 8 种场景(7 种 Name-value 的场景 + 1 种动态表更新场景)。
+动态表大小更新有两种方式，一种是在 HEADERS 帧中直接修改(“001” 3 位模式开始)，另外一种方式是通过 SETTINGS 帧中的 SETTINGS_HEADER_TABLE_SIZE 中设置的。
+在介绍 HPACK 实际应用之前，需要先来看看静态表的定义和 HTTP/2 中霍夫曼编码的定义。
+一. 静态表定义 静态表（请参阅第 2.3.1 节）包含一个预定义且不可更改的 header 字段列表。
+静态表是根据流行网站使用的最频繁的 header 字段创建的，并添加了 HTTP/2 特定的伪 header 字段（请参见 [HTTP2]的 8.1.2.1 节）。对于具有一些频繁值的 header 字段，为每个这些频繁值添加了一个条目。对于其他标题字段，添加了带有空值的条目。
+表 1 列出了构成静态表的预定义 header 字段，并提供了每个条目的索引。
+Index Header Name Header Value 1 :authority 2 :method GET 3 :method POST 4 :path / 5 :path /index.</description></item><item><title>详解 HTTP/2 头压缩算法 —— HPACK</title><link>https://new.halfrost.com/http2-header-compression/</link><pubDate>Sun, 16 Jun 2019 07:31:00 +0000</pubDate><guid>https://new.halfrost.com/http2-header-compression/</guid><description>一. 简介 在 HTTP/1.1（请参阅[RFC7230]）中，header 字段未被压缩。随着网页内的请求数增长到需要数十到数百个请求的时候，这些请求中的冗余 header 字段不必要地消耗了带宽，从而显着增加了延迟。
+SPDY [SPDY] 最初通过使用 DEFLATE [DEFLATE] 格式压缩 header 字段来解决此冗余问题，事实证明，这种格式非常有效地表示了冗余 header 字段。但是，这种方法暴露了安全风险，如 CRIME（轻松实现压缩率信息泄漏）攻击所证明的安全风险（请参阅 [CRIME]）。
+本规范定义了 HPACK，这是一种新的压缩方法，它消除了多余的 header 字段，将漏洞限制到已知的安全攻击，并且在受限的环境中具有有限的内存需求。第 7 节介绍了 HPACK 的潜在安全问题。
+HPACK 格式特意被设计成简单且不灵活的形式。两种特性都降低了由于实现错误而引起的互操作性或安全性问题的风险。没有定义扩展机制；只能通过定义完整的替换来更改格式。
+1. 总览 本规范中定义的格式将 header 字段列表视为 name-value 对的有序集合，其中可以包括重复的对。名称和值被认为是八位字节的不透明序列，并且 header 字段的顺序在压缩和解压缩后保持不变。
+header 字段表将 header 字段映射到索引值，从而得到编码。这些 header 字段表可以在编码或解码新 header 字段时进行增量更新。
+在编码形式中，header 字段以字面形式表示或作为对 header 字段表中的一个 header 字段的引用。因此，可以使用引用和字面值的混合来编码 header 字段的列表。
+字面值可以直接编码，也可以使用静态霍夫曼编码(最高压缩比 8:5)。
+编码器负责决定将哪些 header 字段作为新条目插入 header 字段表中。解码器执行对编码器指定的 header 字段表的修改，从而在此过程中重建 header 字段的列表。这使解码器保持简单并可以与多种编码器互操作。
+附录C 中提供了使用这些不同的机制表示 header 字段的示例。
+注：在 HTTP/2 中，请求和响应标头字段的定义保持不变，仅有一些微小的差异：所有标头字段名称均为小写，请求行现在拆分成各个 :method、:scheme、:authority 和 :path 伪标头字段。</description></item><item><title>Hypertext Transfer Protocol Version 2 (HTTP/2)</title><link>https://new.halfrost.com/http2_rfc7540/</link><pubDate>Sun, 09 Jun 2019 07:28:00 +0000</pubDate><guid>https://new.halfrost.com/http2_rfc7540/</guid><description>Table of Contents 1. Introduction 2. HTTP/2 Protocol Overview 2.1. Document Organization 2.2. Conventions and Terminology 3. Starting HTTP/2 3.1. HTTP/2 Version Identification 3.2. Starting HTTP/2 for &amp;ldquo;http&amp;rdquo; URIs 3.2.1 HTTP2-Settings Header Field 3.3. Starting HTTP/2 for &amp;ldquo;https&amp;rdquo; URIs 3.4. Starting HTTP/2 with Prior Knowledge 3.5. HTTP/2 Connection Preface 4. HTTP Frames 4.1. Frame Format 4.2. Frame Size 4.3. Header Compression and Decompression 5. Streams and Multiplexing 5.</description></item><item><title>HTTP/2 中的常见问题</title><link>https://new.halfrost.com/http2-frequently-asked-questions/</link><pubDate>Sun, 26 May 2019 07:25:00 +0000</pubDate><guid>https://new.halfrost.com/http2-frequently-asked-questions/</guid><description>以下是有关 HTTP/2 的常见问题。
+一. 一般的问题 1. 为什么要修改 HTTP？ HTTP/1.1 在 Web 上已经服务了 15 年以上，但是它的缺点正在开始显现。加载网页比以往任何时候都需要更多资源(请参阅HTTP Archive’s page size statistics)，并且要高效地加载所有这些资源非常困难，因为事实上，HTTP 只允许每个 TCP 连接有一个未完成的请求。
+过去，浏览器使用多个 TCP 连接来发出并行请求。但是，这是有局限性的。如果使用的连接过多，则将适得其反(TCP 拥塞控制将被无效化，导致的用塞事件将会损害性能和网络)，并且从根本上讲是不公平的(因为浏览器会占用许多本不该属于它的资源)。同时，大量请求意味着“在线”上有大量重复数据。
+这两个因素都意味着 HTTP/1.1 请求有很多与之相关的开销。如果请求过多，则会影响性能。
+这使得业界误解了“最佳实践”，进行诸如 spriting 图片合并，data: inlining 内联数据，Domain Sharding 域名分片和 Concatenation 文件合并之类的事情。这些 hack 行为表明协议本身存在潜在问题，在使用的时候会出现很多问题。
+2. 谁制定了 HTTP/2？ HTTP/2 是由 IETF 的 HTTP 工作组开发的，该工作组维护 HTTP 协议。它由许多 HTTP 实现者，用户，网络运营商和 HTTP 专家组成。
+请注意，虽然我们的邮件列表托管在 W3C 网站上，但这并不是 W3C 的努力。但是，Tim Berners-Lee 和 W3C TAG 与 WG 的工作进度保持同步。
+大量的人为这项工作做出了贡献，最活跃的参与者包括来自诸如 Firefox，Chrome，Twitter，Microsoft 的 HTTP stack，Curl 和 Akamai 等“大型”项目的工程师，以及许多诸如 Python、Ruby 和 NodeJS 之类的 HTTP 实现者。</description></item><item><title>HTTP/2 中的注意事项</title><link>https://new.halfrost.com/http2-considerations/</link><pubDate>Sun, 19 May 2019 07:15:00 +0000</pubDate><guid>https://new.halfrost.com/http2-considerations/</guid><description>一. HTTP 值得关注的问题 本节概述了 HTTP 协议的属性，这些属性可提高互操作性，减少已知安全漏洞的风险或降低实现方在代码实现的时候出现歧义的可能性。
+1. 连接管理 HTTP/2 连接是持久的。为了获得最佳性能，建议客户端不要主动关闭连接。除非在确定不需要与服务器进行进一步通信(例如，当用户离开特定网页时)或服务器关闭连接的时候再去关闭连接。
+客户端不应该打开与给定主机和端口对的多个 HTTP/2 连接，其中主机包括是从 URI，选定的备用服务 ALT-SVC 或配置的代理中派生出来的。
+客户端可以创建其他连接作为替换，以替换可用的流标识符空间即将用完的连接（第 5.1.1 节），刷新 TLS 连接的密钥材料，或替换遇到错误的连接（第 5.4.1 节）。
+客户端可以对一个 IP 打开多个连接，并且 TCP 端口可以使用不同服务器标识 TLS-EXT 或者提供不同的 TLS 客户端证书，但应该避免使用相同的配置创建多个连接。
+鼓励服务器尽可能长时间地保持打开的连接，但如果有需要，允许服务器终止空闲连接。当任一端点选择关闭传输层 TCP 连接时，发起终止的端点应首先发送 GOAWAY 帧（第 6.8 节），这样做能够使得两个端点可以可靠地确定先前发送的帧是否已被处理并正常完成或者终止任何必要的剩余任务。
+(1). 连接重用 直接或通过使用 CONNECT 方法创建的隧道的方式（第 8.3 节）对原始服务器建立的连接，可以重用于具有多个不同 URI 权限组件的请求。只要原始服务器具有权限，就可以重用连接（第 10.1 节）。对于没有 TLS 的 TCP 连接，这取决于已解析为相同 IP 地址的主机。
+对于 &amp;ldquo;https&amp;rdquo; 资源，连接重用还取决于具有对 URI 中的主机的证书是否有效。服务器提供的证书必须要能通过客户端在 URI 中为主机建立新的 TLS 连接时将执行的任何检查。
+源服务器可能提供具有多个 &amp;ldquo;subjectAltName&amp;rdquo; 属性的证书或带有通配符的名称，其中一个对 URI 中的权限有效。例如，&amp;ldquo;subjectAltName&amp;rdquo; 为 &amp;ldquo;* .</description></item><item><title>HTTP/2 中的 HTTP 语义</title><link>https://new.halfrost.com/http2-http-semantics/</link><pubDate>Sun, 12 May 2019 07:04:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-semantics/</guid><description>HTTP/2 协议设计之初就为了与当前使用的 HTTP 尽可能兼容。这意味着，从应用程序的角度来看， 协议的功能基本没有变化。为了实现这一点，所有请求和响应语义被保留，虽然传达的语法那些语义已经改变了。
+因此，HTTP/1.1 中的语义和内容 [RFC7231]，条件请求 [RFC7232]，范围请求 [RFC7233]，缓存 [RFC7234] 和认证 [RFC7235] 的规范和要求同样适用于 HTTP/2。HTTP/1.1 消息语法和路由 [RFC7230] 的选定部分（例如 HTTP 和 HTTPS URI 方案）也适用于HTTP/2，但此协议的语义表达式在下文中定义。
+一. HTTP Request/Response Exchange 客户端使用先前未使用的流标识符在新流上发送 HTTP 请求 (第 5.1.1 节)。服务器在与请求相同的流上发送 HTTP 响应。
+HTTP消息（请求或响应）包括：
+仅用于响应，零个或多个 HEADERS 帧（每个帧后跟零个或多个 CONTINUATION 帧）包含信息（1xx）HTTP 响应的消息头（参见 [RFC7230] 第 3.2 节和[RFC7231] 第 6.2 节）， 一个包含消息头的 HEADERS 帧（后跟零个或多个 CONTINUATION 帧）（参见 [RFC7230] 第 3.2 节） 包含有效载荷主体 payload body 的零个或多个 DATA 帧（参见 [RFC7230] 第 3.3 节) 可选地，一个 HEADERS 帧，然后是零或更多 CONTINUATION 帧包含 trailer-part（如果有）（请参阅 [RFC7230] 第 4.</description></item><item><title>HTTP/2 中的帧定义</title><link>https://new.halfrost.com/http2-http-frames-definitions/</link><pubDate>Sun, 28 Apr 2019 07:02:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-frames-definitions/</guid><description>在 HTTP/2 的规范中定义了许多帧类型，每个帧类型由唯一的 8 位类型代码标识。每种帧类型在建立和管理整个连接或单个 stream 流中起到不同的作用。
+特定的帧类型的传输可以改变连接的状态。如果端点无法维持连接状态的同步视图，则无法在连接内继续成功通信。因此，重要的是端点必须共享的理解状态，在使用了任何给定帧的情况下，这些状态是如何受到它们影响的。
+Connection 连接:1 个 TCP 连接，包含 1 个或者多个 stream。所有通信都在一个 TCP 连接上完成，此连接可以承载任意数量的双向数据流。
+Stream 数据流：一个双向通信的数据流，包含 1 条或者多条 Message。每个数据流都有一个唯一的标识符和可选的优先级信息，用于承载双向消息。
+Message 消息：对应 HTTP/1.1 中的请求 request 或者响应 response，包含 1 条或者多条 Frame。
+Frame 数据帧：最小通信单位，以二进制压缩格式存放内容。来自不同数据流的帧可以交错发送，然后再根据每个帧头的数据流标识符重新组装。
+在 HTTP/1.1 中的一个消息是由 Start Line + header + body 组成的，而 HTTP/2 中一个消息是由 HEADER frame + 若干个 DATA frame 组成的，如下图：
+HTTP/2 所有性能增强的核心在于新的二进制分帧层，它定义了如何封装 HTTP 消息并在客户端与服务器之间传输。这里所谓的“层”，指的是位于套接字接口与应用可见的高级 HTTP API 之间一个经过优化的新编码机制：HTTP 的语义（包括各种动词、方法、标头）都不受影响，不同的是传输期间对它们的编码方式变了。 HTTP/1.x 协议以换行符作为纯文本的分隔符，而 HTTP/2 将所有传输的信息分割为更小的消息和帧，并采用二进制格式对它们编码。
+这样一来，客户端和服务器为了相互理解，都必须使用新的二进制编码机制：HTTP/1.x 客户端无法理解只支持 HTTP/2 的服务器，反之亦然。不过不要紧，现有的应用不必担心这些变化，因为客户端和服务器会替我们完成必要的分帧工作。</description></item><item><title>HTTP/2 中的 HTTP 帧和流的多路复用</title><link>https://new.halfrost.com/http2-http-frames/</link><pubDate>Sun, 21 Apr 2019 06:57:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-frames/</guid><description>上篇文章中讲的 HTTP/2 是如何建立连接的。这篇文章开始，我们来讨论讨论帧结构。一旦建立了 HTTP/2 连接后，端点就可以开始交换帧了。
+一. Frame Format 帧格式 HTTP/2 会发送有着不同类型的二进制帧，但他们都有如下的公共字段：Type, Length, Flags, Stream Identifier 和 frame payload。本规范中一共定义了 10 种不同的帧，其中最基础的两种分别对应于 HTTP 1.1 的 DATA 和 HEADERS。
+所有帧都以固定的 9 字节大小的头作为帧开始，后跟可变长度的有效载荷 payload。
++-----------------------------------------------+ | Length (24) | +---------------+---------------+---------------+ | Type (8) | Flags (8) | +-+-------------+---------------+-------------------------------+ |R| Stream Identifier (31) | +=+=============================================================+ | Frame Payload (0...) ... +---------------------------------------------------------------+ 帧头的字段定义如下：
+Length：
+帧有效负载的长度表示为无符号的 24 位整数。除非接收方为 SETTINGS_MAX_FRAME_SIZE 设置了较大的值(详情见这里)，否则不得发送大于2 ^ 14（16,384）的值。帧头的 9 个八位字节不包含在此长度值中。
+Type：</description></item><item><title>解开 HTTP/2 的面纱：HTTP/2 是如何建立连接的</title><link>https://new.halfrost.com/http2_begin/</link><pubDate>Sun, 14 Apr 2019 06:54:00 +0000</pubDate><guid>https://new.halfrost.com/http2_begin/</guid><description>超文本传输协议(HTTP)是一种非常成功的协议。 但是，HTTP/1.1 使用底层传输的方式([RFC7230]，第 6 节)，其中有几个特性对今天的应用程序性能有负面影响。
+特别是，HTTP/1.0 在给定的 TCP 连接上一次只允许一个请求未完成。HTTP/1.1 添加了请求流水线操作(request pipelining)，但这只是部分地解决了请求并发性，并且仍然受到队首阻塞的影响。因此，需要发出许多请求的 HTTP/1.0 和 HTTP/1.1 客户端使用多个连接到服务器以实现并发，从而减少延迟。
+此外，HTTP 头字段通常是重复且冗长的，导致不必要的网络流量以及导致初始 TCP 拥塞窗口被快速的填满。当在新的 TCP 连接上发出多个请求时，这可能导致过多的延迟。
+HTTP/2 通过定义了一个优化过的 HTTP 语义，它与底层连接映射，用这种方式来解决这些问题。具体而言，它允许在同一连接上交错请求和响应消息，并使用 HTTP 头字段的有效编码。它还允许对请求进行优先级排序，使更多重要请求更快地完成，从而进一步提高性能。
+HTTP/2 对网络更友好，因为与 HTTP/1.x 相比，可以使用更少的 TCP 连接。这意味着与其他流量和长连接的竞争减少，反过来可以更好地利用可用网络容量。最后，HTTP/2 还可以通过使用二进制消息帧来更有效地处理消息。
+HTTP/2 最大限度的兼容 HTTP/1.1 原有行为：
+在应用层上修改，基于并充分挖掘 TCP 协议性能。 客户端向服务端发送 request 请求的模型没有变化。 scheme 没有发生变化，没有 http2:// 使用 HTTP/1.X 的客户端和服务器可以无缝的通过代理方式转接到 HTTP/2 上。 不识别 HTTP/2 的代理服务器可以将请求降级到 HTTP/1.X。 一. HTTP/2 Protocol Overview HTTP/2 为 HTTP 语义提供了优化的传输。 HTTP/2 支持 HTTP/1.</description></item></channel></rss>

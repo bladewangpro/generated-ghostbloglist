@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>数据库 on prometheus</title><link>https://new.halfrost.com/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/</link><description>Recent content in 数据库 on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Thu, 02 Jun 2016 08:03:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/index.xml" rel="self" type="application/rss+xml"/><item><title>手把手教你从 Core Data 迁移到 Realm</title><link>https://new.halfrost.com/ios_coredata_to_realm/</link><pubDate>Thu, 02 Jun 2016 08:03:00 +0000</pubDate><guid>https://new.halfrost.com/ios_coredata_to_realm/</guid><description>前言 看了这篇文章的标题，也许有些人还不知道Realm是什么，那么我先简单介绍一下这个新生的数据库。号称是用来替代SQLite 和 Core Data的。Realm有以下优点：
+使用方便 Realm并不是基于SQLite的对象关系映射数据库。它是使用自己的持久化引擎，为简单和速度而生。用户们说，他们在数分钟之内就上手了Realm，构建一个app只需要数小时，每个app开发时间至少节约数周的时间。
+快 Realm比其他的对象关系映射型数据库(Object Relational Mapping)，甚至比原生的SQLite更加快，这都得益于它零拷贝的设计。看看iOS用户和Android用户都是怎么评价它的快的Twitter
+跨平台 Realm 支持 iOS 和 OS X (Objective‑C &amp;amp; Swift) 和Android。你可以通过使用相同的model，共享Realm文件到各个平台，Java，Swift，Objective-C。并且在全平台可以使用相同的业务逻辑 优秀的特性 Realm支持先进的特性，如加密，图形查询，轻松的迁移。Realm的API是一个非常适合打造高响应的应用程​​序，并且Realm为我们提供方便的组件，以轻松构建复杂的用户界面
+值得信任 Realm已经获得了银行，医疗保健提供商，复杂的企业app，星巴克这些产品的青睐。
+社区驱动 Realm是Github上星标最多的数据库里面排名第四，仅次于Java 和 Cocoa 的repos。除了核心工程之外，Realm的社区已经编译了上百个app插件和组件
+支持 可以从Realm公司快速获得官方的答案，去编译和支持你的数据库。Realm的团队会在Github, StackOverflow, &amp;amp; Twitter回答大家的各种问题
+下面再发3张令人惊喜的性能对比图
+上图是每秒能在20万条数据中进行查询后count的次数。realm每秒可以进行30.9次查询后count。SQLite仅仅只有每秒13.6次查询后的count，相对于Core Data只有可怜的1。
+在20万条中进行一次遍历查询，数据和前面的count相似：Realm一秒可以遍历20万条数据31次，而RCore Data只能进行两次查询。 SQLite也只有14次而已。
+这是在一次事务每秒插入数据的对比，Realm每秒可以插入9.4万条记录，在这个比较里纯SQLite的性能最好，每秒可以插入17.8万条记录。然而封装了SQLite的FMDB的成绩大概是Realm的一半，4.7万，Core Data就更低了，只有可怜的1.8万。
+从以上3张图可以看出Realm优秀的特性。那么我们开始使用Realm吧。第一步就是把本地的数据库换成Realm。
+下面是我翻译的一篇手把手教程，那么让我们赶紧通过教程，来把Core Data迁移到Realm吧。
+原文 译文 把一个使用core data框架作为数据库存储方式的app，迁移到Realm的确是一件很容易的事情。如果你现在有一个已经用了Core Data的app，并且考虑换成Realm，这个手把手教程正适合你！
+很多开发者在用户界面，高度集成了Core Data(有时可能有上千行代码),这时很多人会告诉你转换Core Data到Realm可能会花数小时。Core Data和Realm两者都是把你的数据当成Object看待，所以迁移通常是很直接的过程:把你已经存在的Core Data的代码重构成使用Realm API的过程是很简单的。</description></item></channel></rss>

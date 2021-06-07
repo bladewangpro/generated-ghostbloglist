@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Ghost on prometheus</title><link>https://new.halfrost.com/categories/ghost/</link><description>Recent content in Ghost on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 07 Jul 2018 15:46:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/ghost/index.xml" rel="self" type="application/rss+xml"/><item><title>博客跑分优化</title><link>https://new.halfrost.com/ghost_fast/</link><pubDate>Sat, 07 Jul 2018 15:46:00 +0000</pubDate><guid>https://new.halfrost.com/ghost_fast/</guid><description>本篇文章会持续更新，因为优化无止境。
+本文会罗列目前已经优化过的点。从开始页面略卡顿，到最后跑满分，笔者在这里都会一一展现出来。
+起点 博客页面优化从 Chrome 的 Performance 开始。
+从上图中可以看到页面前 550ms 都是空白，时间耗在了加载 JS 的过程上了。这段是 Disqus 的脚本和 Google 统计脚本。
+笔者优化的原则是：必须要加载的 pre-load，不必须加载的并且未出现在屏幕里面的 lazy-load。
+优化的思路很简单，在 DOM 渲染之前，去掉上图中大长条的黄色的矩形，这段时间是加载 JS 的时间，阻塞页面渲染了。笔者在页面渲染的时候不会加载 Disqus 脚本，只在博文页面用的时候，点击按钮的时候才会 lazy-load 加载脚本。
+至于 Google 统计脚本，需要用最新的 gtag 的异步版本，并且加上 async 标志就可以解决。当然如果想彻底异步这段统计的代码，需要服务端做一些改造。
+这里可以参考这两篇文章《优化 Google Analytics 异步加载来提高你的网站速度》、《服务端使用 Google Analytics》。
+如果还有百度统计的脚本的话，将 baidu 统计生成的代码移入网站，将 type 设置为 test 等非 mime/type 类型，这样浏览器便不会解析这段 script，baidu 统计却也能校验通过：
+&amp;lt;script type=&amp;#34;text/test&amp;#34;&amp;gt; var _hmt = _hmt || []; (function() { var hm = document.createElement(&amp;#34;script&amp;#34;); hm.src = &amp;#34;https://hm.baidu.com/hm.js?XXXX&amp;#34;; var s = document.</description></item><item><title>Ghost 博客炫技"新"玩法</title><link>https://new.halfrost.com/ghost_feature/</link><pubDate>Sat, 30 Jun 2018 08:55:00 +0000</pubDate><guid>https://new.halfrost.com/ghost_feature/</guid><description>由于 Ghost 升级到了最新版本，新增加了很多玩法。这里罗列一下“新”玩法，也是对笔者博客新功能的说明。
+如果读者也想修改自己的主题，那么请先阅读官方的文档：
+ghost themes
+ghost api
+Ghost 添加导航页面 之前老版本的博客没有导航功能，也有读者问过这个事情，这次既然升级了，首先完成这个需求。
+新版本的博客导航功能放到了 footer 上了。可能有人问为何不放在 header 上。我尝试了好几种位置，都觉得不太合适，还是放在 footer 上了。
+footer 上主要分了 3 列，TAGS、ABOUT、NEWSLETTER。
+一般博客都会有标签，归档，友链，关于，订阅。这次一口气都加全了。
+给每篇文章添加封面 由于受到了知乎专栏的 CSS 影响，加上 Ghost 本身也支持 cover 功能，所以笔者在这次升级的时候，把原来的主题重新修改了，把 cover 封面重新添加回来了。
+用过知乎专栏的朋友会知道，每篇文章一进去，就是一个占满全屏的封面题图，这种设计笔者觉得挺好的，所以也“抄”过来了。
+其他的设计也说一下，题目标题上面是文章对应的 tag。文章下面有预估阅读时间，这个是根据人类平均阅读时间每分钟 100 个字算出来的。右下角是文章作者的名字和头像，以及文章发布时间。
+最上一排增加了 3 个 iconfont 的按钮，返回按钮是为了 PWA 特意增加的，不然不能返回到主页了。搜索和侧边栏也都是这次增加的新功能，下面会细说。
+文章添加目录 这个功能也是读者提过的需求。因为有些文章比较长，常常容易看到后面忘记了前面，如果有一个目录，可以分章节阅读文章，也可以迅速浏览目录，抓住文章脉络。这次升级笔者也加上了这个功能。
+文章目录这个功能的不难，只要遍历一遍 markdown 的标题就可以了。github 上可以找到现成的 jquery 版本的代码 jquery.toc.js。引用它，然后初始化的时候加上自己的配置：
+//初始化 toc 插件 $(&amp;#39;#toc&amp;#39;).initTOC({ selector: &amp;#34;h1, h2, h3, h4, h5, h6&amp;#34;, scope: &amp;#34;article&amp;#34;, overwrite: false, prefix: &amp;#34;toc&amp;#34; }); selector 代表会搜索 markdown 文章标题的层级深度，这里是从 h1 - h6 。scope 表示的是 toc 搜索范围，由于在 ghost 中文章是在 &amp;lt;article&amp;gt; 标签里面的，所以这里 scope 为 article。</description></item><item><title>Ghost 博客升级指南</title><link>https://new.halfrost.com/ghost_update/</link><pubDate>Sat, 23 Jun 2018 02:58:00 +0000</pubDate><guid>https://new.halfrost.com/ghost_update/</guid><description>在笔者一开始建站的时候，用的 Ghost 版本就是 0.7.4 中文版。这个非常早期的版本也有不少 hack 的玩法。直到最近周围有朋友也在玩 Ghost 的时候，我发现最新版很多新功能非常吸引我：比如最新版早就支持了 markdown 插入表格，也能支持 LateX。关于不支持 markdown 插入表格这个比较痛苦，之前表格的替代方法是在 github 上发布完文章以后截图，然后把图片传到 Ghost 上。
+既然几年过去了，要升级就直接升级到最新版吧。截止到这篇文章的时间，当前最新版是 Ghost 1.24.8 。接下来写一些升级指南，如果也有和我一样用 Ghost 0.7.4 中文版的想升级到最新版，可以看看笔者的升级之路。
+准备工作 准备工作当前是备份老版本的配置和数据。这里列一个需要备份的清单：
+数据库文件 通过 Ghost 后台管理系统，导出所有博文数据，其实就是从 MySQL 中导出的 JSON 文件。 主题文件 ghost/content/themes/ 服务器端 Ghost 的配置文件 config.js Nginx 下的 ghost.conf 配置文件 服务器上的 Ghost 整个文件夹 备份整个文件夹是可选的，是为了防止出错可以回退，丢数据可以找回。 开始升级 Ghost 在 V1.XX 以后改动比较大，因为加入了很多方便的脚手架工具，比如 Ghost、Ghost-CLI 等等。从 0.7.4 升级上来算是一次 breaking，所以 Ghost 这些工具都需要新装。
+Ghost is a fully open source, hackable platform for building and running a modern online publication.</description></item><item><title>Ghost 博客搭建日记</title><link>https://new.halfrost.com/ghost_build/</link><pubDate>Sun, 02 Oct 2016 22:13:00 +0000</pubDate><guid>https://new.halfrost.com/ghost_build/</guid><description>前言 今年7月阴错阳差的给自己买了一台阿里云服务器，当时是想着自己折腾折腾后台，看能否打通前端和后端之间的任督二脉。直到我发现我原来放在GitPage上的博客访问速度慢的实在不能忍，痛下决心之后，就把原来Jekyll搭建的博客站点一口气都迁移到了现在自己阿里云的主机上了。原来的Jekyll博客还在，还在GitPage上。换到了国内自己的阿里云主机上，我就用了优雅的Ghost搭建我的新家了。
+今年8月的时候，博客上线了，网友们看见我这个博客还不错，让我出一下搭建教程。虽然博客上线，还没有通过网络管理中心的审核，还不知道之后会发生什么。当时的我也对Ghost不是很熟，也不知道后期如何维护，所以想着先让Ghost在服务器上面跑一个月看看，有了心得体会之后在写篇文章记录一下搭建过程。
+现在博客也跑了一个多月了，日常维护都玩的转了，于是就有了这一篇文章了。
+目录 1.Ghost 简介 2.搭建前准备清单 3.开始搭建 4.全站 Https 5.管局备案 / 公安备案 6.CDN 优化访问速度 7.后期维护 一.Ghost简介 Ghost 是一套基于 Node.js 构建的开源博客平台（Open source blogging platform），具有易用的书写界面和体验，博客内容默认采用 Markdown 语法书写，不过原生的不支持Markdown的表格和LaTeX，如果需要使用，需要在服务器端安装插件。
+Ghost目标是取代臃肿的 Wordpress，界面简洁，专注写作，支持在线预览和在线写作。
+Ghost属于动态博客，页面并不是像Hexo,Jekyll这类静态博客，在编译的时候会生成所有页面。Ghost有前台和后台。后台负责写作，发布文章，系统配置，等等。
+1. Ghost的优势和劣势 这里有篇文章是这样评论Ghost的优缺点的
+优势 技术上,采用NodeJs，在可预见的未来里，无疑比PHP有更多优势，并发能力远超Wordpress，虽然NodeJs后期维护成本高，但是我们只是借它做博客而已。 易用性上，专注写作，评论，超炫皮肤，完美支持 MarkDown,没有Wordpress那么臃肿，回归到博客最原始的状态,传递文字最原始的力量。 使用上，便捷，随时随地编辑，比Hexo,Jekyll这类静态博客要书写方便，特别是在不同电脑上写作时。
+劣势 需要配套支持Node环境的虚拟机，一般免费的很少支持，这时必须得掏腰包了。 后台简陋,许多功能还未完善，不过写作这一块没啥大问题。
+关于劣势，我再说一点，Ghost没有Hexo上面那么丰富的插件。
+2. Ghost的亮点： 采用Mysql作为数据库,通用快速上手，这里也可以用其他数据库比如Sqlite。 Nginx作为反向代理,配置多个Ghost博客,同时也能增加了网站的负载。 非常简易化的Ubuntu的Node.js安装方法，不用编译打包。 安装系统服务,开机重启Ghost服务，免去日后以后操作。 采用Font Awesome作为社交按钮，也可以自定义图标。 highlight.js 作为主题的代码高亮引擎 整合Disqus评论系统,建立属于自己的Discuss圈 国外优秀免费Ghost主题资源分享 整合百度统计以及百度分享 二. 搭建前准备清单 一个可用的域名 一台服务器 ( 我买的阿里云ECS ，服务器系统安装的是 CentOS 7.</description></item></channel></rss>

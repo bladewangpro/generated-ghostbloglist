@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Macro on prometheus</title><link>https://new.halfrost.com/categories/macro/</link><description>Recent content in Macro on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 12 Feb 2017 05:46:54 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/macro/index.xml" rel="self" type="application/rss+xml"/><item><title>ReactiveCocoa 中 奇妙无比的“宏”魔法</title><link>https://new.halfrost.com/reactivecocoa_macro/</link><pubDate>Sun, 12 Feb 2017 05:46:54 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_macro/</guid><description>前言 在ReactiveCocoa 中，开源库作者为我们提供了很多种魔法，“黑”魔法，“红”魔法……今天就让先来看看“红”魔法。
+在ReactiveCocoa 中，封装了很多非常实用的“宏”，使用这些“宏”为我们开发带来了很多的便利。
+今天就来盘点一下RAC中的宏是如何实现的。
+目录 1.关于宏 2.ReactiveCocoa 中的元宏 3.ReactiveCocoa 中常用的宏 一. 关于宏 宏（Macro），是一种批量处理的称谓。
+在编程领域里的宏是一种抽象（Abstraction），它根据一系列预定义的规则替换一定的文本模式。解释器或编译器在遇到宏时会自动进行这一模式替换。绝大多数情况下，“宏”这个词的使用暗示着将小命令或动作转化为一系列指令。
+宏的用途在于自动化频繁使用的序列或者是获得一种更强大的抽象能力。 计算机语言如C语言或汇编语言有简单的宏系统，由编译器或汇编器的预处理器实现。C语言的宏预处理器的工作只是简单的文本搜索和替换，使用附加的文本处理语言如M4，C程序员可以获得更精巧的宏。
+Lisp类语言如Common Lisp和Scheme有更精巧的宏系统：宏的行为如同是函数对自身程序文本的变形，并且可以应用全部语言来表达这种变形。一个C宏可以定义一段语法的替换，然而一个Lisp的宏却可以控制一节代码的计算。
+对于编译语言来说，所有的宏都是在预编译的时候被展开的，所以在lex进行词法扫描生成Token，词法分析过程之前，所有的宏都已经被展开完成了。
+对于Xcode，预处理或者预编译阶段是可以直接查看的。
+随便写一个宏，然后打开Xcode右上方的Assistant，选择“Preprocess”就可以看到该文件预处理之后的样子了。可以看到左边的@weakify(self) 被转换成了右边的两行代码了。
+关于这个Xcode的这个功能还有2点补充说明：
+1.不同阶段的Preprocessed可能不同，要根据你的目标去选择预处理的条件。
+比如这里就有5种预编译的种类可以选择。
+2.宏经过预编译之后出来的代码，是可以用来检测宏写的是否正确的，但是无法看到宏被展开的具体过程。这意味着我们可以通过Xcode这个功能来查看宏的作用，但是无法知道宏的具体实现。具体实现还是需要通过查看源码来分析。
+ReactiveCocoa中的宏，如果不查看源码分析，会觉得那些宏都像魔法一样奇妙无比，接下来就来解开“宏”魔法的神秘面纱。
+二. ReactiveCocoa 中的元宏 在ReactiveCocoa的宏中，作者定义了这么一些基础的宏，作为“元宏”，它们是构成之后复杂宏的基础。在分析常用宏之前，必须要先分析清楚这些元宏的具体实现。
+1. metamacro_stringify(VALUE) #define metamacro_stringify(VALUE) \ metamacro_stringify_(VALUE) #define metamacro_stringify_(VALUE) # VALUE metamacro_stringify( )这个宏用到了#的用法。#在宏中代表把宏的参数变为一个字符串。这个宏的目的和它的名字一样明显，把入参VALUE转换成一个字符串返回。
+这里可能就有人有疑问，为啥要包装一层，不能直接写成下面这样：
+#define metamacro_stringify(VALUE) # VALUE 语意确实也没有变，但是有种特殊情况下就会出现问题。
+举个例子：
+#define NUMBER 10 #define ADD(a,b) (a+b) NSLog(@&amp;#34;%d+%d=%d&amp;#34;,NUMBER, NUMBER, ADD(NUMBER,NUMBER)); 输出如下：
+10+10=20这样子确实是没有问题，但是稍作修改就会有问题。</description></item></channel></rss>

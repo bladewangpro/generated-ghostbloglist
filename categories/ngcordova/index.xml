@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>ngCordova on prometheus</title><link>https://new.halfrost.com/categories/ngcordova/</link><description>Recent content in ngCordova on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 01 May 2016 21:59:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/ngcordova/index.xml" rel="self" type="application/rss+xml"/><item><title>iOS Hybrid 框架 —— PhoneGap</title><link>https://new.halfrost.com/ios_hybrid_phonegap/</link><pubDate>Sun, 01 May 2016 21:59:00 +0000</pubDate><guid>https://new.halfrost.com/ios_hybrid_phonegap/</guid><description>####前言
+Hybrid App（混合模式移动应用）是指介于web-app、native-app这两者之间的app，兼具“Native App良好用户交互体验的优势”和“Web App跨平台开发的优势”。
+Hybrid App按网页语言与程序语言的混合，通常分为三种类型：多View混合型，单View混合型，Web主体型，3种类型比较如下：
+今天我来谈谈Web主体型中Hybrid框架里面比较有名的PhoneGap
+####一.Cordova 说到PhoneGap，就不得不说到Cordova
+Cordova 是一个可以让 JS 与原生代码(包括 Android 的 java，iOS 的 Objective-C 等)互相通信的一个库，并且提供了一系列的插件类，比如 JS 直接操作本地数据库的插件类。
+Cordova的设计概念，是在APP上透过Web控件来呈现Web页面，让Web开发人员可以操作熟悉的语言、工具来开发APP.
+为了让Web页面能够满足更多的APP功能需求，Cordova提供了Plugin机制，让Web页面能够挂载并调用Native开发技术所开发的功能模块
+Cordova在系统中的层级应该是这样子的:
+Cordova的层级结构是下图这样的:
+Cordova又可以和Angular相结合，变成ngCordova
+Cordova + Angular = ngCordova ####二.JS 与 Objective-C 通信 JS 使用了两种方式来与 Objective-C 通信，一种是使用 XMLHttpRequest 发起请求的方式，另一种则是通过设置透明的 iframe 的 src 属性。
+我接下来说的主要是第二种方式，iframe bridge。
+通过在 JS 端创建一个透明的 iframe，设置这个 ifame 的 src 为自定义的协议，而 ifame 的 src 更改时，UIWebView 会先回调其 delegate 的 webView:shouldStartLoadWithRequest:navigationType: 方法
+说的还是很抽象的，来实际看一段代码
+在cordova.js 里面，是这样子实现的
+function iOSExec() { .</description></item></channel></rss>

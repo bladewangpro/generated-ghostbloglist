@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>RACSignal on prometheus</title><link>https://new.halfrost.com/categories/racsignal/</link><description>Recent content in RACSignal on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 10 Dec 2016 09:12:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/racsignal/index.xml" rel="self" type="application/rss+xml"/><item><title>ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(下)</title><link>https://new.halfrost.com/reactivecocoa_racsignal_operations3/</link><pubDate>Sat, 10 Dec 2016 09:12:00 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_racsignal_operations3/</guid><description>前言 紧接着上篇的源码实现分析，继续分析RACSignal的变换操作的底层实现。
+目录 1.高阶信号操作 2.同步操作 3.副作用操作 4.多线程操作 5.其他操作 一. 高阶信号操作 高阶操作大部分的操作是针对高阶信号的，也就是说信号里面发送的值还是一个信号或者是一个高阶信号。可以类比数组，这里就是多维数组，数组里面还是套的数组。
+1. flattenMap: (在父类RACStream中定义的) flattenMap:在整个RAC中具有很重要的地位，很多信号变换都是可以用flattenMap:来实现的。
+map:，flatten，filter，sequenceMany:这4个操作都是用flattenMap:来实现的。然而其他变换操作实现里面用到map:，flatten，filter又有很多。
+回顾一下map:的实现：
+- (instancetype)map:(id (^)(id value))block { NSCParameterAssert(block != nil); Class class = self.class; return [[self flattenMap:^(id value) { return [class return:block(value)]; }] setNameWithFormat:@&amp;#34;[%@] -map:&amp;#34;, self.name]; } map:的操作其实就是直接原信号进行的 flattenMap:的操作，变换出来的新的信号的值是block(value)。
+flatten的实现接下去会具体分析，这里先略过。
+filter的实现：
+- (instancetype)filter:(BOOL (^)(id value))block { NSCParameterAssert(block != nil); Class class = self.class; return [[self flattenMap:^ id (id value) { block(value) ? return [class return:value] : return class.</description></item><item><title>ReactiveCocoa 中 RACSignal 冷信号和热信号底层实现分析</title><link>https://new.halfrost.com/reactivecocoa_hot_cold_signal/</link><pubDate>Sun, 04 Dec 2016 22:15:00 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_hot_cold_signal/</guid><description>前言 关于ReactiveCocoa v2.5中冷信号和热信号的文章中，最著名的就是美团的臧成威老师写的3篇冷热信号的文章：
+细说ReactiveCocoa的冷信号与热信号（一）
+细说ReactiveCocoa的冷信号与热信号（二）：为什么要区分冷热信号
+细说ReactiveCocoa的冷信号与热信号（三）：怎么处理冷信号与热信号
+由于最近在写关于RACSignal底层实现分析的文章，当然也逃不了关于冷热信号操作的分析。这篇文章打算分析分析如何从冷信号转成热信号的底层实现。
+目录 1.关于冷信号和热信号的概念 2.RACSignal热信号 3.RACSignal冷信号 4.冷信号是如何转换成热信号的 一. 关于冷信号和热信号的概念 冷热信号的概念是源自于源于.NET框架Reactive Extensions(RX)中的Hot Observable和Cold Observable，
+Hot Observable是主动的，尽管你并没有订阅事件，但是它会时刻推送，就像鼠标移动；而Cold Observable是被动的，只有当你订阅的时候，它才会发布消息。
+Hot Observable可以有多个订阅者，是一对多，集合可以与订阅者共享信息；而Cold Observable只能一对一，当有不同的订阅者，消息是重新完整发送。
+在这篇文章细说ReactiveCocoa的冷信号与热信号（一）详细分析了冷热信号的特点：
+热信号是主动的，即使你没有订阅事件，它仍然会时刻推送。而冷信号是被动的，只有当你订阅的时候，它才会发送消息。
+热信号可以有多个订阅者，是一对多，信号可以与订阅者共享信息。而冷信号只能一对一，当有不同的订阅者，消息会从新完整发送。
+二. RACSignal热信号 RACSignal家族中符合热信号的特点的信号有以下几个。
+1.RACSubject @interface RACSubject : RACSignal &amp;lt;RACSubscriber&amp;gt; @property (nonatomic, strong, readonly) NSMutableArray *subscribers; @property (nonatomic, strong, readonly) RACCompoundDisposable *disposable; - (void)enumerateSubscribersUsingBlock:(void (^)(id&amp;lt;RACSubscriber&amp;gt; subscriber))block; + (instancetype)subject; @end 首先来看看RACSubject的定义。
+RACSubject是继承自RACSignal，并且它还遵守RACSubscriber协议。这就意味着它既能订阅信号，也能发送信号。
+在RACSubject里面有一个NSMutableArray数组，里面装着该信号的所有订阅者。其次还有一个RACCompoundDisposable信号，里面装着该信号所有订阅者的RACDisposable。
+RACSubject之所以能称之为热信号，那么它肯定是符合上述热信号的定义的。让我们从它的实现来看看它是如何符合的。
+- (RACDisposable *)subscribe:(id&amp;lt;RACSubscriber&amp;gt;)subscriber { NSCParameterAssert(subscriber !</description></item><item><title>ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(中)</title><link>https://new.halfrost.com/reactivecocoa_racsignal_operations2/</link><pubDate>Tue, 29 Nov 2016 20:52:00 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_racsignal_operations2/</guid><description>前言 紧接着上篇的源码实现分析，继续分析RACSignal的变换操作的底层实现。
+目录 1.过滤操作 2.组合操作 一. 过滤操作 过滤操作也属于一种变换，根据过滤条件，过滤出符合条件的值。变换出来的新的信号是原信号的一个子集。
+1. filter: (在父类RACStream中定义的) 这个filter:操作在any:的实现中用到过了。
+- (instancetype)filter:(BOOL (^)(id value))block { NSCParameterAssert(block != nil); Class class = self.class; return [[self flattenMap:^ id (id value) { if (block(value)) { return [class return:value]; } else { return class.empty; } }] setNameWithFormat:@&amp;#34;[%@] -filter:&amp;#34;, self.name]; } filter:中传入一个闭包，是用筛选的条件。如果满足筛选条件的即返回原信号的值，否则原信号的值被“吞”掉，返回空的信号。这个变换主要是用flattenMap的。
+2. ignoreValues - (RACSignal *)ignoreValues { return [[self filter:^(id _) { return NO; }] setNameWithFormat:@&amp;#34;[%@] -ignoreValues&amp;#34;, self.name]; } 由上面filter的实现，这里把筛选判断条件永远的传入NO，那么原信号的值都会被变换成empty信号，故变换之后的信号为空信号。</description></item><item><title>ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(上)</title><link>https://new.halfrost.com/reactivecocoa_racsignal_operations1/</link><pubDate>Sat, 26 Nov 2016 00:42:12 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_racsignal_operations1/</guid><description>前言 在上篇文章中，详细分析了RACSignal是创建和订阅的详细过程。看到底层源码实现后，就能发现，ReactiveCocoa这个FRP的库，实现响应式（RP）是用Block闭包来实现的，而并不是用KVC / KVO实现的。
+在ReactiveCocoa整个库中，RACSignal占据着比较重要的位置，而RACSignal的变换操作更是整个RACStream流操作核心之一。在上篇文章中也详细分析了bind操作的实现。RACsignal很多变换操作都是基于bind操作来实现的。在开始本篇底层实现分析之前，先简单回顾一下上篇文章中分析的bind函数，这是这篇文章分析的基础。
+bind函数可以简单的缩写成下面这样子。
+- (RACSignal *)bind:(RACStreamBindBlock (^)(void))block; { return [RACSignal createSignal:^RACDisposable *(id&amp;lt;RACSubscriber&amp;gt; subscriber) { RACStreamBindBlock bindBlock = block(); [self subscribeNext:^(id x) { //(1)  BOOL stop = NO; RACSignal *signal = (RACSignal *)bindBlock(x, &amp;amp;stop); //(2)  if (signal == nil || stop) { [subscriber sendCompleted]; } else { [signal subscribeNext:^(id x) { [subscriber sendNext:x]; //(3)  } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ }]; } } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ [subscriber sendCompleted]; }]; return nil; }]; } 当bind变换之后的信号被订阅，就开始执行bind函数中return的block闭包。</description></item><item><title>ReactiveCocoa 中 RACSignal 是如何发送信号的</title><link>https://new.halfrost.com/reactivecocoa_racsignal/</link><pubDate>Mon, 14 Nov 2016 09:48:43 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_racsignal/</guid><description>前言 ReactiveCocoa是一个(第一个？)将函数响应式编程范例带入Objective-C的开源库。ReactiveCocoa是由Josh Abernathy和Justin Spahr-Summers 两位大神在对GitHub for Mac的开发过程中编写的。Justin Spahr-Summers 大神在2011年11月13号下午12点35分进行的第一次提交，直到2013年2月13日上午3点05分发布了其1.0 release，达到了第一个重要里程碑。ReactiveCocoa社区也非常活跃，目前最新版已经完成了ReactiveCocoa 5.0.0-alpha.3，目前在5.0.0-alpha.4开发中。
+ReactiveCocoa v2.5 是公认的Objective-C最稳定的版本，因此被广大的以OC为主要语言的客户端选中使用。ReactiveCocoa v3.x主要是基于Swift 1.2的版本，而ReactiveCocoa v4.x 主要基于Swift 2.x，ReactiveCocoa 5.0就全面支持Swift 3.0，也许还有以后的Swift 4.0。接下来几篇博客先以ReactiveCocoa v2.5版本为例子，分析一下OC版的RAC具体实现（也许分析完了RAC 5.0就到来了）。也算是写在ReactiveCocoa 5.0正式版到来前夕的祝福吧。
+目录 1.什么是ReactiveCocoa？ 2.RAC中的核心RACSignal发送与订阅流程 3.RACSignal操作的核心bind实现 4.RACSignal基本操作concat和zipWith实现 5.最后 一. 什么是ReactiveCocoa？ ReactiveCocoa（其简称为RAC）是由Github 开源的一个应用于iOS和OS X开发的新框架。RAC具有函数式编程(FP)和响应式编程(RP)的特性。它主要吸取了.Net的 Reactive Extensions的设计和实现。
+ReactiveCocoa 的宗旨是Streams of values over time ，随着时间变化而不断流动的数据流。
+ReactiveCocoa 主要解决了以下这些问题：
+UI数据绑定 UI控件通常需要绑定一个事件，RAC可以很方便的绑定任何数据流到控件上。
+用户交互事件绑定 RAC为可交互的UI控件提供了一系列能发送Signal信号的方法。这些数据流会在用户交互中相互传递。
+解决状态以及状态之间依赖过多的问题 有了RAC的绑定之后，可以不用在关心各种复杂的状态，isSelect，isFinish……也解决了这些状态在后期很难维护的问题。
+消息传递机制的大统一 OC中编程原来消息传递机制有以下几种：Delegate，Block Callback，Target-Action，Timers，KVO，objc上有一篇关于OC中这5种消息传递方式改如何选择的文章Communication Patterns，推荐大家阅读。现在有了RAC之后，以上这5种方式都可以统一用RAC来处理。
+二. RAC中的核心RACSignal ReactiveCocoa 中最核心的概念之一就是信号RACStream。RACStream中有两个子类——RACSignal 和 RACSequence。本文先来分析RACSignal。</description></item></channel></rss>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Websocket on prometheus</title><link>https://new.halfrost.com/tags/websocket/</link><description>Recent content in Websocket on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 19 May 2018 15:30:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/websocket/index.xml" rel="self" type="application/rss+xml"/><item><title>全双工通信的 WebSocket</title><link>https://new.halfrost.com/websocket/</link><pubDate>Sat, 19 May 2018 15:30:00 +0000</pubDate><guid>https://new.halfrost.com/websocket/</guid><description>一. WebSocket 是什么？ WebSocket 是一种网络通信协议。在 2009 年诞生，于 2011 年被 IETF 定为标准 RFC 6455 通信标准。并由 RFC7936 补充规范。WebSocket API 也被 W3C 定为标准。
+WebSocket 是 HTML5 开始提供的一种在单个 TCP 连接上进行全双工(full-duplex)通讯的协议。没有了 Request 和 Response 的概念，两者地位完全平等，连接一旦建立，就建立了真•持久性连接，双方可以随时向对方发送数据。
+(HTML5 是 HTML 最新版本，包含一些新的标签和全新的 API。HTTP 是一种协议，目前最新版本是 HTTP/2 ，所以 WebSocket 和 HTTP 有一些交集，两者相异的地方还是很多。两者交集的地方在 HTTP 握手阶段，握手成功后，数据就直接从 TCP 通道传输。)
+二. 为什么要发明 WebSocket ？ 在没有 WebSocket 之前，Web 为了实现即时通信，有以下几种方案，最初的 polling ，到之后的 Long polling，最后的基于 streaming 方式，再到最后的 SSE，也是经历了几个不种的演进方式。
+(1) 最开始的短轮询 Polling 阶段 这种方式下，是不适合获取实时信息的，客户端和服务器之间会一直进行连接，每隔一段时间就询问一次。客户端会轮询，有没有新消息。这种方式连接数会很多，一个接受，一个发送。而且每次发送请求都会有 HTTP 的 Header，会很耗流量，也会消耗 CPU 的利用率。</description></item><item><title>微信,QQ 这类 IM app 怎么做——谈谈 Websocket</title><link>https://new.halfrost.com/ios_weixin_qq_websocket/</link><pubDate>Sun, 15 May 2016 02:55:00 +0000</pubDate><guid>https://new.halfrost.com/ios_weixin_qq_websocket/</guid><description>####前言 关于我和WebSocket的缘：我从大二在计算机网络课上听老师讲过之后，第一次使用就到了毕业之后的第一份工作。直到最近换了工作，到了一家是含有IM社交聊天功能的app的时候，我觉得我现在可以谈谈我对WebSocket/Socket的一些看法了。要想做IM聊天app，就不得不理解WebSocket和Socket的原理了，听我一一道来。
+####目录
+1.WebSocket使用场景 2.WebSocket诞生由来 3.谈谈WebSocket协议原理 4.WebSocket 和 Socket的区别与联系 5.iOS平台有哪些WebSocket和Socket的开源框架 6.iOS平台如何实现WebSocket协议 #####一.WebSocket的使用场景 1.社交聊天
+最著名的就是微信，QQ，这一类社交聊天的app。这一类聊天app的特点是低延迟，高即时。即时是这里面要求最高的，如果有一个紧急的事情，通过IM软件通知你，假设网络环境良好的情况下，这条message还无法立即送达到你的客户端上，紧急的事情都结束了，你才收到消息，那么这个软件肯定是失败的。
+2.弹幕
+说到这里，大家一定里面想到了A站和B站了。确实，他们的弹幕一直是一种特色。而且弹幕对于一个视频来说，很可能弹幕才是精华。发弹幕需要实时显示，也需要和聊天一样，需要即时。
+3.多玩家游戏
+4.协同编辑
+现在很多开源项目都是分散在世界各地的开发者一起协同开发，此时就会用到版本控制系统，比如Git，SVN去合并冲突。但是如果有一份文档，支持多人实时在线协同编辑，那么此时就会用到比如WebSocket了，它可以保证各个编辑者都在编辑同一个文档，此时不需要用到Git，SVN这些版本控制，因为在协同编辑界面就会实时看到对方编辑了什么，谁在修改哪些段落和文字。
+5.股票基金实时报价
+金融界瞬息万变——几乎是每毫秒都在变化。如果采用的网络架构无法满足实时性，那么就会给客户带来巨大的损失。几毫秒钱股票开始大跌，几秒以后才刷新数据，一秒钟的时间内，很可能用户就已经损失巨大财产了。
+6.体育实况更新
+全世界的球迷，体育爱好者特别多，当然大家在关心自己喜欢的体育活动的时候，比赛实时的赛况是他们最最关心的事情。这类新闻中最好的体验就是利用Websocket达到实时的更新！
+7.视频会议/聊天
+视频会议并不能代替和真人相见，但是他能让分布在全球天涯海角的人聚在电脑前一起开会。既能节省大家聚在一起路上花费的时间，讨论聚会地点的纠结，还能随时随地，只要有网络就可以开会。
+8.基于位置的应用
+越来越多的开发者借用移动设备的GPS功能来实现他们基于位置的网络应用。如果你一直记录用户的位置(比如运行应用来记录运动轨迹)，你可以收集到更加细致化的数据。
+9.在线教育
+在线教育近几年也发展迅速。优点很多，免去了场地的限制，能让名师的资源合理的分配给全国各地想要学习知识的同学手上，Websocket是个不错的选择，可以视频聊天、即时聊天以及其与别人合作一起在网上讨论问题&amp;hellip;
+10.智能家居
+这也是我一毕业加入的一个伟大的物联网智能家居的公司。考虑到家里的智能设备的状态必须需要实时的展现在手机app客户端上，毫无疑问选择了Websocket。
+11.总结
+从上面我列举的这些场景来看，一个共同点就是，高实时性！
+#####二.WebSocket诞生由来 1.最开始的轮询Polling阶段
+这种方式下，是不适合获取实时信息的，客户端和服务器之间会一直进行连接，每隔一段时间就询问一次。客户端会轮询，有没有新消息。这种方式连接数会很多，一个接受，一个发送。而且每次发送请求都会有Http的Header，会很耗流量，也会消耗CPU的利用率。
+2.改进版的长轮询Long polling阶段
+长轮询是对轮询的改进版，客户端发送HTTP给服务器之后，有没有新消息，如果没有新消息，就一直等待。当有新消息的时候，才会返回给客户端。在某种程度上减小了网络带宽和CPU利用率等问题。但是这种方式还是有一种弊端：例如假设服务器端的数据更新速度很快，服务器在传送一个数据包给客户端后必须等待客户端的下一个Get请求到来，才能传递第二个更新的数据包给客户端，那么这样的话，客户端显示实时数据最快的时间为2×RTT（往返时间），而且如果在网络拥塞的情况下，这个时间用户是不能接受的，比如在股市的的报价上。另外，由于http数据包的头部数据量往往很大（通常有400多个字节），但是真正被服务器需要的数据却很少（有时只有10个字节左右），这样的数据包在网络上周期性的传输，难免对网络带宽是一种浪费。
+3.WebSocket诞生
+现在急需的需求是能支持客户端和服务器端的双向通信，而且协议的头部又没有HTTP的Header那么大，于是，Websocket就诞生了！
+上图就是Websocket和Polling的区别，从图中可以看到Polling里面客户端发送了好多Request，而下图，只有一个Upgrade，非常简洁高效。至于消耗方面的比较就要看下图了
+上图中，我们先看蓝色的柱状图，是Polling轮询消耗的流量，这次测试，HTTP请求和响应头信息开销总共包括871字节。当然每次测试不同的请求，头的开销不同。这次测试都以871字节的请求来测试。
+**Use case A:**1,000 clients polling every second: Network throughput is (871 x 1,000) = 871,000 bytes = 6,968,000 bits per second (6.6 Mbps)
+Use case B: 10,000 clients polling every second: Network throughput is (871 x 10,000) = 8,710,000 bytes = 69,680,000 bits per second (66 Mbps)</description></item></channel></rss>

@@ -1,0 +1,389 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>揭开 this & that 之迷 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="揭开 this & that 之迷"><meta property="og:description" content="新手在入门 JavaScript 的过程中，一定会踩很多关于 this 的坑，出现问题的本质就是 this 指针的指向和自己想的不一样。笔者在入门学习的过程中，也踩了很多坑，于是便写下本篇文章记录自己“踩坑”历程。
+一. this 在哪里？ 在上篇《从 JavaScript 作用域说开去》分析中，我们知道，在 Execution Context 中有一个属性是 this，这里的 this 就是我们所说的 this 。this 与上下文中可执行代码的类型有直接关系，this 的值在进入执行上下文时确定，并且在执行上下文运行期间永久不变。
+this 到底取何值？this 的取值是动态的，是在函数真正被调用执行的时候确定的，函数定义的时候确定不了。因为 this 的取值是执行上下文环境的一部分，每次调用函数，都会产生一个新的执行上下文环境。
+所以 this 的作用就是用来指明执行上下文是在哪个上下文中被触发的对象。令人迷惑的地方就在这里，同一个函数，当在不同的上下文进行调用的时候，this 的值就可能会不同。也就是说，this 的值就是函数调用表达式（也就是函数被调用的方式）的 caller。
+二. this & that 具体值得是谁？ 目前接触的有以下14种情况，笔者打算一一列举出来，以后如果遇到了更多的情况，还会继续增加。
+既然 this 是执行上下文确定的，那么从执行上下文的种类进行分类，可以分为3种：
+那么接下来我们就从 Global Execution Context 全局执行上下文，Function Execution Context 函数执行上下文，Eval Execution Context Eval执行上下文 这三类，具体谈谈 this 究竟指的是谁。
+（一）. 全局执行上下文 1. 非严格模式下的函数调用 这是函数的最通常用法，属于全局性调用，因此 this 就代表全局对象 Global。
+var name = 'halfrost'; function test() { console."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/javascript_this/"><meta property="article:published_time" content="2017-06-24T10:52:00+00:00"><meta property="article:modified_time" content="2017-06-24T10:52:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="揭开 this & that 之迷"><meta name=twitter:description content="新手在入门 JavaScript 的过程中，一定会踩很多关于 this 的坑，出现问题的本质就是 this 指针的指向和自己想的不一样。笔者在入门学习的过程中，也踩了很多坑，于是便写下本篇文章记录自己“踩坑”历程。
+一. this 在哪里？ 在上篇《从 JavaScript 作用域说开去》分析中，我们知道，在 Execution Context 中有一个属性是 this，这里的 this 就是我们所说的 this 。this 与上下文中可执行代码的类型有直接关系，this 的值在进入执行上下文时确定，并且在执行上下文运行期间永久不变。
+this 到底取何值？this 的取值是动态的，是在函数真正被调用执行的时候确定的，函数定义的时候确定不了。因为 this 的取值是执行上下文环境的一部分，每次调用函数，都会产生一个新的执行上下文环境。
+所以 this 的作用就是用来指明执行上下文是在哪个上下文中被触发的对象。令人迷惑的地方就在这里，同一个函数，当在不同的上下文进行调用的时候，this 的值就可能会不同。也就是说，this 的值就是函数调用表达式（也就是函数被调用的方式）的 caller。
+二. this & that 具体值得是谁？ 目前接触的有以下14种情况，笔者打算一一列举出来，以后如果遇到了更多的情况，还会继续增加。
+既然 this 是执行上下文确定的，那么从执行上下文的种类进行分类，可以分为3种：
+那么接下来我们就从 Global Execution Context 全局执行上下文，Function Execution Context 函数执行上下文，Eval Execution Context Eval执行上下文 这三类，具体谈谈 this 究竟指的是谁。
+（一）. 全局执行上下文 1. 非严格模式下的函数调用 这是函数的最通常用法，属于全局性调用，因此 this 就代表全局对象 Global。
+var name = 'halfrost'; function test() { console."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/vue_electron/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/vue_ios_modularization/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&text=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&is_video=false&description=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&name=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7&description=%e6%96%b0%e6%89%8b%e5%9c%a8%e5%85%a5%e9%97%a8%20JavaScript%20%e7%9a%84%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e4%b8%80%e5%ae%9a%e4%bc%9a%e8%b8%a9%e5%be%88%e5%a4%9a%e5%85%b3%e4%ba%8e%20this%20%e7%9a%84%e5%9d%91%ef%bc%8c%e5%87%ba%e7%8e%b0%e9%97%ae%e9%a2%98%e7%9a%84%e6%9c%ac%e8%b4%a8%e5%b0%b1%e6%98%af%20this%20%e6%8c%87%e9%92%88%e7%9a%84%e6%8c%87%e5%90%91%e5%92%8c%e8%87%aa%e5%b7%b1%e6%83%b3%e7%9a%84%e4%b8%8d%e4%b8%80%e6%a0%b7%e3%80%82%e7%ac%94%e8%80%85%e5%9c%a8%e5%85%a5%e9%97%a8%e5%ad%a6%e4%b9%a0%e7%9a%84%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e4%b9%9f%e8%b8%a9%e4%ba%86%e5%be%88%e5%a4%9a%e5%9d%91%ef%bc%8c%e4%ba%8e%e6%98%af%e4%be%bf%e5%86%99%e4%b8%8b%e6%9c%ac%e7%af%87%e6%96%87%e7%ab%a0%e8%ae%b0%e5%bd%95%e8%87%aa%e5%b7%b1%e2%80%9c%e8%b8%a9%e5%9d%91%e2%80%9d%e5%8e%86%e7%a8%8b%e3%80%82%0a%e4%b8%80.%20this%20%e5%9c%a8%e5%93%aa%e9%87%8c%ef%bc%9f%20%e5%9c%a8%e4%b8%8a%e7%af%87%e3%80%8a%e4%bb%8e%20JavaScript%20%e4%bd%9c%e7%94%a8%e5%9f%9f%e8%af%b4%e5%bc%80%e5%8e%bb%e3%80%8b%e5%88%86%e6%9e%90%e4%b8%ad%ef%bc%8c%e6%88%91%e4%bb%ac%e7%9f%a5%e9%81%93%ef%bc%8c%e5%9c%a8%20Execution%20Context%20%e4%b8%ad%e6%9c%89%e4%b8%80%e4%b8%aa%e5%b1%9e%e6%80%a7%e6%98%af%20this%ef%bc%8c%e8%bf%99%e9%87%8c%e7%9a%84%20this%20%e5%b0%b1%e6%98%af%e6%88%91%e4%bb%ac%e6%89%80%e8%af%b4%e7%9a%84%20this%20%e3%80%82this%20%e4%b8%8e%e4%b8%8a%e4%b8%8b%e6%96%87%e4%b8%ad%e5%8f%af%e6%89%a7%e8%a1%8c%e4%bb%a3%e7%a0%81%e7%9a%84%e7%b1%bb%e5%9e%8b%e6%9c%89%e7%9b%b4%e6%8e%a5%e5%85%b3%e7%b3%bb%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%9c%a8%e8%bf%9b%e5%85%a5%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e6%97%b6%e7%a1%ae%e5%ae%9a%ef%bc%8c%e5%b9%b6%e4%b8%94%e5%9c%a8%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e8%bf%90%e8%a1%8c%e6%9c%9f%e9%97%b4%e6%b0%b8%e4%b9%85%e4%b8%8d%e5%8f%98%e3%80%82%0athis%20%e5%88%b0%e5%ba%95%e5%8f%96%e4%bd%95%e5%80%bc%ef%bc%9fthis%20%e7%9a%84%e5%8f%96%e5%80%bc%e6%98%af%e5%8a%a8%e6%80%81%e7%9a%84%ef%bc%8c%e6%98%af%e5%9c%a8%e5%87%bd%e6%95%b0%e7%9c%9f%e6%ad%a3%e8%a2%ab%e8%b0%83%e7%94%a8%e6%89%a7%e8%a1%8c%e7%9a%84%e6%97%b6%e5%80%99%e7%a1%ae%e5%ae%9a%e7%9a%84%ef%bc%8c%e5%87%bd%e6%95%b0%e5%ae%9a%e4%b9%89%e7%9a%84%e6%97%b6%e5%80%99%e7%a1%ae%e5%ae%9a%e4%b8%8d%e4%ba%86%e3%80%82%e5%9b%a0%e4%b8%ba%20this%20%e7%9a%84%e5%8f%96%e5%80%bc%e6%98%af%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%8e%af%e5%a2%83%e7%9a%84%e4%b8%80%e9%83%a8%e5%88%86%ef%bc%8c%e6%af%8f%e6%ac%a1%e8%b0%83%e7%94%a8%e5%87%bd%e6%95%b0%ef%bc%8c%e9%83%bd%e4%bc%9a%e4%ba%a7%e7%94%9f%e4%b8%80%e4%b8%aa%e6%96%b0%e7%9a%84%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%8e%af%e5%a2%83%e3%80%82%0a%e6%89%80%e4%bb%a5%20this%20%e7%9a%84%e4%bd%9c%e7%94%a8%e5%b0%b1%e6%98%af%e7%94%a8%e6%9d%a5%e6%8c%87%e6%98%8e%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e6%98%af%e5%9c%a8%e5%93%aa%e4%b8%aa%e4%b8%8a%e4%b8%8b%e6%96%87%e4%b8%ad%e8%a2%ab%e8%a7%a6%e5%8f%91%e7%9a%84%e5%af%b9%e8%b1%a1%e3%80%82%e4%bb%a4%e4%ba%ba%e8%bf%b7%e6%83%91%e7%9a%84%e5%9c%b0%e6%96%b9%e5%b0%b1%e5%9c%a8%e8%bf%99%e9%87%8c%ef%bc%8c%e5%90%8c%e4%b8%80%e4%b8%aa%e5%87%bd%e6%95%b0%ef%bc%8c%e5%bd%93%e5%9c%a8%e4%b8%8d%e5%90%8c%e7%9a%84%e4%b8%8a%e4%b8%8b%e6%96%87%e8%bf%9b%e8%a1%8c%e8%b0%83%e7%94%a8%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%b0%b1%e5%8f%af%e8%83%bd%e4%bc%9a%e4%b8%8d%e5%90%8c%e3%80%82%e4%b9%9f%e5%b0%b1%e6%98%af%e8%af%b4%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%b0%b1%e6%98%af%e5%87%bd%e6%95%b0%e8%b0%83%e7%94%a8%e8%a1%a8%e8%be%be%e5%bc%8f%ef%bc%88%e4%b9%9f%e5%b0%b1%e6%98%af%e5%87%bd%e6%95%b0%e8%a2%ab%e8%b0%83%e7%94%a8%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%89%e7%9a%84%20caller%e3%80%82%0a%e4%ba%8c.%20this%20%26amp%3b%20that%20%e5%85%b7%e4%bd%93%e5%80%bc%e5%be%97%e6%98%af%e8%b0%81%ef%bc%9f%20%e7%9b%ae%e5%89%8d%e6%8e%a5%e8%a7%a6%e7%9a%84%e6%9c%89%e4%bb%a5%e4%b8%8b14%e7%a7%8d%e6%83%85%e5%86%b5%ef%bc%8c%e7%ac%94%e8%80%85%e6%89%93%e7%ae%97%e4%b8%80%e4%b8%80%e5%88%97%e4%b8%be%e5%87%ba%e6%9d%a5%ef%bc%8c%e4%bb%a5%e5%90%8e%e5%a6%82%e6%9e%9c%e9%81%87%e5%88%b0%e4%ba%86%e6%9b%b4%e5%a4%9a%e7%9a%84%e6%83%85%e5%86%b5%ef%bc%8c%e8%bf%98%e4%bc%9a%e7%bb%a7%e7%bb%ad%e5%a2%9e%e5%8a%a0%e3%80%82%0a%e6%97%a2%e7%84%b6%20this%20%e6%98%af%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%a1%ae%e5%ae%9a%e7%9a%84%ef%bc%8c%e9%82%a3%e4%b9%88%e4%bb%8e%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%9a%84%e7%a7%8d%e7%b1%bb%e8%bf%9b%e8%a1%8c%e5%88%86%e7%b1%bb%ef%bc%8c%e5%8f%af%e4%bb%a5%e5%88%86%e4%b8%ba3%e7%a7%8d%ef%bc%9a%0a%e9%82%a3%e4%b9%88%e6%8e%a5%e4%b8%8b%e6%9d%a5%e6%88%91%e4%bb%ac%e5%b0%b1%e4%bb%8e%20Global%20Execution%20Context%20%e5%85%a8%e5%b1%80%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%ef%bc%8cFunction%20Execution%20Context%20%e5%87%bd%e6%95%b0%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%ef%bc%8cEval%20Execution%20Context%20Eval%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%20%e8%bf%99%e4%b8%89%e7%b1%bb%ef%bc%8c%e5%85%b7%e4%bd%93%e8%b0%88%e8%b0%88%20this%20%e7%a9%b6%e7%ab%9f%e6%8c%87%e7%9a%84%e6%98%af%e8%b0%81%e3%80%82%0a%ef%bc%88%e4%b8%80%ef%bc%89.%20%e5%85%a8%e5%b1%80%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%201.%20%e9%9d%9e%e4%b8%a5%e6%a0%bc%e6%a8%a1%e5%bc%8f%e4%b8%8b%e7%9a%84%e5%87%bd%e6%95%b0%e8%b0%83%e7%94%a8%20%e8%bf%99%e6%98%af%e5%87%bd%e6%95%b0%e7%9a%84%e6%9c%80%e9%80%9a%e5%b8%b8%e7%94%a8%e6%b3%95%ef%bc%8c%e5%b1%9e%e4%ba%8e%e5%85%a8%e5%b1%80%e6%80%a7%e8%b0%83%e7%94%a8%ef%bc%8c%e5%9b%a0%e6%ad%a4%20this%20%e5%b0%b1%e4%bb%a3%e8%a1%a8%e5%85%a8%e5%b1%80%e5%af%b9%e8%b1%a1%20Global%e3%80%82%0avar%20name%20%3d%20%26%2339%3bhalfrost%26%2339%3b%3b%20function%20test%28%29%20%7b%20console."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&t=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#一-this-在哪里>一. this 在哪里？</a></li><li><a href=#二-this--that-具体值得是谁>二. this & that 具体值得是谁？</a><ul><li><a href=#一-全局执行上下文>（一）. 全局执行上下文</a></li><li><a href=#1-非严格模式下的函数调用>1. 非严格模式下的函数调用</a></li><li><a href=#2-严格模式下的函数调用>2. 严格模式下的函数调用</a></li><li><a href=#二函数执行上下文>（二）.函数执行上下文</a></li><li><a href=#3-函数调用>3. 函数调用</a></li><li><a href=#4-方法作为对象的属性被调用>4. 方法作为对象的属性被调用</a></li><li><a href=#5-构造函数的调用>5. 构造函数的调用</a></li><li><a href=#6-内部函数--匿名函数-的调用>6. 内部函数 / 匿名函数 的调用</a></li><li><a href=#7-call--apply--bind-的方式调用>7. call() / apply() / bind() 的方式调用</a></li><li><a href=#8-settimeoutsetinterval-中的-this>8. setTimeout、setInterval 中的 this</a></li><li><a href=#9-dom-event>9. DOM event</a></li><li><a href=#10-in-line-的方式调用>10. in-line 的方式调用</a></li><li><a href=#11-this--that>11. this & that</a></li><li><a href=#12-箭头函数>12. 箭头函数</a></li><li><a href=#13-函数绑定>13. 函数绑定</a></li><li><a href=#三-eval执行上下文>（三）. Eval执行上下文</a></li><li><a href=#14-eval-函数>14. Eval 函数</a></li></ul></li><li><a href=#总结>总结</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">揭开 this & that 之迷</h1><div class=meta><div class=postdate><time datetime="2017-06-24 10:52:00 +0000 UTC" itemprop=datePublished>Jun 24</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/javascript>JavaScript</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/javascript rel=tag>JavaScript</a></div></div></header><div class=content itemprop=articleBody><p>新手在入门 JavaScript 的过程中，一定会踩很多关于 this 的坑，出现问题的本质就是 this 指针的指向和自己想的不一样。笔者在入门学习的过程中，也踩了很多坑，于是便写下本篇文章记录自己“踩坑”历程。</p><h3 id=一-this-在哪里>一. this 在哪里？</h3><p>在上篇<a href=http://www.jianshu.com/p/9ecb728c5db9>《从 JavaScript 作用域说开去》</a>分析中，我们知道，在 Execution Context 中有一个属性是 this，这里的 this 就是我们所说的 this 。this 与上下文中可执行代码的类型有直接关系，<strong>this 的值在进入执行上下文时确定，并且在执行上下文运行期间永久不变。</strong></p><p>this 到底取何值？this 的取值是动态的，是在函数真正被调用执行的时候确定的，函数定义的时候确定不了。因为 this 的取值是执行上下文环境的一部分，每次调用函数，都会产生一个新的执行上下文环境。</p><p>所以 this 的作用就是用来指明执行上下文是在哪个上下文中被触发的对象。令人迷惑的地方就在这里，同一个函数，当在不同的上下文进行调用的时候，this 的值就可能会不同。也就是说，this 的值就是函数调用表达式（也就是函数被调用的方式）的 caller。</p><h3 id=二-this--that-具体值得是谁>二. this & that 具体值得是谁？</h3><p>目前接触的有以下14种情况，笔者打算一一列举出来，以后如果遇到了更多的情况，还会继续增加。</p><p>既然 this 是执行上下文确定的，那么从执行上下文的种类进行分类，可以分为3种：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/48_6.png alt></p><p>那么接下来我们就从 Global Execution Context 全局执行上下文，Function Execution Context 函数执行上下文，Eval Execution Context Eval执行上下文 这三类，具体谈谈 this 究竟指的是谁。</p><h4 id=一-全局执行上下文>（一）. 全局执行上下文</h4><h4 id=1-非严格模式下的函数调用>1. 非严格模式下的函数调用</h4><p>这是函数的最通常用法，属于全局性调用，因此 this 就代表全局对象 Global。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>;
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>test</span>() {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>// window
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>); <span style=color:#75715e>// halfrost
+</span><span style=color:#75715e></span>}                                                                                                                                                                                                                                                                                                                              
+<span style=color:#a6e22e>test</span>();
+
+
+</code></pre></div><p>在全局上下文（Global Context）中，this 总是 global object，在浏览器中就是 window 对象。</p><h4 id=2-严格模式下的函数调用>2. 严格模式下的函数调用</h4><p>严格模式由 <a href=http://www.ecma-international.org/ecma-262/5.1/#sec-10.1.1>ECMAScript 5.1</a> 引进，用来限制 JavaScript 的一些异常处理，提供更好的安全性和更强壮的错误检查机制。使用严格模式，只需要将 &lsquo;use strict&rsquo; 置于函数体的顶部。这样就可以将上下文环境中的 this 转为 undefined。这样执行上下文环境不再是全局对象，与非严格模式刚好相反。</p><p>在严格模式下，情况并不是仅仅是 undefined 这么简单，有可能严格模式夹杂着非严格模式。</p><p>先看严格模式的情况：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#e6db74>&#39;use strict&#39;</span>;
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>test</span>() {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>//undefined
+</span><span style=color:#75715e></span>};
+<span style=color:#a6e22e>test</span>();
+
+</code></pre></div><p>上面的这个情况比较好理解，还有一种情况也是严格模式下的：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>execute</span>() {  
+      <span style=color:#e6db74>&#39;use strict&#39;</span>; <span style=color:#75715e>// 开启严格模式
+</span><span style=color:#75715e></span>      <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>test</span>() {
+        <span style=color:#75715e>// 内部函数也是严格模式
+</span><span style=color:#75715e></span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span>      }
+      <span style=color:#75715e>// 在严格模式下调用 test()
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// this 在 test() 下是 undefined
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>test</span>(); <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span>    }
+    <span style=color:#a6e22e>execute</span>();  
+
+</code></pre></div><p>如果严格模式在外层，那么在执行作用域内部声明的函数，它会继承严格模式。</p><p>接下来就看看严格模式和非严格模式混合的情况。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>nonStrict</span>() {  
+      <span style=color:#75715e>// 非严格模式
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>// window
+</span><span style=color:#75715e></span>    }
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>strict</span>() {  
+      <span style=color:#e6db74>&#39;use strict&#39;</span>;
+      <span style=color:#75715e>// 严格模式
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span>    }
+
+
+
+</code></pre></div><p>这种情况就比较简单了，各个模式下分别判断就可以了。</p><h4 id=二函数执行上下文>（二）.函数执行上下文</h4><h4 id=3-函数调用>3. 函数调用</h4><p>当通过正常的方式调用一个函数的时候，this 的值就会被设置为 global object（浏览器中的 window 对象）。</p><p>严格模式和非严格模式的情况和上述全局执行上下文的情况一致，严格模式对应的 undefined ，非严格模式对应的 window 这里就不再赘述了。</p><h4 id=4-方法作为对象的属性被调用>4. 方法作为对象的属性被调用</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;halfrost&#34;</span>,
+    <span style=color:#a6e22e>func</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> () {
+        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;:&#34;</span> <span style=color:#f92672>+</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>);
+    }
+};
+
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>func</span>(); <span style=color:#75715e>// halfrost
+</span><span style=color:#75715e></span>
+</code></pre></div><p>在这个例子里面的 this 调用的是函数的调用者 person，所以会输出 person.name 。</p><p>当然如果函数的调用者是一个全局对象的话，那么这里的 this 指向又会发生变化。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;YDZ&#34;</span>;
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;halfrost&#34;</span>,
+    <span style=color:#a6e22e>func</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> () {
+        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;:&#34;</span> <span style=color:#f92672>+</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>);
+    }
+};
+
+<span style=color:#a6e22e>temp</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>func</span>;
+<span style=color:#a6e22e>temp</span>(); <span style=color:#75715e>// YDZ
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>在上面这个例子里面，由于函数被赋值到了另一个变量中，并没有作为 person 的一个属性被调用，那么 this 的值就是 window。</p><p>上述现象其实可以描述为，“<strong>从一个类中提取方式时丢失了 this 对象</strong>”。针对这个现象可以再举一个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>counter</span> <span style=color:#f92672>=</span> {
+      <span style=color:#a6e22e>count</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>0</span>,
+      <span style=color:#a6e22e>inc</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+          <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>count</span> <span style=color:#f92672>++</span>;
+      }
+}
+
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>func</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>inc</span>;
+<span style=color:#a6e22e>func</span>();
+<span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>count</span>;   <span style=color:#75715e>// 输出0，会发现func函数根本不起作用
+</span><span style=color:#75715e></span>
+</code></pre></div><p>这里我们虽然把 counter.inc 函数提取出来了，但是函数里面的 this 变成了全局对象了，所以 func() 函数执行的结果是 window.count++。然而 window.count 根本不存在，且值是 undefined，对 undefined 操作，得到的结果只能是 NaN。</p><p>验证一下，我们打印全局的 count：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>count</span>  <span style=color:#75715e>// 输出是 NaN
+</span><span style=color:#75715e></span>
+</code></pre></div><p>那么这种情况我们应该如何解决呢？如果就是想提取出一个有用的方法给其他类使用呢？这个时候的正确做法是使用 bind 函数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>func2</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>inc</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#a6e22e>counter</span>);
+<span style=color:#a6e22e>func2</span>();
+<span style=color:#a6e22e>counter</span>.<span style=color:#a6e22e>count</span>; <span style=color:#75715e>// 输出是1，函数生效了！
+</span><span style=color:#75715e></span>
+</code></pre></div><h4 id=5-构造函数的调用>5. 构造函数的调用</h4><p>所谓构造函数就是用来 new 对象的函数。严格的来说，所有的函数都可以 new 一个对象，但是有些函数的定义是为了 new 一个对象，而有些函数则不是。另外注意，构造函数的函数名第一个字母大写（规则约定）。例如：Object、Array、Function等。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>person</span>() {
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;halfrost&#34;</span>;
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>age</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>18</span>;
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>);
+}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>ydz</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>person</span>();  <span style=color:#75715e>// person {name: &#34;halfrost&#34;, age: 18}
+</span><span style=color:#75715e></span><span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#a6e22e>ydz</span>.<span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>ydz</span>.<span style=color:#a6e22e>age</span>); <span style=color:#75715e>// halfrost 18
+</span><span style=color:#75715e></span>
+</code></pre></div><p>如果是构造函数被调用的话，this 其实指向的是 new 出来的那个对象。</p><p>如果不是被当做构造函数调用的话，情况有所区别：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>person</span>() {
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;halfrost&#34;</span>;
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>age</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>18</span>;
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>);
+}
+
+<span style=color:#a6e22e>person</span>(); <span style=color:#75715e>// Window {stop: function, open: function, alert: function, confirm: function, prompt: function…}
+</span><span style=color:#75715e></span>
+</code></pre></div><p>如果不是被当做构造函数调用的话，那就变成了普通函数调用的情况，那么这里的 this 就是 window。</p><p>构造函数里面如果还定义了 prototype，this 会指向什么呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>person</span>() {
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;halfrost&#34;</span>;
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>age</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>18</span>;
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>);
+}
+
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>prototype</span>.<span style=color:#a6e22e>getName</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span>() {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>); <span style=color:#75715e>// person {name: &#34;halfrost&#34;, age: 18} &#34;halfrost&#34;
+</span><span style=color:#75715e></span>}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>ydz</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>person</span>();  <span style=color:#75715e>// person {name: &#34;halfrost&#34;, age: 18}
+</span><span style=color:#75715e></span><span style=color:#a6e22e>ydz</span>.<span style=color:#a6e22e>getName</span>();
+
+</code></pre></div><p>在 person.prototype.getName 函数中，this 指向的是 ydz 对象。因此可以通过 this.name 获取 ydz.name 的值。</p><p>其实，不仅仅是构造函数的 prototype，即便是在整个原型链中，this 代表的也都是当前对象的值。</p><h4 id=6-内部函数--匿名函数-的调用>6. 内部函数 / 匿名函数 的调用</h4><p>如果在一个对象的属性是一个方法，这个方法里面又定义了内部函数和匿名函数，那么它们的 this 又是怎么样的呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>context</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;global&#34;</span>;
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>test</span> <span style=color:#f92672>=</span> {  
+    <span style=color:#a6e22e>context</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;inside&#34;</span>,
+    <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> () {  
+        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;:&#34;</span> <span style=color:#f92672>+</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>context</span>);
+        
+        <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>f</span>() {
+            <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>context</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;function&#34;</span>;
+            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;:&#34;</span> <span style=color:#f92672>+</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>context</span>); 
+        };
+        <span style=color:#a6e22e>f</span>(); 
+        
+        (<span style=color:#66d9ef>function</span>(){
+            <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>context</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;function&#34;</span>;
+            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#34;:&#34;</span> <span style=color:#f92672>+</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>context</span>); 
+        })();
+    }
+};
+
+<span style=color:#a6e22e>test</span>.<span style=color:#a6e22e>method</span>();
+
+<span style=color:#75715e>// [object Object]:object
+</span><span style=color:#75715e>// [object Window]:global
+</span><span style=color:#75715e>// [object Window]:global
+</span><span style=color:#75715e></span>
+</code></pre></div><p>从输出可以看出，内部函数和匿名函数里面的 this 都是指向外面的 window。</p><h4 id=7-call--apply--bind-的方式调用>7. call() / apply() / bind() 的方式调用</h4><p>this 本身是不可变的，但是 JavaScript 中提供了 call() / apply() / bind() 三个函数来在函数调用时设置 this 的值。</p><p>这三个函数的原型如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#75715e>// Sets obj1 as the value of this inside fun() and calls fun() passing elements of argsArray as its arguments.
+</span><span style=color:#75715e></span><span style=color:#a6e22e>fun</span>.<span style=color:#a6e22e>apply</span>(<span style=color:#a6e22e>obj1</span> [, <span style=color:#a6e22e>argsArray</span>])
+
+<span style=color:#75715e>// Sets obj1 as the value of this inside fun() and calls fun() passing arg1, arg2, arg3, ... as its arguments.
+</span><span style=color:#75715e></span><span style=color:#a6e22e>fun</span>.<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>obj1</span> [, <span style=color:#a6e22e>arg1</span> [, <span style=color:#a6e22e>arg2</span> [,<span style=color:#a6e22e>arg3</span> [, ...]]]])
+
+<span style=color:#75715e>// Returns the reference to the function fun with this inside fun() bound to obj1 and parameters of fun bound to the parameters specified arg1, arg2, arg3, ....
+</span><span style=color:#75715e></span><span style=color:#a6e22e>fun</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#a6e22e>obj1</span> [, <span style=color:#a6e22e>arg1</span> [, <span style=color:#a6e22e>arg2</span> [,<span style=color:#a6e22e>arg3</span> [, ...]]]])
+
+
+</code></pre></div><p>在这3个函数里面，this 都是对应的第一个参数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>rabbit</span> <span style=color:#f92672>=</span> { <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;White Rabbit&#39;</span> };  
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>concatName</span>(<span style=color:#a6e22e>string</span>) {  
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>===</span> <span style=color:#a6e22e>rabbit</span>); <span style=color:#75715e>// =&gt; true
+</span><span style=color:#75715e></span>      <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>string</span> <span style=color:#f92672>+</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>;
+    }
+    <span style=color:#75715e>// 间接调用
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>concatName</span>.<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>rabbit</span>, <span style=color:#e6db74>&#39;Hello &#39;</span>);  <span style=color:#75715e>// =&gt; &#39;Hello White Rabbit&#39;  
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>concatName</span>.<span style=color:#a6e22e>apply</span>(<span style=color:#a6e22e>rabbit</span>, [<span style=color:#e6db74>&#39;Bye &#39;</span>]); <span style=color:#75715e>// =&gt; &#39;Bye White Rabbit&#39;  
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>apply() 和 call() 能够强制改变函数执行时的当前对象，让 this 指向其他对象。apply() 和 call() 的区别在于，apply() 的入参是一个数组，call() 的入参是一个参数列表。</p><p>apply() 和 call()，它俩都立即执行了函数，而 bind() 函数返回了一个新的函数，它允许创建预先设置好 this 的函数 ，并可以延后调用。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>multiply</span>(<span style=color:#a6e22e>number</span>) {  
+      <span style=color:#e6db74>&#39;use strict&#39;</span>;
+      <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>number</span>;
+    }
+    <span style=color:#75715e>// 创建绑定函数，绑定上下文2
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>var</span> <span style=color:#66d9ef>double</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>multiply</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#ae81ff>2</span>);  
+    <span style=color:#75715e>// 调用间接调用
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>double</span>(<span style=color:#ae81ff>3</span>);  <span style=color:#75715e>// =&gt; 6  
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>double</span>(<span style=color:#ae81ff>10</span>); <span style=color:#75715e>// =&gt; 20
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>bind() 函数实质其实是实现了，原始绑定函数共享相同的代码和作用域，但是在执行时拥有不同的上下文环境。</p><p>bind() 函数创建了一个永恒的上下文链并不可修改。一个绑定函数即使使用 call() 或者 apply()传入其他不同的上下文环境，也不会更改它之前连接的上下文环境，重新绑定也不会起任何作用。</p><p>只有在构造器调用时，绑定函数可以改变上下文，然而这并不是特别推荐的做法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+    <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>getThis</span>() {  
+      <span style=color:#e6db74>&#39;use strict&#39;</span>;
+      <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>;
+    }
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>one</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>getThis</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#ae81ff>1</span>);  
+    <span style=color:#75715e>// 绑定函数调用
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>one</span>(); <span style=color:#75715e>// =&gt; 1  
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// 使用 .apply() 和 .call() 绑定函数
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>one</span>.<span style=color:#a6e22e>call</span>(<span style=color:#ae81ff>2</span>);  <span style=color:#75715e>// =&gt; 1  
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>one</span>.<span style=color:#a6e22e>apply</span>(<span style=color:#ae81ff>2</span>); <span style=color:#75715e>// =&gt; 1  
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// 重新绑定
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>one</span>.<span style=color:#a6e22e>bind</span>(<span style=color:#ae81ff>2</span>)(); <span style=color:#75715e>// =&gt; 1  
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// 利用构造器方式调用绑定函数
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>one</span>(); <span style=color:#75715e>// =&gt; Object 
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>只有 new one() 时可以改变绑定函数的上下文环境，其他类型的调用结果是 this 永远指向 1。</p><h4 id=8-settimeoutsetinterval-中的-this>8. setTimeout、setInterval 中的 this</h4><p>《 javascript 高级程序设计》中写到：“超时调用的代码需要调用 window 对象的 setTimeout 方法”。setTimeout/setInterval 执行的时候，this 默认指向 window 对象，除非手动改变 this 的指向。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>;
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>Person</span>(){
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;YDZ&#39;</span>;
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>sayName</span><span style=color:#f92672>=</span><span style=color:#66d9ef>function</span>(){
+    	<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>); <span style=color:#75715e>// window
+</span><span style=color:#75715e></span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span>); <span style=color:#75715e>// halfrost
+</span><span style=color:#75715e></span>        };
+    <span style=color:#a6e22e>setTimeout</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>sayName</span>, <span style=color:#ae81ff>10</span>);
+    }
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span><span style=color:#f92672>=</span><span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Person</span>();
+
+</code></pre></div><p>上面这个例子如果想改变 this 的指向，可是使用 apply/call 等，也可以使用 that 保存 this。</p><p>值得注意的是：<strong>setTimeout 中的回调函数在严格模式下也指向 window 而不是 undefined ！</strong></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#e6db74>&#39;use strict&#39;</span>;
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>test</span>() {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>);  <span style=color:#75715e>//window
+</span><span style=color:#75715e></span>}
+<span style=color:#a6e22e>setTimeout</span>(<span style=color:#a6e22e>test</span>, <span style=color:#ae81ff>0</span>);
+
+</code></pre></div><p>因为 setTimeout 的回调函数如果没有指定的 this ，会做一个隐式的操作，将全局上下文注入进去，不管是在严格还是非严格模式下。</p><h4 id=9-dom-event>9. DOM event</h4><p>当一个函数被当作event handler的时候，this会被设置为触发事件的页面元素（element）。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html>
+var body = document.getElementsByTagName(&#34;body&#34;)[0];
+body.addEventListener(&#34;click&#34;, function(){
+    console.log(this);
+});
+// &lt;<span style=color:#f92672>body</span>&gt;…&lt;/<span style=color:#f92672>body</span>&gt;
+
+</code></pre></div><h4 id=10-in-line-的方式调用>10. in-line 的方式调用</h4><p>当代码通过 in-line handler 执行的时候，this 同样指向拥有该
+handler 的页面元素。</p><p>看下面的代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+document.<span style=color:#a6e22e>write</span>(<span style=color:#e6db74>&#39;&lt;button onclick=&#34;console.log(this)&#34;&gt;Show this&lt;/button&gt;&#39;</span>);
+<span style=color:#75715e>// &lt;button onclick=&#34;console.log(this)&#34;&gt;Show this&lt;/button&gt;
+</span><span style=color:#75715e></span>document.<span style=color:#a6e22e>write</span>(<span style=color:#e6db74>&#39;&lt;button onclick=&#34;(function(){console.log(this);})()&#34;&gt;Show this&lt;/button&gt;&#39;</span>);
+<span style=color:#75715e>// window
+</span><span style=color:#75715e></span>
+</code></pre></div><p>在第一行代码中，正如上面 in-line handler 所描述的，this 将指向 &ldquo;button&rdquo; 这个 element。但是，对于第二行代码中的匿名函数，是一个上下文无关（context-less）的函数，所以 this 会被默认的设置为
+window。</p><p>前面我们已经介绍过了 bind 函数，所以，通过下面的修改就能改变上面例子中第二行代码的行为：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+document.<span style=color:#a6e22e>write</span>(<span style=color:#e6db74>&#39;&lt;button onclick=&#34;((function(){console.log(this);}).bind(this))()&#34;&gt;Show this&lt;/button&gt;&#39;</span>);
+<span style=color:#75715e>// &lt;button onclick=&#34;((function(){console.log(this);}).bind(this))()&#34;&gt;Show this&lt;/button&gt;
+</span><span style=color:#75715e></span>
+</code></pre></div><h4 id=11-this--that>11. this & that</h4><p>在 JavaScript 中，经常会存在嵌套函数，这是因为函数可以作为参数，并可以在合适的时候通过函数表达式创建。这会引发一些问题，如果一个方法包含一个普通函数，而你又想在后者的内部访问到前者，方法中的 this 会被普通函数的 this 覆盖，比如下面的例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+       <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>,
+       <span style=color:#a6e22e>friends</span><span style=color:#f92672>:</span> [ <span style=color:#e6db74>&#39;AA&#39;</span>, <span style=color:#e6db74>&#39;BB&#39;</span>],
+       <span style=color:#a6e22e>loop</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+            <span style=color:#e6db74>&#39;use strict&#39;</span>;
+             <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(
+                 <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>friend</span>) {   <span style=color:#75715e>// (1)
+</span><span style=color:#75715e></span>                    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39; knows &#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);   <span style=color:#75715e>// (2)
+</span><span style=color:#75715e></span>                 }
+          );
+      }
+};
+
+
+</code></pre></div><p>上述这个例子中，假设(1)处的函数想要在(2)这一行访问到 loop 方法里面的 this，该怎么做呢？</p><p>如果直接去调用 loop 方法是不行的，会发现报了下面这个错误。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>loop</span>();
+<span style=color:#75715e>// Uncaught TypeError: Cannot read property &#39;name&#39; of undefined
+</span><span style=color:#75715e></span>
+</code></pre></div><p>因为(1)处的函数拥有自己的 this，是没有办法在里面调用外面一层的 this 的。那怎么办呢？</p><p>解决办法有3种：</p><p>(1) that = this
+我们可以把外层的 this 保存一份，一般会使用 that ，self，me，这些变量名暂存 this。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+       <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>,
+       <span style=color:#a6e22e>friends</span><span style=color:#f92672>:</span> [ <span style=color:#e6db74>&#39;AA&#39;</span>, <span style=color:#e6db74>&#39;BB&#39;</span>],
+       <span style=color:#a6e22e>loop</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+            <span style=color:#e6db74>&#39;use strict&#39;</span>;
+             <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>that</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>;
+             <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(
+                 <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>friend</span>) {   <span style=color:#75715e>// (1)
+</span><span style=color:#75715e></span>                    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#a6e22e>that</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39; knows &#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);   <span style=color:#75715e>// (2)
+</span><span style=color:#75715e></span>                 }
+          );
+      }
+};
+
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>loop</span>();
+
+<span style=color:#75715e>// halfrost knows AA
+</span><span style=color:#75715e>// halfrost knows BB
+</span><span style=color:#75715e></span>
+</code></pre></div><p>这样就可以正确的输出想要的答案了。</p><p>(2) bind()</p><p>借助 bind() 函数，直接给回调函数的 this 绑定一个固定值，即函数的 this：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+       <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>,
+       <span style=color:#a6e22e>friends</span><span style=color:#f92672>:</span> [ <span style=color:#e6db74>&#39;AA&#39;</span>, <span style=color:#e6db74>&#39;BB&#39;</span>],
+       <span style=color:#a6e22e>loop</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+            <span style=color:#e6db74>&#39;use strict&#39;</span>;
+             <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>that</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>;
+             <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(
+                 <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>friend</span>) {   <span style=color:#75715e>// (1)
+</span><span style=color:#75715e></span>                    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39; knows &#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);   <span style=color:#75715e>// (2)
+</span><span style=color:#75715e></span>                 }.<span style=color:#a6e22e>bind</span>(<span style=color:#66d9ef>this</span>)
+          );
+      }
+};
+
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>loop</span>();
+
+<span style=color:#75715e>// halfrost knows AA
+</span><span style=color:#75715e>// halfrost knows BB
+</span><span style=color:#75715e></span>
+</code></pre></div><p>(3) forEach() 的 thisValue</p><p>这种方法特定于 forEach()中，因为在这个方法的回调函数里面提供了第二个参数，我们可以利用这个参数，让它来为我们提供 this：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+       <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>,
+       <span style=color:#a6e22e>friends</span><span style=color:#f92672>:</span> [ <span style=color:#e6db74>&#39;AA&#39;</span>, <span style=color:#e6db74>&#39;BB&#39;</span>],
+       <span style=color:#a6e22e>loop</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+            <span style=color:#e6db74>&#39;use strict&#39;</span>;
+             <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>that</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>;
+             <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(
+                 <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>friend</span>) {   <span style=color:#75715e>// (1)
+</span><span style=color:#75715e></span>                    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39; knows &#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);   <span style=color:#75715e>// (2)
+</span><span style=color:#75715e></span>                 }, <span style=color:#66d9ef>this</span> );
+      }
+};
+
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>loop</span>();
+
+<span style=color:#75715e>// halfrost knows AA
+</span><span style=color:#75715e>// halfrost knows BB
+</span><span style=color:#75715e></span>
+</code></pre></div><h4 id=12-箭头函数>12. 箭头函数</h4><p>箭头函数是 ES6 增加的新用法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>numbers</span> <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>2</span>];  
+    (<span style=color:#66d9ef>function</span>() {  
+      <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>get</span> <span style=color:#f92672>=</span> () =&gt; {
+        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>===</span> <span style=color:#a6e22e>numbers</span>); <span style=color:#75715e>// =&gt; true
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>;
+      };
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span> <span style=color:#f92672>===</span> <span style=color:#a6e22e>numbers</span>); <span style=color:#75715e>// =&gt; true
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>get</span>(); <span style=color:#75715e>// =&gt; [1, 2]
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// 箭头函数使用 .apply() 和 .call()
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>get</span>.<span style=color:#a6e22e>call</span>([<span style=color:#ae81ff>0</span>]);  <span style=color:#75715e>// =&gt; [1, 2]
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>get</span>.<span style=color:#a6e22e>apply</span>([<span style=color:#ae81ff>0</span>]); <span style=color:#75715e>// =&gt; [1, 2]
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// Bind
+</span><span style=color:#75715e></span>      <span style=color:#a6e22e>get</span>.<span style=color:#a6e22e>bind</span>([<span style=color:#ae81ff>0</span>])(); <span style=color:#75715e>// =&gt; [1, 2]
+</span><span style=color:#75715e></span>    }).<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>numbers</span>);
+
+
+</code></pre></div><p>从上面的例子可以看出：</p><ol><li><p>箭头函数里面的 this 对象就是定义时候所在的对象，而不是使用时所在的对象。</p></li><li><p>箭头函数不能被用来当做构造函数，于是也不能使用 new 命令。否则会报错<code>TypeError: get is not a constructor</code>。</p><p>this 指向的固化，并不是因为箭头函数内部有绑定 this 的机制，实际原因是箭头函数根本就没有自己的 this ，导致内部的 this 就是外层代码块的 this。正因为它没有 this，所以也就不能作为构造函数了。</p></li><li><p>箭头函数也不能使用 arguments 对象，因为 arguments 对象在箭头函数体内不存在，如果要使用，可以用 rest 参数代替。同样的，super，new.target 在箭头函数里面也是不存在的。所以，arguments、super、new.target 这3个变量在箭头函数里面都不存在。</p></li><li><p>箭头函数里面也不能使用 yield 命令，因此箭头函数也不能用作 Generator 函数。</p></li><li><p>由于箭头函数没有自己的 this ，当然就不能用 call()、apply()、bind() 这些方法去改变 this 的指向。</p></li></ol><h4 id=13-函数绑定>13. 函数绑定</h4><p>虽然在 ES6 中引入了箭头函数可以绑定 this 对象，大大减少了显示绑定 this 对象的写法(call、apply、bind)。鉴于箭头函数有上述说到的4个缺点（不能当做构造函数，不能使用 arguments 对象，不能使用 yield 命令，不能使用call、apply、bind），所以在 ES7 中又提出了函数绑定运算符。用来取代 call、apply、bind 的调用。</p><p>函数绑定运算符是并排的双冒号（::），双冒号左边是一个对象，右边是一个函数。该运算符会自动的将左边的对象作为上下文环境（即
+this 对象）绑定到右边的函数上。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>foo</span><span style=color:#f92672>::</span><span style=color:#a6e22e>bar</span>  <span style=color:#75715e>// 等同于 bar.bind(foo)
+</span><span style=color:#75715e></span>
+<span style=color:#a6e22e>foo</span><span style=color:#f92672>::</span><span style=color:#a6e22e>bar</span>(...<span style=color:#a6e22e>arguments</span>) <span style=color:#75715e>// 等同于 bar.apply(foo,arguments)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><h4 id=三-eval执行上下文>（三）. Eval执行上下文</h4><h4 id=14-eval-函数>14. Eval 函数</h4><p>Eval 函数比较特殊，this 指向就是当前作用域的对象。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;halfrost&#39;</span>;
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>person</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;YDZ&#39;</span>,
+    <span style=color:#a6e22e>getName</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>(){
+        eval(<span style=color:#e6db74>&#34;console.log(this.name)&#34;</span>);
+    }
+}
+<span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>getName</span>();  <span style=color:#75715e>// YDZ
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>getName</span><span style=color:#f92672>=</span><span style=color:#a6e22e>person</span>.<span style=color:#a6e22e>getName</span>;
+<span style=color:#a6e22e>getName</span>();  <span style=color:#75715e>// halfrost
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这里的结果和方法作为对象的属性被调用的结果是一样的。</p><h3 id=总结>总结</h3><p>如果要判断一个运行中函数的 this 绑定，就需要找到这个函数的直接调用位置。找到之后
+就可以顺序应用下面这四条规则来判断 this 的绑定对象。</p><ol><li>函数是否在new中调用(new绑定)?如果是的话this绑定的是新创建的对象。
+var bar = new foo()</li><li>函数是否通过call、apply(显式绑定)或者硬绑定调用?如果是的话，this绑定的是 指定的对象。
+var bar = foo.call(obj2)</li><li>函数是否在某个上下文对象中调用(隐式绑定)?如果是的话，this绑定的是那个上 下文对象。
+var bar = obj1.foo()</li><li>如果都不是的话，使用默认绑定。如果在严格模式下，就绑定到undefined，否则绑定到 全局对象。
+var bar = foo()</li></ol><p>ES6 中的箭头函数并不会使用四条标准的绑定规则，而是根据当前的词法作用域来决定 this，具体来说，箭头函数会继承外层函数调用的 this 绑定(无论 this 绑定到什么)。这 其实和ES6之前代码中的self = this机制一样。</p><hr><p>Reference：<br>《ECMAScript 6 Primer》<br>《javascript 高级程序设计》<br><a href=https://gold.xitu.io/entry/576d640d2e958a005724e07f>JavaScript This 之谜(译文)</a><br>《你不知道的JavaScript（上卷）》</p><blockquote><p>GitHub Repo：<a href=https://github.com/halfrost/Halfrost-Field>Halfrost-Field</a></p><p>Follow: <a href=https://github.com/halfrost>halfrost · GitHub</a></p><p>Source:<a href=https://halfrost.com/javascript_this/>https://halfrost.com/javascript_this/</a></p></blockquote><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#一-this-在哪里>一. this 在哪里？</a></li><li><a href=#二-this--that-具体值得是谁>二. this & that 具体值得是谁？</a><ul><li><a href=#一-全局执行上下文>（一）. 全局执行上下文</a></li><li><a href=#1-非严格模式下的函数调用>1. 非严格模式下的函数调用</a></li><li><a href=#2-严格模式下的函数调用>2. 严格模式下的函数调用</a></li><li><a href=#二函数执行上下文>（二）.函数执行上下文</a></li><li><a href=#3-函数调用>3. 函数调用</a></li><li><a href=#4-方法作为对象的属性被调用>4. 方法作为对象的属性被调用</a></li><li><a href=#5-构造函数的调用>5. 构造函数的调用</a></li><li><a href=#6-内部函数--匿名函数-的调用>6. 内部函数 / 匿名函数 的调用</a></li><li><a href=#7-call--apply--bind-的方式调用>7. call() / apply() / bind() 的方式调用</a></li><li><a href=#8-settimeoutsetinterval-中的-this>8. setTimeout、setInterval 中的 this</a></li><li><a href=#9-dom-event>9. DOM event</a></li><li><a href=#10-in-line-的方式调用>10. in-line 的方式调用</a></li><li><a href=#11-this--that>11. this & that</a></li><li><a href=#12-箭头函数>12. 箭头函数</a></li><li><a href=#13-函数绑定>13. 函数绑定</a></li><li><a href=#三-eval执行上下文>（三）. Eval执行上下文</a></li><li><a href=#14-eval-函数>14. Eval 函数</a></li></ul></li><li><a href=#总结>总结</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&text=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&is_video=false&description=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&title=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&name=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7&description=%e6%96%b0%e6%89%8b%e5%9c%a8%e5%85%a5%e9%97%a8%20JavaScript%20%e7%9a%84%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e4%b8%80%e5%ae%9a%e4%bc%9a%e8%b8%a9%e5%be%88%e5%a4%9a%e5%85%b3%e4%ba%8e%20this%20%e7%9a%84%e5%9d%91%ef%bc%8c%e5%87%ba%e7%8e%b0%e9%97%ae%e9%a2%98%e7%9a%84%e6%9c%ac%e8%b4%a8%e5%b0%b1%e6%98%af%20this%20%e6%8c%87%e9%92%88%e7%9a%84%e6%8c%87%e5%90%91%e5%92%8c%e8%87%aa%e5%b7%b1%e6%83%b3%e7%9a%84%e4%b8%8d%e4%b8%80%e6%a0%b7%e3%80%82%e7%ac%94%e8%80%85%e5%9c%a8%e5%85%a5%e9%97%a8%e5%ad%a6%e4%b9%a0%e7%9a%84%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e4%b9%9f%e8%b8%a9%e4%ba%86%e5%be%88%e5%a4%9a%e5%9d%91%ef%bc%8c%e4%ba%8e%e6%98%af%e4%be%bf%e5%86%99%e4%b8%8b%e6%9c%ac%e7%af%87%e6%96%87%e7%ab%a0%e8%ae%b0%e5%bd%95%e8%87%aa%e5%b7%b1%e2%80%9c%e8%b8%a9%e5%9d%91%e2%80%9d%e5%8e%86%e7%a8%8b%e3%80%82%0a%e4%b8%80.%20this%20%e5%9c%a8%e5%93%aa%e9%87%8c%ef%bc%9f%20%e5%9c%a8%e4%b8%8a%e7%af%87%e3%80%8a%e4%bb%8e%20JavaScript%20%e4%bd%9c%e7%94%a8%e5%9f%9f%e8%af%b4%e5%bc%80%e5%8e%bb%e3%80%8b%e5%88%86%e6%9e%90%e4%b8%ad%ef%bc%8c%e6%88%91%e4%bb%ac%e7%9f%a5%e9%81%93%ef%bc%8c%e5%9c%a8%20Execution%20Context%20%e4%b8%ad%e6%9c%89%e4%b8%80%e4%b8%aa%e5%b1%9e%e6%80%a7%e6%98%af%20this%ef%bc%8c%e8%bf%99%e9%87%8c%e7%9a%84%20this%20%e5%b0%b1%e6%98%af%e6%88%91%e4%bb%ac%e6%89%80%e8%af%b4%e7%9a%84%20this%20%e3%80%82this%20%e4%b8%8e%e4%b8%8a%e4%b8%8b%e6%96%87%e4%b8%ad%e5%8f%af%e6%89%a7%e8%a1%8c%e4%bb%a3%e7%a0%81%e7%9a%84%e7%b1%bb%e5%9e%8b%e6%9c%89%e7%9b%b4%e6%8e%a5%e5%85%b3%e7%b3%bb%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%9c%a8%e8%bf%9b%e5%85%a5%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e6%97%b6%e7%a1%ae%e5%ae%9a%ef%bc%8c%e5%b9%b6%e4%b8%94%e5%9c%a8%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e8%bf%90%e8%a1%8c%e6%9c%9f%e9%97%b4%e6%b0%b8%e4%b9%85%e4%b8%8d%e5%8f%98%e3%80%82%0athis%20%e5%88%b0%e5%ba%95%e5%8f%96%e4%bd%95%e5%80%bc%ef%bc%9fthis%20%e7%9a%84%e5%8f%96%e5%80%bc%e6%98%af%e5%8a%a8%e6%80%81%e7%9a%84%ef%bc%8c%e6%98%af%e5%9c%a8%e5%87%bd%e6%95%b0%e7%9c%9f%e6%ad%a3%e8%a2%ab%e8%b0%83%e7%94%a8%e6%89%a7%e8%a1%8c%e7%9a%84%e6%97%b6%e5%80%99%e7%a1%ae%e5%ae%9a%e7%9a%84%ef%bc%8c%e5%87%bd%e6%95%b0%e5%ae%9a%e4%b9%89%e7%9a%84%e6%97%b6%e5%80%99%e7%a1%ae%e5%ae%9a%e4%b8%8d%e4%ba%86%e3%80%82%e5%9b%a0%e4%b8%ba%20this%20%e7%9a%84%e5%8f%96%e5%80%bc%e6%98%af%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%8e%af%e5%a2%83%e7%9a%84%e4%b8%80%e9%83%a8%e5%88%86%ef%bc%8c%e6%af%8f%e6%ac%a1%e8%b0%83%e7%94%a8%e5%87%bd%e6%95%b0%ef%bc%8c%e9%83%bd%e4%bc%9a%e4%ba%a7%e7%94%9f%e4%b8%80%e4%b8%aa%e6%96%b0%e7%9a%84%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%8e%af%e5%a2%83%e3%80%82%0a%e6%89%80%e4%bb%a5%20this%20%e7%9a%84%e4%bd%9c%e7%94%a8%e5%b0%b1%e6%98%af%e7%94%a8%e6%9d%a5%e6%8c%87%e6%98%8e%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e6%98%af%e5%9c%a8%e5%93%aa%e4%b8%aa%e4%b8%8a%e4%b8%8b%e6%96%87%e4%b8%ad%e8%a2%ab%e8%a7%a6%e5%8f%91%e7%9a%84%e5%af%b9%e8%b1%a1%e3%80%82%e4%bb%a4%e4%ba%ba%e8%bf%b7%e6%83%91%e7%9a%84%e5%9c%b0%e6%96%b9%e5%b0%b1%e5%9c%a8%e8%bf%99%e9%87%8c%ef%bc%8c%e5%90%8c%e4%b8%80%e4%b8%aa%e5%87%bd%e6%95%b0%ef%bc%8c%e5%bd%93%e5%9c%a8%e4%b8%8d%e5%90%8c%e7%9a%84%e4%b8%8a%e4%b8%8b%e6%96%87%e8%bf%9b%e8%a1%8c%e8%b0%83%e7%94%a8%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%b0%b1%e5%8f%af%e8%83%bd%e4%bc%9a%e4%b8%8d%e5%90%8c%e3%80%82%e4%b9%9f%e5%b0%b1%e6%98%af%e8%af%b4%ef%bc%8cthis%20%e7%9a%84%e5%80%bc%e5%b0%b1%e6%98%af%e5%87%bd%e6%95%b0%e8%b0%83%e7%94%a8%e8%a1%a8%e8%be%be%e5%bc%8f%ef%bc%88%e4%b9%9f%e5%b0%b1%e6%98%af%e5%87%bd%e6%95%b0%e8%a2%ab%e8%b0%83%e7%94%a8%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%89%e7%9a%84%20caller%e3%80%82%0a%e4%ba%8c.%20this%20%26amp%3b%20that%20%e5%85%b7%e4%bd%93%e5%80%bc%e5%be%97%e6%98%af%e8%b0%81%ef%bc%9f%20%e7%9b%ae%e5%89%8d%e6%8e%a5%e8%a7%a6%e7%9a%84%e6%9c%89%e4%bb%a5%e4%b8%8b14%e7%a7%8d%e6%83%85%e5%86%b5%ef%bc%8c%e7%ac%94%e8%80%85%e6%89%93%e7%ae%97%e4%b8%80%e4%b8%80%e5%88%97%e4%b8%be%e5%87%ba%e6%9d%a5%ef%bc%8c%e4%bb%a5%e5%90%8e%e5%a6%82%e6%9e%9c%e9%81%87%e5%88%b0%e4%ba%86%e6%9b%b4%e5%a4%9a%e7%9a%84%e6%83%85%e5%86%b5%ef%bc%8c%e8%bf%98%e4%bc%9a%e7%bb%a7%e7%bb%ad%e5%a2%9e%e5%8a%a0%e3%80%82%0a%e6%97%a2%e7%84%b6%20this%20%e6%98%af%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%a1%ae%e5%ae%9a%e7%9a%84%ef%bc%8c%e9%82%a3%e4%b9%88%e4%bb%8e%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%e7%9a%84%e7%a7%8d%e7%b1%bb%e8%bf%9b%e8%a1%8c%e5%88%86%e7%b1%bb%ef%bc%8c%e5%8f%af%e4%bb%a5%e5%88%86%e4%b8%ba3%e7%a7%8d%ef%bc%9a%0a%e9%82%a3%e4%b9%88%e6%8e%a5%e4%b8%8b%e6%9d%a5%e6%88%91%e4%bb%ac%e5%b0%b1%e4%bb%8e%20Global%20Execution%20Context%20%e5%85%a8%e5%b1%80%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%ef%bc%8cFunction%20Execution%20Context%20%e5%87%bd%e6%95%b0%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%ef%bc%8cEval%20Execution%20Context%20Eval%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%20%e8%bf%99%e4%b8%89%e7%b1%bb%ef%bc%8c%e5%85%b7%e4%bd%93%e8%b0%88%e8%b0%88%20this%20%e7%a9%b6%e7%ab%9f%e6%8c%87%e7%9a%84%e6%98%af%e8%b0%81%e3%80%82%0a%ef%bc%88%e4%b8%80%ef%bc%89.%20%e5%85%a8%e5%b1%80%e6%89%a7%e8%a1%8c%e4%b8%8a%e4%b8%8b%e6%96%87%201.%20%e9%9d%9e%e4%b8%a5%e6%a0%bc%e6%a8%a1%e5%bc%8f%e4%b8%8b%e7%9a%84%e5%87%bd%e6%95%b0%e8%b0%83%e7%94%a8%20%e8%bf%99%e6%98%af%e5%87%bd%e6%95%b0%e7%9a%84%e6%9c%80%e9%80%9a%e5%b8%b8%e7%94%a8%e6%b3%95%ef%bc%8c%e5%b1%9e%e4%ba%8e%e5%85%a8%e5%b1%80%e6%80%a7%e8%b0%83%e7%94%a8%ef%bc%8c%e5%9b%a0%e6%ad%a4%20this%20%e5%b0%b1%e4%bb%a3%e8%a1%a8%e5%85%a8%e5%b1%80%e5%af%b9%e8%b1%a1%20Global%e3%80%82%0avar%20name%20%3d%20%26%2339%3bhalfrost%26%2339%3b%3b%20function%20test%28%29%20%7b%20console."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fjavascript_this%2f&t=%e6%8f%ad%e5%bc%80%20this%20%26%20that%20%e4%b9%8b%e8%bf%b7"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

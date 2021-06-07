@@ -1,0 +1,411 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>Octave Matlab 教程 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="Octave Matlab 教程"><meta property="og:description" content="由于 Ghost 博客对 LateX 的识别语法和标准的 LateX 语法有差异，为了更加通用性，所以以下文章中 LateX 公式可能出现乱码，如果出现乱码，不嫌弃的话可以在笔者的 Github 上看这篇无乱码的文章。笔者有空会修复这个乱码问题的。请见谅。
+GitHub Repo：Halfrost-Field
+Follow: halfrost · GitHub
+Source: https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb
+ 一. Basic Operations 基本操作 在 matlab 中，%是注释符号。基础的数学运算有以下这些：
+1 + 2 %加 5 - 6 %减 7 * 4 %乘 9 / 3 %除 6 ^ 4 %幂指数 log(20) %对数运算 exp(30) %指数运算 abs(-2) %绝对值运算 1. 逻辑运算： 1 == 2 %判断是否相等 ans = 0 %false -------------------------------------------------------------------------------------------- 1 ~= 2 % ~= 是 ！= 的意思，判断是否不相等 ans = 1 %True -------------------------------------------------------------------------------------------- 1 && 0 %逻辑 AND （和运算） ans = 0 -------------------------------------------------------------------------------------------- 1 || 0 %逻辑 OR（或运算） ans = 1 -------------------------------------------------------------------------------------------- xor(1,0) %异或运算 ans = 1 -------------------------------------------------------------------------------------------- 2."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/octave_matlab_tutorial/"><meta property="article:published_time" content="2018-03-22T07:56:00+00:00"><meta property="article:modified_time" content="2018-03-22T07:56:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Octave Matlab 教程"><meta name=twitter:description content="由于 Ghost 博客对 LateX 的识别语法和标准的 LateX 语法有差异，为了更加通用性，所以以下文章中 LateX 公式可能出现乱码，如果出现乱码，不嫌弃的话可以在笔者的 Github 上看这篇无乱码的文章。笔者有空会修复这个乱码问题的。请见谅。
+GitHub Repo：Halfrost-Field
+Follow: halfrost · GitHub
+Source: https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb
+ 一. Basic Operations 基本操作 在 matlab 中，%是注释符号。基础的数学运算有以下这些：
+1 + 2 %加 5 - 6 %减 7 * 4 %乘 9 / 3 %除 6 ^ 4 %幂指数 log(20) %对数运算 exp(30) %指数运算 abs(-2) %绝对值运算 1. 逻辑运算： 1 == 2 %判断是否相等 ans = 0 %false -------------------------------------------------------------------------------------------- 1 ~= 2 % ~= 是 ！= 的意思，判断是否不相等 ans = 1 %True -------------------------------------------------------------------------------------------- 1 && 0 %逻辑 AND （和运算） ans = 0 -------------------------------------------------------------------------------------------- 1 || 0 %逻辑 OR（或运算） ans = 1 -------------------------------------------------------------------------------------------- xor(1,0) %异或运算 ans = 1 -------------------------------------------------------------------------------------------- 2."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/computing_parameters_analytically/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/logistic_regression/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&text=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&is_video=false&description=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Octave%20Matlab%20%e6%95%99%e7%a8%8b&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&name=Octave%20Matlab%20%e6%95%99%e7%a8%8b&description=%e7%94%b1%e4%ba%8e%20Ghost%20%e5%8d%9a%e5%ae%a2%e5%af%b9%20LateX%20%e7%9a%84%e8%af%86%e5%88%ab%e8%af%ad%e6%b3%95%e5%92%8c%e6%a0%87%e5%87%86%e7%9a%84%20LateX%20%e8%af%ad%e6%b3%95%e6%9c%89%e5%b7%ae%e5%bc%82%ef%bc%8c%e4%b8%ba%e4%ba%86%e6%9b%b4%e5%8a%a0%e9%80%9a%e7%94%a8%e6%80%a7%ef%bc%8c%e6%89%80%e4%bb%a5%e4%bb%a5%e4%b8%8b%e6%96%87%e7%ab%a0%e4%b8%ad%20LateX%20%e5%85%ac%e5%bc%8f%e5%8f%af%e8%83%bd%e5%87%ba%e7%8e%b0%e4%b9%b1%e7%a0%81%ef%bc%8c%e5%a6%82%e6%9e%9c%e5%87%ba%e7%8e%b0%e4%b9%b1%e7%a0%81%ef%bc%8c%e4%b8%8d%e5%ab%8c%e5%bc%83%e7%9a%84%e8%af%9d%e5%8f%af%e4%bb%a5%e5%9c%a8%e7%ac%94%e8%80%85%e7%9a%84%20Github%20%e4%b8%8a%e7%9c%8b%e8%bf%99%e7%af%87%e6%97%a0%e4%b9%b1%e7%a0%81%e7%9a%84%e6%96%87%e7%ab%a0%e3%80%82%e7%ac%94%e8%80%85%e6%9c%89%e7%a9%ba%e4%bc%9a%e4%bf%ae%e5%a4%8d%e8%bf%99%e4%b8%aa%e4%b9%b1%e7%a0%81%e9%97%ae%e9%a2%98%e7%9a%84%e3%80%82%e8%af%b7%e8%a7%81%e8%b0%85%e3%80%82%0aGitHub%20Repo%ef%bc%9aHalfrost-Field%0aFollow%3a%20halfrost%20%c2%b7%20GitHub%0aSource%3a%20https%3a%2f%2fgithub.com%2fhalfrost%2fHalfrost-Field%2fblob%2fmaster%2fcontents%2fMachine_Learning%2fOctave_Matlab_Tutorial.ipynb%0a%20%e4%b8%80.%20Basic%20Operations%20%e5%9f%ba%e6%9c%ac%e6%93%8d%e4%bd%9c%20%e5%9c%a8%20matlab%20%e4%b8%ad%ef%bc%8c%25%e6%98%af%e6%b3%a8%e9%87%8a%e7%ac%a6%e5%8f%b7%e3%80%82%e5%9f%ba%e7%a1%80%e7%9a%84%e6%95%b0%e5%ad%a6%e8%bf%90%e7%ae%97%e6%9c%89%e4%bb%a5%e4%b8%8b%e8%bf%99%e4%ba%9b%ef%bc%9a%0a1%20%2b%202%20%25%e5%8a%a0%205%20-%206%20%25%e5%87%8f%207%20%2a%204%20%25%e4%b9%98%209%20%2f%203%20%25%e9%99%a4%206%20%5e%204%20%25%e5%b9%82%e6%8c%87%e6%95%b0%20log%2820%29%20%25%e5%af%b9%e6%95%b0%e8%bf%90%e7%ae%97%20exp%2830%29%20%25%e6%8c%87%e6%95%b0%e8%bf%90%e7%ae%97%20abs%28-2%29%20%25%e7%bb%9d%e5%af%b9%e5%80%bc%e8%bf%90%e7%ae%97%201.%20%e9%80%bb%e8%be%91%e8%bf%90%e7%ae%97%ef%bc%9a%201%20%3d%3d%202%20%25%e5%88%a4%e6%96%ad%e6%98%af%e5%90%a6%e7%9b%b8%e7%ad%89%20ans%20%3d%200%20%25false%20--------------------------------------------------------------------------------------------%201%20~%3d%202%20%25%20~%3d%20%e6%98%af%20%ef%bc%81%3d%20%e7%9a%84%e6%84%8f%e6%80%9d%ef%bc%8c%e5%88%a4%e6%96%ad%e6%98%af%e5%90%a6%e4%b8%8d%e7%9b%b8%e7%ad%89%20ans%20%3d%201%20%25True%20--------------------------------------------------------------------------------------------%201%20%26amp%3b%26amp%3b%200%20%25%e9%80%bb%e8%be%91%20AND%20%ef%bc%88%e5%92%8c%e8%bf%90%e7%ae%97%ef%bc%89%20ans%20%3d%200%20--------------------------------------------------------------------------------------------%201%20%7c%7c%200%20%25%e9%80%bb%e8%be%91%20OR%ef%bc%88%e6%88%96%e8%bf%90%e7%ae%97%ef%bc%89%20ans%20%3d%201%20--------------------------------------------------------------------------------------------%20xor%281%2c0%29%20%25%e5%bc%82%e6%88%96%e8%bf%90%e7%ae%97%20ans%20%3d%201%20--------------------------------------------------------------------------------------------%202."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&t=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><a href=#一-basic-operations-基本操作>一. Basic Operations 基本操作</a><ul><li><a href=#1-逻辑运算>1. 逻辑运算：</a></li><li><a href=#2-更换行首提示符>2. 更换行首提示符</a></li><li><a href=#3-变量赋值>3. 变量赋值：</a></li><li><a href=#4-向量和矩阵>4. 向量和矩阵：</a></li><li><a href=#5-帮助函数>5. 帮助函数：</a></li></ul></li><li><a href=#二-moving-data-around>二. Moving Data Around</a><ul><li><a href=#1-矩阵计算>1. 矩阵计算：</a></li><li><a href=#2-读取和存储文件数据>2. 读取和存储文件数据：</a></li><li><a href=#3-显示命令>3. 显示命令：</a></li><li><a href=#4-矩阵索引操作>4. 矩阵索引操作：</a></li></ul></li><li><a href=#三-computing-on-data>三. Computing on Data</a><ul><li><a href=#1-矩阵计算-1>1. 矩阵计算：</a></li></ul></li><li><a href=#四-plotting-data>四. Plotting Data</a><ul><li><a href=#1-画图>1. 画图：</a></li></ul></li><li><a href=#五-control-statements-for-while-if-statement>五. Control Statements: for, while, if statement</a><ul><li><a href=#1-循环语句>1. 循环语句</a></li></ul></li><li><a href=#六-octavematlab-tutorial-测试>六. Octave/Matlab Tutorial 测试</a><ul><li><a href=#1-question-1>1. Question 1</a></li><li><a href=#2-question-2>2. Question 2</a></li><li><a href=#3-question-3>3. Question 3</a></li><li><a href=#4-question-4>4. Question 4</a></li><li><a href=#5-question-5>5. Question 5</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">Octave Matlab 教程</h1><div class=meta><div class=postdate><time datetime="2018-03-22 07:56:00 +0000 UTC" itemprop=datePublished>Mar 22</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/machine-learning>Machine Learning</a>
+,
+<a class=category-link href=/categories/ai>AI</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/machine-learning rel=tag>Machine Learning</a>
+,
+<a class=tag-link href=/tags/ai rel=tag>AI</a></div></div></header><div class=content itemprop=articleBody><blockquote><p>由于 Ghost 博客对 LateX 的识别语法和标准的 LateX 语法有差异，为了更加通用性，所以以下文章中 LateX 公式可能出现乱码，如果出现乱码，不嫌弃的话可以在笔者的 <a href=https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/contents.md>Github</a> 上看这篇无乱码的文章。笔者有空会修复这个乱码问题的。请见谅。</p><p>GitHub Repo：<a href=https://github.com/halfrost/Halfrost-Field>Halfrost-Field</a><br>Follow: <a href=https://github.com/halfrost>halfrost · GitHub</a><br>Source: <a href=https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb>https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb</a></p></blockquote><h2 id=一-basic-operations-基本操作>一. Basic Operations 基本操作</h2><p>在 matlab 中，%是注释符号。基础的数学运算有以下这些：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#ae81ff>1</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>2</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>加</span>
+<span style=color:#ae81ff>5</span> <span style=color:#f92672>-</span> <span style=color:#ae81ff>6</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>减</span>
+<span style=color:#ae81ff>7</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>4</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>乘</span>
+<span style=color:#ae81ff>9</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>3</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>除</span>
+<span style=color:#ae81ff>6</span> <span style=color:#f92672>^</span> <span style=color:#ae81ff>4</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>幂指数</span>
+log(<span style=color:#ae81ff>20</span>) <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>对数运算</span>
+exp(<span style=color:#ae81ff>30</span>) <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>指数运算</span>
+abs(<span style=color:#f92672>-</span><span style=color:#ae81ff>2</span>) <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>绝对值运算</span>
+
+</code></pre></div><h3 id=1-逻辑运算>1. 逻辑运算：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#ae81ff>1</span> <span style=color:#f92672>==</span> <span style=color:#ae81ff>2</span>             <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>判断是否相等</span>
+ans <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>            <span style=color:#f92672>%</span>false
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+<span style=color:#ae81ff>1</span> <span style=color:#f92672>~=</span> <span style=color:#ae81ff>2</span>             <span style=color:#f92672>%</span> <span style=color:#f92672>~=</span> <span style=color:#960050;background-color:#1e0010>是</span> <span style=color:#960050;background-color:#1e0010>！</span><span style=color:#f92672>=</span> <span style=color:#960050;background-color:#1e0010>的意思，判断是否不相等</span>
+ans <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>            <span style=color:#f92672>%</span>True 
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+<span style=color:#ae81ff>1</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#ae81ff>0</span>             <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>逻辑</span> AND <span style=color:#960050;background-color:#1e0010>（和运算）</span>
+ans <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+<span style=color:#ae81ff>1</span> <span style=color:#f92672>||</span> <span style=color:#ae81ff>0</span>             <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>逻辑</span> OR<span style=color:#960050;background-color:#1e0010>（或运算）</span>
+ans <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>            
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+xor(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>0</span>)           <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>异或运算</span>
+ans <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span> 
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+</code></pre></div><h3 id=2-更换行首提示符>2. 更换行首提示符</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+PS1(<span style=color:#960050;background-color:#1e0010>&#39;</span><span style=color:#f92672>&gt;&gt;</span><span style=color:#960050;background-color:#1e0010>&#39;</span>);   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>单引号内就是待替换的行首提示符</span>
+
+</code></pre></div><h3 id=3-变量赋值>3. 变量赋值：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+a <span style=color:#f92672>=</span> <span style=color:#ae81ff>3</span>        <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>赋值数字</span>
+a <span style=color:#f92672>=</span> <span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>；</span>      <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>假如不想让其输出可以在后面加上分号（；）</span>
+b <span style=color:#f92672>=</span> <span style=color:#960050;background-color:#1e0010>&#39;</span>Hello world<span style=color:#960050;background-color:#1e0010>&#39;；</span>   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>赋值字符串</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+disp(a)
+disp(sprintf(<span style=color:#960050;background-color:#1e0010>&#39;</span><span style=color:#ae81ff>2</span> decimals :<span style=color:#f92672>%</span><span style=color:#ae81ff>0.2f</span><span style=color:#960050;background-color:#1e0010>&#39;</span>,a))   <span style=color:#f92672>%</span>sprintf打印格式化字符串
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+format <span style=color:#66d9ef>long</span>   <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>让接下来的字符串显示默认的位数</span>
+a
+
+format <span style=color:#66d9ef>short</span>  <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>让接下来的字符串小数点后面打印少量的位数</span>
+a
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+</code></pre></div><h3 id=4-向量和矩阵>4. 向量和矩阵：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+A <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span> <span style=color:#ae81ff>2</span>;<span style=color:#ae81ff>3</span> <span style=color:#ae81ff>4</span>;<span style=color:#ae81ff>5</span> <span style=color:#ae81ff>6</span>;] <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>创建矩阵变量，分号的意思就是换行到下一行</span>
+A <span style=color:#f92672>=</span>
+
+   <span style=color:#ae81ff>1</span>   <span style=color:#ae81ff>2</span>
+   <span style=color:#ae81ff>3</span>   <span style=color:#ae81ff>4</span>
+   <span style=color:#ae81ff>5</span>   <span style=color:#ae81ff>6</span>
+ 
+B <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span> <span style=color:#ae81ff>2</span> <span style=color:#ae81ff>3</span>]  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>创建向量</span>
+B <span style=color:#f92672>=</span>
+
+   <span style=color:#ae81ff>1</span>   <span style=color:#ae81ff>2</span>   <span style=color:#ae81ff>3</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+v <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>0.1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>2</span>    <span style=color:#f92672>%</span> a:x:b <span style=color:#960050;background-color:#1e0010>表示</span>[a,b]<span style=color:#960050;background-color:#1e0010>区间，</span>x表示递增步长
+v <span style=color:#f92672>=</span>
+    <span style=color:#ae81ff>1.0000</span>    <span style=color:#ae81ff>1.1000</span>    <span style=color:#ae81ff>1.2000</span>    <span style=color:#ae81ff>1.3000</span>    <span style=color:#ae81ff>1.4000</span>    <span style=color:#ae81ff>1.5000</span>    <span style=color:#ae81ff>1.6000</span>    <span style=color:#ae81ff>1.7000</span>    <span style=color:#ae81ff>1.8000</span>    <span style=color:#ae81ff>1.9000</span>    <span style=color:#ae81ff>2.0000</span>
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+ones(<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>)   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>2</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的元素都为</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>的矩阵</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>1</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>1</span>
+
+<span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>如果想生成</span><span style=color:#ae81ff>2</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的元素都为</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>的矩阵，当然不是用</span> twos(<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>),<span style=color:#960050;background-color:#1e0010>而是用下面的方式</span>
+
+<span style=color:#ae81ff>2</span><span style=color:#f92672>*</span>ones(<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>)
+ans <span style=color:#f92672>=</span>
+
+   <span style=color:#ae81ff>2</span>   <span style=color:#ae81ff>2</span>   <span style=color:#ae81ff>2</span>
+   <span style=color:#ae81ff>2</span>   <span style=color:#ae81ff>2</span>   <span style=color:#ae81ff>2</span>
+   
+<span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>与</span> ones <span style=color:#960050;background-color:#1e0010>相同的快捷命令是</span> zeros
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+zeros(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>3</span>)  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>1</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的零矩阵</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>0</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>     
+
+rand(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>3</span>)  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>1</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的随机数矩阵</span>
+ans <span style=color:#f92672>=</span>
+
+   <span style=color:#ae81ff>0.960762</span>   <span style=color:#ae81ff>0.089159</span>   <span style=color:#ae81ff>0.384507</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>   
+eye(<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>)   <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>2</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的单位矩阵</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>0</span>
+     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>0</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>     
+eye(<span style=color:#ae81ff>3</span>)     <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>3</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>的单位矩阵</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>0</span>
+     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>0</span>
+     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>0</span>     <span style=color:#ae81ff>1</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+</code></pre></div><h3 id=5-帮助函数>5. 帮助函数：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+help eye  <span style=color:#f92672>%</span> help <span style=color:#960050;background-color:#1e0010>后面跟一个命令名字，就会显示出这个命令的详细用法</span>
+
+
+</code></pre></div><hr><h2 id=二-moving-data-around>二. Moving Data Around</h2><h3 id=1-矩阵计算>1. 矩阵计算：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+A <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>; <span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>; <span style=color:#ae81ff>5</span>,<span style=color:#ae81ff>6</span>;];
+size(A)           <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>计算矩阵的维度大小</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>2</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+size(A,<span style=color:#ae81ff>1</span>)         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>显示该矩阵的行数，</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>代表返回行数</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>3</span>
+size(A,<span style=color:#ae81ff>2</span>)         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>显示该矩阵的列数，</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>代表返回列数</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>2</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+v <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>]; 
+length(v)         <span style=color:#f92672>%</span> <span style=color:#960050;background-color:#1e0010>计算向量的最大维度的大小，</span>length <span style=color:#960050;background-color:#1e0010>通常对向量使用，而不对矩阵使用</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>4</span>
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+
+</code></pre></div><h3 id=2-读取和存储文件数据>2. 读取和存储文件数据：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+load xxx               <span style=color:#f92672>%</span>xxx为当前路径下的文件名
+load (<span style=color:#960050;background-color:#1e0010>&#39;</span>xxx<span style=color:#960050;background-color:#1e0010>&#39;</span>)           <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>以字符串的形式加载</span>
+v <span style=color:#f92672>=</span> xxx(<span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>10</span>)          <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>建立向量</span>v<span style=color:#960050;background-color:#1e0010>，元素分别为</span>xxx文件内1<span style=color:#f92672>~</span><span style=color:#ae81ff>10</span><span style=color:#960050;background-color:#1e0010>的数据</span>
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+save xxx.mat V         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将当前的数据存储存储到文件中，并且变量名为</span> V
+save xxx.txt V <span style=color:#f92672>-</span>ascii  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将当前的数据存储存储到</span>ascii编码的文本文档中
+
+</code></pre></div><h3 id=3-显示命令>3. 显示命令：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+pwd              <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>显示当前路径</span>
+ls               <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>显示当前路径的文件夹</span>
+cd <span style=color:#960050;background-color:#1e0010>&#39;</span>path<span style=color:#960050;background-color:#1e0010>&#39;</span>        <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>打开该路径</span>
+who              <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>在当前内存中存储的所有变量</span>
+whos             <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>更详细地显示变量的名称、维度和占用多少内存空间和数据类型</span>
+clear            <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>清除所有变量</span>
+addpath(<span style=color:#960050;background-color:#1e0010>&#39;</span>path<span style=color:#960050;background-color:#1e0010>&#39;</span>)  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将路径添加到当前搜索处</span>
+
+
+</code></pre></div><h3 id=4-矩阵索引操作>4. 矩阵索引操作：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+A <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>; <span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>; <span style=color:#ae81ff>5</span>,<span style=color:#ae81ff>6</span>;];
+
+A(<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>2</span>)   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>索引矩阵第</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>行第</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>列的元素</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>6</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+A(<span style=color:#ae81ff>2</span>,<span style=color:#f92672>:</span>)   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>索引矩阵第</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>行所有元素</span>,<span style=color:#960050;background-color:#1e0010>冒号表示该行或者该列的所有元素</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>4</span>
+A(<span style=color:#f92672>:</span>,<span style=color:#ae81ff>2</span>)   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>索引矩阵第</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>列所有元素</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>2</span>
+     <span style=color:#ae81ff>4</span>
+     <span style=color:#ae81ff>6</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+A([<span style=color:#ae81ff>1</span> <span style=color:#ae81ff>3</span>],<span style=color:#f92672>:</span>)  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>索引矩阵第</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>行和第</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>行所有元素</span>
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>2</span>
+     <span style=color:#ae81ff>5</span>     <span style=color:#ae81ff>6</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+A(<span style=color:#f92672>:</span>,<span style=color:#ae81ff>2</span>) <span style=color:#f92672>=</span> [<span style=color:#ae81ff>10</span>;<span style=color:#ae81ff>11</span>;<span style=color:#ae81ff>12</span>]  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将</span>A的第二列用右边的向量替代
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>10</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>11</span>
+     <span style=color:#ae81ff>5</span>     <span style=color:#ae81ff>12</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+A <span style=color:#f92672>=</span> [A,[<span style=color:#ae81ff>100</span>;<span style=color:#ae81ff>101</span>;<span style=color:#ae81ff>102</span>]] <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>加入一列新的向量</span>
+A <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>2</span>     <span style=color:#ae81ff>100</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>4</span>     <span style=color:#ae81ff>101</span>
+     <span style=color:#ae81ff>5</span>     <span style=color:#ae81ff>6</span>     <span style=color:#ae81ff>102</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+          
+A(<span style=color:#f92672>:</span>)    <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将矩阵</span>A的元素变成列向量
+ans <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>
+     <span style=color:#ae81ff>3</span>
+     <span style=color:#ae81ff>5</span>
+     <span style=color:#ae81ff>2</span>
+     <span style=color:#ae81ff>4</span>
+     <span style=color:#ae81ff>6</span>
+     <span style=color:#ae81ff>100</span>
+     <span style=color:#ae81ff>101</span>
+     <span style=color:#ae81ff>102</span>
+     
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+A <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>;<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>];           <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>合并矩阵，</span>A在左边<span style=color:#960050;background-color:#1e0010>，</span>B在右边
+B <span style=color:#f92672>=</span> [<span style=color:#ae81ff>4</span>,<span style=color:#ae81ff>5</span>;<span style=color:#ae81ff>6</span>,<span style=color:#ae81ff>7</span>];
+C <span style=color:#f92672>=</span> [A B]                <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>等价于</span> C <span style=color:#f92672>=</span> [A,B]
+C <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>2</span>     <span style=color:#ae81ff>4</span>     <span style=color:#ae81ff>5</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>4</span>     <span style=color:#ae81ff>6</span>     <span style=color:#ae81ff>7</span>
+     
+C <span style=color:#f92672>=</span> [A;B]                <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>合并矩阵，</span>A在上边<span style=color:#960050;background-color:#1e0010>，</span>B在下边
+C <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>2</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>4</span>
+     <span style=color:#ae81ff>4</span>     <span style=color:#ae81ff>5</span>
+     <span style=color:#ae81ff>6</span>     <span style=color:#ae81ff>7</span>     
+  
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+
+</code></pre></div><hr><h2 id=三-computing-on-data>三. Computing on Data</h2><h3 id=1-矩阵计算-1>1. 矩阵计算：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+
+A<span style=color:#f92672>*</span>B                    <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>矩阵相乘</span>
+A.<span style=color:#f92672>*</span>B                   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>矩阵对应元素相乘（两个矩阵需是相同维度）</span>
+A.<span style=color:#f92672>^</span><span style=color:#ae81ff>2</span>                   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>矩阵每个元素作平方处理</span>
+<span style=color:#ae81ff>1.</span><span style=color:#f92672>/</span>A                   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>矩阵每个元素求倒数</span>
+log(A)                 <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>对矩阵每个元素求对数</span>
+exp(A)                 <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>对矩阵每个元素求以</span>e为底<span style=color:#960050;background-color:#1e0010>，元素为指数的幂运算</span>
+abs(A)                 <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>求矩阵每个元素的绝对值</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+A <span style=color:#f92672>+</span> ones(length(A),<span style=color:#ae81ff>1</span>)  <span style=color:#f92672>%</span>A中每个元素都加一
+A <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>                  <span style=color:#f92672>%</span>A中每个元素都加一
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+A<span style=color:#960050;background-color:#1e0010>&#39;</span>                     <span style=color:#f92672>%</span>A的转置矩阵
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+A <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>3</span>                  <span style=color:#f92672>%</span>A中每个元素都和3进行比较<span style=color:#960050;background-color:#1e0010>，</span><span style=color:#ae81ff>0</span><span style=color:#960050;background-color:#1e0010>为假，</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>为真</span>
+find(A<span style=color:#f92672>&lt;</span><span style=color:#ae81ff>3</span>)              <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>查找</span>A中所有小于3的元素<span style=color:#960050;background-color:#1e0010>，并返回它们的索引</span>
+[r,c] <span style=color:#f92672>=</span> find(A<span style=color:#f92672>&gt;=</span><span style=color:#ae81ff>7</span>)     <span style=color:#f92672>%</span>r<span style=color:#960050;background-color:#1e0010>，</span>c分别表示A矩阵中元素大于7的行和列
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+A <span style=color:#f92672>=</span> magic(<span style=color:#ae81ff>3</span>)           <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成每一行每一列相加起来都是相等的矩阵，即矩阵幻方</span>
+A <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>8</span>     <span style=color:#ae81ff>1</span>     <span style=color:#ae81ff>6</span>
+     <span style=color:#ae81ff>3</span>     <span style=color:#ae81ff>5</span>     <span style=color:#ae81ff>7</span>
+     <span style=color:#ae81ff>4</span>     <span style=color:#ae81ff>9</span>     <span style=color:#ae81ff>2</span>
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+sum(A)                 <span style=color:#f92672>%</span>A中所有元素的和
+prod(A)                <span style=color:#f92672>%</span>A中所有元素的积
+floor(A)               <span style=color:#f92672>%</span>A中元素向下取整
+ceil(A)                <span style=color:#f92672>%</span>A中元素向上取整
+rand(<span style=color:#ae81ff>3</span>)                <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成</span><span style=color:#ae81ff>3</span><span style=color:#f92672>*</span><span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>随机矩阵</span>
+max(A,[],<span style=color:#ae81ff>1</span>)            <span style=color:#f92672>%</span>A中每列的最大值<span style=color:#960050;background-color:#1e0010>，</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>表示从</span>A的列去取值
+max(A,[],<span style=color:#ae81ff>2</span>)            <span style=color:#f92672>%</span>A中每行的最大值<span style=color:#960050;background-color:#1e0010>，</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>表示从</span>A的行去取值
+max(A)                 <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>默认是</span>A每列的最大值
+max(max(A))            <span style=color:#f92672>%</span>A中所有元素的最大值
+max(A(<span style=color:#f92672>:</span>))              <span style=color:#f92672>%</span>A中所有元素的最大值(<span style=color:#960050;background-color:#1e0010>先将</span>A变成列向量<span style=color:#960050;background-color:#1e0010>，再求出最大值</span>)
+sum(A,<span style=color:#ae81ff>1</span>)               <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>求</span>A每列的和
+sum(A,<span style=color:#ae81ff>2</span>)               <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>求</span>A每行的和
+eye(<span style=color:#ae81ff>9</span>)                 <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>构造</span><span style=color:#ae81ff>9</span><span style=color:#f92672>*</span><span style=color:#ae81ff>9</span><span style=color:#960050;background-color:#1e0010>单位矩阵</span>
+flipud(A)              <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>矩阵垂直翻转</span>
+pinv(A)                <span style=color:#f92672>%</span>A的伪逆矩阵(pseudo inverse)
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+</code></pre></div><hr><h2 id=四-plotting-data>四. Plotting Data</h2><h3 id=1-画图>1. 画图：</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+t <span style=color:#f92672>=</span> [<span style=color:#ae81ff>0</span><span style=color:#f92672>:</span><span style=color:#ae81ff>0.01</span><span style=color:#f92672>:</span><span style=color:#ae81ff>0.98</span>];
+y1 <span style=color:#f92672>=</span> sin(<span style=color:#ae81ff>2</span><span style=color:#f92672>*</span>pi<span style=color:#f92672>*</span><span style=color:#ae81ff>4</span><span style=color:#f92672>*</span>t);
+y2 <span style=color:#f92672>=</span> cos(<span style=color:#ae81ff>2</span><span style=color:#f92672>*</span>pi<span style=color:#f92672>*</span><span style=color:#ae81ff>4</span><span style=color:#f92672>*</span>t);
+plot(t,y1);
+hold on;                    <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>在原来的图像中画图</span>
+plot(t,y2,<span style=color:#e6db74>&#39;r&#39;</span>);
+xlabel(<span style=color:#960050;background-color:#1e0010>&#39;</span>time<span style=color:#960050;background-color:#1e0010>&#39;</span>);             <span style=color:#f92672>%</span>X轴单位
+ylabel(<span style=color:#960050;background-color:#1e0010>&#39;</span>value<span style=color:#960050;background-color:#1e0010>&#39;</span>);            <span style=color:#f92672>%</span>Y轴单位
+legend(<span style=color:#960050;background-color:#1e0010>&#39;</span>sin<span style=color:#e6db74>&#39;,&#39;</span>cos<span style=color:#960050;background-color:#1e0010>&#39;</span>);        <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将两条曲线表示出来</span>
+title(<span style=color:#960050;background-color:#1e0010>&#39;</span>myplot<span style=color:#960050;background-color:#1e0010>&#39;</span>);            <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>加入标题</span>
+print  <span style=color:#f92672>-</span>dpng <span style=color:#960050;background-color:#1e0010>&#39;</span>myplot.png<span style=color:#960050;background-color:#1e0010>&#39;</span>;  <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>输出图片为</span>png格式
+close                       <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>关闭</span>
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/69_1.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+
+figure(<span style=color:#ae81ff>1</span>);plot(t,y1);   <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>分开画图</span>
+figure(<span style=color:#ae81ff>2</span>);plot(t,y2);
+
+subplot(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>1</span>);         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将图像分为</span><span style=color:#ae81ff>1</span><span style=color:#f92672>*</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>的格子，使用第</span><span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>个</span>
+plot(t,y1);
+subplot(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>2</span>);         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>将图像分为</span><span style=color:#ae81ff>1</span><span style=color:#f92672>*</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>的格子，使用第</span><span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>个</span>
+plot(t,y2);
+axis([<span style=color:#ae81ff>0.5</span> <span style=color:#ae81ff>1</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span> <span style=color:#ae81ff>1</span>]);     <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>改变轴的刻度</span> x轴变为[<span style=color:#ae81ff>0.5</span>,<span style=color:#ae81ff>1</span>] y轴变为[<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>1</span>]
+clf;                    <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>清除一幅图像</span>
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/69_2.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+A <span style=color:#f92672>=</span> magic(<span style=color:#ae81ff>5</span>);
+imagesc(A)                                    <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>生成矩阵的彩色格图，不同颜色对应不同的值</span>
+imagesc(A)<span style=color:#960050;background-color:#1e0010>，</span> colorbar, colormap gray;         <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>增加灰度分布图和颜色条</span>
+
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/69_3.png alt></p><hr><h2 id=五-control-statements-for-while-if-statement>五. Control Statements: for, while, if statement</h2><h3 id=1-循环语句>1. 循环语句</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+ v <span style=color:#f92672>=</span> zeros(<span style=color:#ae81ff>5</span>,<span style=color:#ae81ff>1</span>);
+<span style=color:#66d9ef>for</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>5</span>,        <span style=color:#f92672>%</span>for语句
+    v(i) <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span><span style=color:#f92672>^</span>i;
+end;                <span style=color:#f92672>%</span><span style=color:#960050;background-color:#1e0010>以</span>end为结尾标志
+ans:
+v <span style=color:#f92672>=</span>
+     <span style=color:#ae81ff>2</span>
+     <span style=color:#ae81ff>4</span>
+     <span style=color:#ae81ff>8</span>
+    <span style=color:#ae81ff>16</span>
+    <span style=color:#ae81ff>32</span>
+    
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>    
+    
+i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>；</span>
+<span style=color:#66d9ef>while</span> i <span style=color:#f92672>&lt;=</span> <span style=color:#ae81ff>3</span>;       <span style=color:#f92672>%</span>while语句
+      v(i) <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span>;
+      i <span style=color:#f92672>=</span> i <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>;
+end;
+ans:
+v <span style=color:#f92672>=</span>
+    <span style=color:#ae81ff>100</span>
+    <span style=color:#ae81ff>100</span>
+    <span style=color:#ae81ff>100</span>
+    <span style=color:#ae81ff>16</span>
+    <span style=color:#ae81ff>32</span>
+    
+    
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span> ;
+<span style=color:#66d9ef>while</span> true,
+      v(i) <span style=color:#f92672>=</span> <span style=color:#ae81ff>999</span>;
+      i <span style=color:#f92672>=</span> i <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>;
+      <span style=color:#66d9ef>if</span> i<span style=color:#f92672>==</span><span style=color:#ae81ff>6</span>,
+         <span style=color:#66d9ef>break</span>;     <span style=color:#f92672>%</span>break语句
+      end;
+end;
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+
+<span style=color:#66d9ef>if</span> v(<span style=color:#ae81ff>1</span>)<span style=color:#f92672>==</span> <span style=color:#ae81ff>1</span>,        <span style=color:#f92672>%</span><span style=color:#66d9ef>if</span><span style=color:#f92672>-</span>else语句
+   disp(<span style=color:#960050;background-color:#1e0010>&#39;</span>The value is one<span style=color:#960050;background-color:#1e0010>&#39;</span>);
+elseif <span style=color:#a6e22e>v</span>(<span style=color:#ae81ff>1</span>) <span style=color:#f92672>==</span> <span style=color:#ae81ff>2</span>,
+   disp(<span style=color:#960050;background-color:#1e0010>&#39;</span>The value is two<span style=color:#960050;background-color:#1e0010>&#39;</span>); 
+<span style=color:#66d9ef>else</span> 
+   <span style=color:#a6e22e>disp</span>(<span style=color:#960050;background-color:#1e0010>&#39;</span>The value is not one or two<span style=color:#960050;background-color:#1e0010>&#39;</span>);
+end;
+
+<span style=color:#f92672>--------------------------------------------------------------------------------------------</span>
+
+</code></pre></div><hr><h2 id=六-octavematlab-tutorial-测试>六. Octave/Matlab Tutorial 测试</h2><h3 id=1-question-1>1. Question 1</h3><p>Suppose I first execute the following in Octave/Matlab:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+A <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span> <span style=color:#ae81ff>2</span>; <span style=color:#ae81ff>3</span> <span style=color:#ae81ff>4</span>; <span style=color:#ae81ff>5</span> <span style=color:#ae81ff>6</span>];  
+B <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span> <span style=color:#ae81ff>2</span> <span style=color:#ae81ff>3</span>; <span style=color:#ae81ff>4</span> <span style=color:#ae81ff>5</span> <span style=color:#ae81ff>6</span>];
+
+</code></pre></div><p>Which of the following are then valid commands? Check all that apply. (Hint: A&rsquo; denotes the transpose of A.)</p><p>A. C = A&rsquo; + B;<br>B. C = B * A;<br>C. C = A + B;<br>D. C = B&rsquo; * A;</p><p>解答：A、B</p><p>相同维度的矩阵才能够相加。相乘的条件是$A*B$（A的列=B的行）</p><h3 id=2-question-2>2. Question 2</h3><p>$ Let;A= \begin{bmatrix}
+16& 2 & 3 & 13\
+5& 11 & 10 & 8\
+9& 7& 6&12 \
+4& 14& 15 & 1
+\end{bmatrix}$</p><p>Which of the following indexing expressions gives $ B= \begin{bmatrix}
+16& 2 \
+5& 11 \
+9& 7 \
+4& 14
+\end{bmatrix}$? Check all that apply.</p><p>A. B = A(:, 1:2);<br>B. B = A(1:4, 1:2);<br>C. B = A(:, 0:2);<br>D. B = A(0:4, 0:2);</p><p>解答： A、B</p><p>$B = A(:, 1:2);$ 先取出 A 的所有行，再取出 1，2 列
+$B = A(1:4, 1:2);$ 先取出 A 的 1-4行，再取出 1，2 列</p><h3 id=3-question-3>3. Question 3</h3><p>Let A be a 10x10 matrix and x be a 10-element vector. Your friend wants to compute the product Ax and writes the following code:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+v <span style=color:#f92672>=</span> zeros(<span style=color:#ae81ff>10</span>, <span style=color:#ae81ff>1</span>);
+<span style=color:#66d9ef>for</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>10</span>
+  <span style=color:#66d9ef>for</span> j <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>10</span>
+    v(i) <span style=color:#f92672>=</span> v(i) <span style=color:#f92672>+</span> A(i, j) <span style=color:#f92672>*</span> x(j);
+  end
+end
+
+</code></pre></div><p>How would you vectorize this code to run without any FOR loops? Check all that apply.</p><p>A. v = A * x;<br>B. v = Ax;<br>C. v = A .* x;<br>D. v = sum (A * x);</p><p>解答： A</p><p>将 for 循环矢量化</p><h3 id=4-question-4>4. Question 4</h3><p>Say you have two column vectors v and w, each with 7 elements (i.e., they have dimensions 7x1). Consider the following code:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+z <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#66d9ef>for</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>7</span>
+  z <span style=color:#f92672>=</span> z <span style=color:#f92672>+</span> v(i) <span style=color:#f92672>*</span> w(i)
+end
+
+
+</code></pre></div><p>Which of the following vectorizations correctly compute z? Check all that apply.</p><p>A. z = sum (v .* w);<br>B. z = v&rsquo; * w;<br>C. z = v * w&rsquo;;<br>D. z = v .* w;</p><p>解答：A、B</p><p>最后的结果是一个实数，通过这一点就可以看哪个选项是 $1*1$ 的。</p><h3 id=5-question-5>5. Question 5</h3><p>In Octave/Matlab, many functions work on single numbers, vectors, and matrices. For example, the sin function when applied to a matrix will return a new matrix with the sin of each element. But you have to be careful, as certain functions have different behavior. Suppose you have an 7x7 matrix X. You want to compute the log of every element, the square of every element, add 1 to every element, and divide every element by 4. You will store the results in four matrices, A,B,C,D. One way to do so is the following code:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#66d9ef>for</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>7</span>
+  <span style=color:#66d9ef>for</span> j <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span><span style=color:#ae81ff>7</span>
+    A(i, j) <span style=color:#f92672>=</span> log(X(i, j));
+    B(i, j) <span style=color:#f92672>=</span> X(i, j) <span style=color:#f92672>^</span> <span style=color:#ae81ff>2</span>;
+    C(i, j) <span style=color:#f92672>=</span> X(i, j) <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>;
+    D(i, j) <span style=color:#f92672>=</span> X(i, j) <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span>;
+  end
+end
+
+</code></pre></div><p>Which of the following correctly compute A,B,C, or D? Check all that apply.</p><p>A. C = X + 1;<br>B. D = X / 4;<br>C. A = log (X);<br>D. B = X ^ 2;</p><p>解答： A、B、C</p><p>最后一个选项应该是 $B = X. ^{} 2;$ (点^2)</p><hr><blockquote><p>GitHub Repo：<a href=https://github.com/halfrost/Halfrost-Field>Halfrost-Field</a></p><p>Follow: <a href=https://github.com/halfrost>halfrost · GitHub</a></p><p>Source: <a href=https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb>https://github.com/halfrost/Halfrost-Field/blob/master/contents/Machine_Learning/Octave_Matlab_Tutorial.ipynb</a></p></blockquote><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><a href=#一-basic-operations-基本操作>一. Basic Operations 基本操作</a><ul><li><a href=#1-逻辑运算>1. 逻辑运算：</a></li><li><a href=#2-更换行首提示符>2. 更换行首提示符</a></li><li><a href=#3-变量赋值>3. 变量赋值：</a></li><li><a href=#4-向量和矩阵>4. 向量和矩阵：</a></li><li><a href=#5-帮助函数>5. 帮助函数：</a></li></ul></li><li><a href=#二-moving-data-around>二. Moving Data Around</a><ul><li><a href=#1-矩阵计算>1. 矩阵计算：</a></li><li><a href=#2-读取和存储文件数据>2. 读取和存储文件数据：</a></li><li><a href=#3-显示命令>3. 显示命令：</a></li><li><a href=#4-矩阵索引操作>4. 矩阵索引操作：</a></li></ul></li><li><a href=#三-computing-on-data>三. Computing on Data</a><ul><li><a href=#1-矩阵计算-1>1. 矩阵计算：</a></li></ul></li><li><a href=#四-plotting-data>四. Plotting Data</a><ul><li><a href=#1-画图>1. 画图：</a></li></ul></li><li><a href=#五-control-statements-for-while-if-statement>五. Control Statements: for, while, if statement</a><ul><li><a href=#1-循环语句>1. 循环语句</a></li></ul></li><li><a href=#六-octavematlab-tutorial-测试>六. Octave/Matlab Tutorial 测试</a><ul><li><a href=#1-question-1>1. Question 1</a></li><li><a href=#2-question-2>2. Question 2</a></li><li><a href=#3-question-3>3. Question 3</a></li><li><a href=#4-question-4>4. Question 4</a></li><li><a href=#5-question-5>5. Question 5</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&text=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&is_video=false&description=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Octave%20Matlab%20%e6%95%99%e7%a8%8b&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&title=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&name=Octave%20Matlab%20%e6%95%99%e7%a8%8b&description=%e7%94%b1%e4%ba%8e%20Ghost%20%e5%8d%9a%e5%ae%a2%e5%af%b9%20LateX%20%e7%9a%84%e8%af%86%e5%88%ab%e8%af%ad%e6%b3%95%e5%92%8c%e6%a0%87%e5%87%86%e7%9a%84%20LateX%20%e8%af%ad%e6%b3%95%e6%9c%89%e5%b7%ae%e5%bc%82%ef%bc%8c%e4%b8%ba%e4%ba%86%e6%9b%b4%e5%8a%a0%e9%80%9a%e7%94%a8%e6%80%a7%ef%bc%8c%e6%89%80%e4%bb%a5%e4%bb%a5%e4%b8%8b%e6%96%87%e7%ab%a0%e4%b8%ad%20LateX%20%e5%85%ac%e5%bc%8f%e5%8f%af%e8%83%bd%e5%87%ba%e7%8e%b0%e4%b9%b1%e7%a0%81%ef%bc%8c%e5%a6%82%e6%9e%9c%e5%87%ba%e7%8e%b0%e4%b9%b1%e7%a0%81%ef%bc%8c%e4%b8%8d%e5%ab%8c%e5%bc%83%e7%9a%84%e8%af%9d%e5%8f%af%e4%bb%a5%e5%9c%a8%e7%ac%94%e8%80%85%e7%9a%84%20Github%20%e4%b8%8a%e7%9c%8b%e8%bf%99%e7%af%87%e6%97%a0%e4%b9%b1%e7%a0%81%e7%9a%84%e6%96%87%e7%ab%a0%e3%80%82%e7%ac%94%e8%80%85%e6%9c%89%e7%a9%ba%e4%bc%9a%e4%bf%ae%e5%a4%8d%e8%bf%99%e4%b8%aa%e4%b9%b1%e7%a0%81%e9%97%ae%e9%a2%98%e7%9a%84%e3%80%82%e8%af%b7%e8%a7%81%e8%b0%85%e3%80%82%0aGitHub%20Repo%ef%bc%9aHalfrost-Field%0aFollow%3a%20halfrost%20%c2%b7%20GitHub%0aSource%3a%20https%3a%2f%2fgithub.com%2fhalfrost%2fHalfrost-Field%2fblob%2fmaster%2fcontents%2fMachine_Learning%2fOctave_Matlab_Tutorial.ipynb%0a%20%e4%b8%80.%20Basic%20Operations%20%e5%9f%ba%e6%9c%ac%e6%93%8d%e4%bd%9c%20%e5%9c%a8%20matlab%20%e4%b8%ad%ef%bc%8c%25%e6%98%af%e6%b3%a8%e9%87%8a%e7%ac%a6%e5%8f%b7%e3%80%82%e5%9f%ba%e7%a1%80%e7%9a%84%e6%95%b0%e5%ad%a6%e8%bf%90%e7%ae%97%e6%9c%89%e4%bb%a5%e4%b8%8b%e8%bf%99%e4%ba%9b%ef%bc%9a%0a1%20%2b%202%20%25%e5%8a%a0%205%20-%206%20%25%e5%87%8f%207%20%2a%204%20%25%e4%b9%98%209%20%2f%203%20%25%e9%99%a4%206%20%5e%204%20%25%e5%b9%82%e6%8c%87%e6%95%b0%20log%2820%29%20%25%e5%af%b9%e6%95%b0%e8%bf%90%e7%ae%97%20exp%2830%29%20%25%e6%8c%87%e6%95%b0%e8%bf%90%e7%ae%97%20abs%28-2%29%20%25%e7%bb%9d%e5%af%b9%e5%80%bc%e8%bf%90%e7%ae%97%201.%20%e9%80%bb%e8%be%91%e8%bf%90%e7%ae%97%ef%bc%9a%201%20%3d%3d%202%20%25%e5%88%a4%e6%96%ad%e6%98%af%e5%90%a6%e7%9b%b8%e7%ad%89%20ans%20%3d%200%20%25false%20--------------------------------------------------------------------------------------------%201%20~%3d%202%20%25%20~%3d%20%e6%98%af%20%ef%bc%81%3d%20%e7%9a%84%e6%84%8f%e6%80%9d%ef%bc%8c%e5%88%a4%e6%96%ad%e6%98%af%e5%90%a6%e4%b8%8d%e7%9b%b8%e7%ad%89%20ans%20%3d%201%20%25True%20--------------------------------------------------------------------------------------------%201%20%26amp%3b%26amp%3b%200%20%25%e9%80%bb%e8%be%91%20AND%20%ef%bc%88%e5%92%8c%e8%bf%90%e7%ae%97%ef%bc%89%20ans%20%3d%200%20--------------------------------------------------------------------------------------------%201%20%7c%7c%200%20%25%e9%80%bb%e8%be%91%20OR%ef%bc%88%e6%88%96%e8%bf%90%e7%ae%97%ef%bc%89%20ans%20%3d%201%20--------------------------------------------------------------------------------------------%20xor%281%2c0%29%20%25%e5%bc%82%e6%88%96%e8%bf%90%e7%ae%97%20ans%20%3d%201%20--------------------------------------------------------------------------------------------%202."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2foctave_matlab_tutorial%2f&t=Octave%20Matlab%20%e6%95%99%e7%a8%8b"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

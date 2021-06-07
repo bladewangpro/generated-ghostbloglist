@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>AutoResizing Masks on prometheus</title><link>https://new.halfrost.com/categories/autoresizing-masks/</link><description>Recent content in AutoResizing Masks on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 17 Jul 2016 03:36:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/autoresizing-masks/index.xml" rel="self" type="application/rss+xml"/><item><title>WWDC 2016 Session 笔记 - Xcode 8 Auto Layout 新特性</title><link>https://new.halfrost.com/wwdc2016_xcode8autolayout_features/</link><pubDate>Sun, 17 Jul 2016 03:36:00 +0000</pubDate><guid>https://new.halfrost.com/wwdc2016_xcode8autolayout_features/</guid><description>####目录
+1.Incrementally Adopting Auto Layout 2.Design and Runtime Constraints 3.NSGridView 4.Layout Feedback Loop Debugging ####一.Incrementally Adopting Auto Layout Incrementally Adopting Auto Layout是什么意思呢？在我们IB里面布局我们的View的时候，我们并不需要一次性就添加好所有的constraints。我们可以一步步的增加constraints，简化我们的步骤，而且能让我们的设置起来更加灵活。
+再谈新特性之前，先介绍一下这个特性对应的背景来源。
+有这样一种场景，试想，我们把一个view放在父view上，这个时候并没有设置constraints，当我们运行完程序，就会出现下图的样子。
+看上去一切都还正常。但是一旦当我们把设备旋转90°以后，就会出现下图的样子。
+这个时候可以发现，这个View的长，宽，以及top和left的边距都没有发生变化。这时我们并没有设置constraints，这是怎么做到的呢？
+在程序的编译期，Auto Layout的引擎会自动隐式的给View加上一些constraints约束，以保证View的大小不会发生变化。这个例子中，View被加上了top，left，width，height这4个约束。
+如果我们需要更加动态的resize的行为，就需要我们在IB里面自定义约束了。现在问题就来了，有没有更好的方式来做这件事情？最好是能有一种不用约束的方法，也能达到简单的resize的效果。
+现在这个问题有了解决办法。在Xcode8中，我们可以给View指定autoresizing masks，而不用去设置constraints。这就意味着我们可以不用约束，我们也能做到简单的resize的效果。
+在Autolayout时代之前，可能会有人认出这种UI方式。这是一种Springs &amp;amp; Struts的UI。我们可以设定边缘约束(注：这里的约束并不是指的是Autolayout里面的constraints，是autoresizing masks里面的规则)，无论View的长宽如何变化，这些View都会跟随着设置了约束的view一起变化。
+上述的例子中，Xcode 8 中在没有加如何constraint就可以做到旋转屏幕之后，View的边距并没有发生变化。这是怎么做到的呢？事实上，Xcode 8的做法是先取出autoresizing masks，然后把它转换成对应的constraints，这个转换的时机发生在Runtime期间。生成对应的constraints是发生在运行时，而不是编译时的原因是可以给我们开发者更加便利的方式为View添加更加细致的约束。
+在View上，我们可以设置translatesAutoresizingMaskIntoConstraints属性。
+translatesAutoresizingMaskIntoConstraints == true 假设如果View已经在Interface Builder里面加过constraints，“Show the Size inspector”面板依旧会和以前一样。点击View，查看给它加的所有的constraints，这个时候Autoresizing masks就被忽略了，而且translatesAutoresizingMask的属性也会变成false。如下图，我们这个时候在“Show the Size inspector”面板上面就已经看不到AutoresizingMask的设置面板了。
+上图就是在Autolayout时代之前，我们一直使用的是autoresizing masks，但是Autolayout时代来临之后，一旦勾选上了这个Autolayout，之前的AutoresizingMask也就失效了。
+回到我们最原始的问题上来，Xcode 8 现在针对View可以支持增量的适用Autolayout。这就意味着我们可以从AutoresizingMask开始，先做简单的resize的工作，然后如果有更加复杂的需求，我们再加上适当的约束constraints来进行适配。简而概之，Xcode 8 Autolayout ≈ AutoresizingMask + Autolayout 。
+接下来用一个demo的例子来说明一下Xcode 8 Autolayout新特性。</description></item></channel></rss>

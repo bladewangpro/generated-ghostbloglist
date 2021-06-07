@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Weex on prometheus</title><link>https://new.halfrost.com/categories/weex/</link><description>Recent content in Weex on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Wed, 03 May 2017 06:07:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/weex/index.xml" rel="self" type="application/rss+xml"/><item><title>iOS 开发者的 Weex 伪最佳实践指北</title><link>https://new.halfrost.com/weex_best_practice_guidelines/</link><pubDate>Wed, 03 May 2017 06:07:00 +0000</pubDate><guid>https://new.halfrost.com/weex_best_practice_guidelines/</guid><description>引子 这篇文章是笔者近期关于Weex在iOS端的一些研究和实践心得，和大家一起分享分享，也算是对学习成果的总结。文章里面提到的做法也许不是最佳实践，也许里面的方法称不算是一份标准的指南手册，所以标题就只好叫“伪最佳实践指北”了。有更好的方法欢迎大家一起留言讨论，一起学习。
+由于笔者不太了解Android，所以以下的文章不会涉及到Android。
+一. React Native 和 Weex 自从Weex出生的那一天起，就无法摆脱和React Native相互比较的命运。React Native宣称“Learn once, write anywhere”，而Weex宣称“Write Once, Run Everywhere”。Weex从出生那天起，就被给予了一统三端的厚望。React Native可以支持iOS、Android，而Weex可以支持iOS、Android、HTML5。
+在Native端，两者的最大的区别可能就是在对JSBundle是否分包。React Native官方只允许将React Native基础JS库和业务JS一起打成一个JS bundle，没有提供分包的功能，所以如果想节约流量就必须制作分包打包工具。而Weex默认打的JS bundle只包含业务JS代码，体积小很多，基础JS库包含在Weex SDK中，这一点Weex与Facebook的React Native和微软的Cordova相比，Weex更加轻量，体积小巧。
+在JS端，Weex又被人称为Vue Native，所以 React Native 和 Weex 的区别就在 React 和 Vue 两者上了。
+笔者没有写过React Native，所以也没法客观的去比较两者。不过知乎上有一个关于Weex 和 React Native很好的对比文章《weex&amp;amp;React Native对比》，推荐大家阅读。
+前两天@Allen 许帅也在Glow 技术团队博客上面发布了一篇《React Native 在 Glow 的实践》这篇文章里面也谈了很多关于React Native实践相关的点，也强烈推荐大家去阅读。
+二. 入门基础 关于小白想入门Weex，当然最基础的还是要通读文档，文档是官方最好的学习资料。官方的基础文档有两份：
+教程文档
+手册文档
+在文档手册里面包含了Weex所有目前有的组件，模块，每个组件和模块的用法和属性。遇到问题可以先过来翻翻。很有可能有些组件和模块没有那些属性。
+1. Weex全家桶和脚手架 看完官方文档以后，就可以开始上手构建工程项目了。
+我司在知乎上面写了4篇关于《Weex入坑指南的》。这四篇文章还是很值得看的。
+Weex也和前端项目一样，拥有它自己的脚手架全家桶。weex-toolkit + weexpack + playground + code snippets + weex-devtool。</description></item><item><title>Weex 中别具匠心的 JS Framework</title><link>https://new.halfrost.com/weex_js_framework/</link><pubDate>Sun, 23 Apr 2017 05:15:00 +0000</pubDate><guid>https://new.halfrost.com/weex_js_framework/</guid><description>前言 Weex为了提高Native的极致性能，做了很多优化的工作
+为了达到所有页面在用户端达到秒开，也就是网络（JS Bundle下载）和首屏渲染（展现在用户第一屏的渲染时间）时间和小于1s。
+手淘团队在对Weex进行性能优化时，遇到了很多问题和挑战：
+JS Bundle下载慢，压缩后60k左右大小的JS Bundle，在全网环境下，平均下载速度大于800ms（在2G/3G下甚至是2s以上）。 JS和Native通信效率低，拖慢了首屏加载时间。
+最终想到的办法就是把JSFramework内置到SDK中，达到极致优化的作用。
+客户端访问Weex页面时，首先会网络请求JS Bundle，JS Bundle被加载到客户端本地后，传入JSFramework中进行解析渲染。JS Framework解析和渲染的过程其实是根据JS Bundle的数据结构创建Virtual DOM 和数据绑定，然后传递给客户端渲染。
+由于JSFramework在本地，所以就减少了JS Bundle的体积，每个JS Bundle都可以减少一部分体积，Bundle里面只保留业务代码。每个页面下载Bundle的时间都可以节约10-20ms。如果Weex页面非常多，那么每个页面累计起来节约的时间就很多了。 Weex这种默认就拆包加载的设计，比ReactNative强，也就不需要考虑一直困扰ReactNative头疼的拆包的问题了。
+整个过程中，JSFramework将整个页面的渲染分拆成一个个渲染指令，然后通过JS Bridge发送给各个平台的RenderEngine进行Native渲染。因此，尽管在开发时写的是 HTML / CSS / JS，但最后在各个移动端（在iOS上对应的是iOS的Native UI、在Android上对应的是Android的Native UI）渲染后产生的结果是纯Native页面。 由于JSFramework在本地SDK中，只用在初始化的时候初始化一次，之后每个页面都无须再初始化了。也进一步的提高了与Native的通信效率。
+JSFramework在客户端的作用在前几篇文章里面也提到了。它的在Native端的职责有3个：
+管理每个Weex instance实例的生命周期。 不断的接收Native传过来的JS Bundle，转换成Virtual DOM，再调用Native的方法，构建页面布局。 响应Native传过来的事件，进行响应。 接下来，笔者从源码的角度详细分析一下Weex 中别具匠心的JS Framework是如何实现上述的特性的。
+目录 1.Weex JS Framework 初始化 2.Weex JS Framework 管理实例的生命周期 3.Weex JS Framework 构建Virtual DOM 4.Weex JS Framework 处理Native触发的事件 5.Weex JS Framework 未来可能做更多的事情 一.</description></item><item><title>Weex 事件传递的那些事儿</title><link>https://new.halfrost.com/weex_event/</link><pubDate>Fri, 14 Apr 2017 18:18:00 +0000</pubDate><guid>https://new.halfrost.com/weex_event/</guid><description>前言 在前两篇文章里面分别谈了Weex如何在Native端初始化的和Weex是如何高效的渲染Native的原生UI的。Native这边还缺一块，那就是Native产生的一些事件，是怎么传回给JS的。这篇文章就详细分析这一部分。
+目录 1.Weex的事件类型 2.Weex的事件传递 一.Weex的事件类型 在Weex中，目前最新版本中事件总共分为4种类型，通用事件，Appear 事件，Disappear 事件，Page 事件。
+在Weex的组件里面只包含前三种事件，即通用事件，Appear 事件，Disappear 事件。
+当WXComponent添加事件的时候，会调用以下函数：
+- (void)_addEventOnMainThread:(NSString *)addEventName { WX_ADD_EVENT(appear, addAppearEvent) WX_ADD_EVENT(disappear, addDisappearEvent) WX_ADD_EVENT(click, addClickEvent) WX_ADD_EVENT(swipe, addSwipeEvent) WX_ADD_EVENT(longpress, addLongPressEvent) WX_ADD_EVENT(panstart, addPanStartEvent) WX_ADD_EVENT(panmove, addPanMoveEvent) WX_ADD_EVENT(panend, addPanEndEvent) WX_ADD_EVENT(horizontalpan, addHorizontalPanEvent) WX_ADD_EVENT(verticalpan, addVerticalPanEvent) WX_ADD_EVENT(touchstart, addTouchStartEvent) WX_ADD_EVENT(touchmove, addTouchMoveEvent) WX_ADD_EVENT(touchend, addTouchEndEvent) WX_ADD_EVENT(touchcancel, addTouchCancelEvent) [self addEvent:addEventName]; } WX_ADD_EVENT是一个宏：
+#define WX_ADD_EVENT(eventName, addSelector) \ if ([addEventName isEqualToString:@#eventName]) {\ [self addSelector];\ } 即是判断待添加的事件addEventName的名字和默认支持的事件名字eventName是否一致，如果一致，就执行addSelector方法。
+最后会执行一个addEvent:方法，每个组件里面会可以重写这个方法。在这个方法里面做的就是对组件的状态的标识。
+比如WXWebComponent组件里面的addEvent:方法：
+- (void)addEvent:(NSString *)eventName { if ([eventName isEqualToString:@&amp;#34;pagestart&amp;#34;]) { _startLoadEvent = YES; } else if ([eventName isEqualToString:@&amp;#34;pagefinish&amp;#34;]) { _finishLoadEvent = YES; } else if ([eventName isEqualToString:@&amp;#34;error&amp;#34;]) { _failLoadEvent = YES; } } 在这个方法里面即对Web组件里面的状态进行了标识。</description></item><item><title>由 FlexBox 算法强力驱动的 Weex 布局引擎</title><link>https://new.halfrost.com/weex_flexbox/</link><pubDate>Fri, 31 Mar 2017 08:26:00 +0000</pubDate><guid>https://new.halfrost.com/weex_flexbox/</guid><description>前言 在上篇文章里面谈了Weex在iOS客户端工作的基本流程。这篇文章将会详细的分析Weex是如何高性能的布局原生界面的，之后还会与现有的布局方法进行对比，看看Weex的布局性能究竟如何。
+目录 1.Weex布局算法 2.Weex布局算法性能分析 3.Weex是如何布局原生界面的 一. Weex布局算法 打开Weex的源码的Layout文件夹，就会看到两个c的文件，这两个文件就是今天要谈的Weex的布局引擎。
+Layout.h和Layout.c最开始是来自于React-Native里面的代码。也就是说Weex和React-Native的布局引擎都是同一套代码。
+当前React-Native的代码里面已经没有这两个文件了，而是换成了Yoga。
+Yoga本是Facebook在React Native里引入的一种跨平台的基于CSS的布局引擎，它实现了Flexbox规范，完全遵守W3C的规范。随着该系统不断完善，Facebook对其进行重新发布，于是就成了现在的Yoga(Yoga官网)。
+那么Flexbox是什么呢？
+熟悉前端的同学一定很熟悉这个概念。2009年，W3C提出了一种新的方案——Flex布局，可以简便、完整、响应式地实现各种页面布局。目前，它已经得到了几乎所有浏览器的支持，目前的前端主要是使用Html / CSS / JS实现，其中CSS用于前端的布局。任何一个Html的容器可以通过css指定为Flex布局，一旦一个容器被指定为Flex布局，其子元素就可以按照FlexBox的语法进行布局。
+关于FlexBox的基本定义，更加详细的文档说明，感兴趣的同学可以去阅读一下W3C的官方文档，那里会有很详细的说明。官方文档链接
+Weex中的Layout文件是Yoga的前身，是Yoga正式发布之前的版本。底层代码使用C语言代码，所以性能也不是问题。接下来就仔细分析Layout文件是如何实现FlexBox的。
+故以下源码分析都基于v0.10.0这个版本。
+（一）FlexBox中的基本数据结构 Flexbox布局（Flexible Box)设计之初的目的是为了能更加高效的分配子视图的布局情况，包括动态的改变宽度，高度，以及排列顺序。Flexbox可以更加方便的兼容各个大小不同的屏幕，比如拉伸和压缩子视图。
+在FlexBox的世界里，存在着主轴和侧轴的概念。
+大多数情况，子视图都是沿着主轴（main axis），从主轴起点（main-start）到主轴终点（main-end）排列。但是这里需要注意的一点是，主轴和侧轴虽然永远是垂直的关系，但是谁是水平，谁是竖直，并没有确定，有可能会有如下的情况：
+在上图这种水平是侧轴的情况下，子视图是沿着侧轴（cross axis），从侧轴起点（cross-start）到侧轴终点（cross-end）排列的。
+**主轴（main axis）：**父视图的主轴，子视图主要沿着这条轴进行排列布局。
+**主轴起点（main-start）和主轴终点（main-end）：**子视图在父视图里面布局的方向是从主轴起点（main-start）向主轴终点（main-start）的方向。
+**主轴尺寸（main size）：**子视图在主轴方向的宽度或高度就是主轴的尺寸。子视图主要的大小属性要么是宽度，要么是高度属性，由哪一个对着主轴方向决定。
+**侧轴（cross axis）：**垂直于主轴称为侧轴。它的方向主要取决于主轴方向。
+**侧轴起点（cross-start）和侧轴终点（cross-end）：**子视图行的配置从容器的侧轴起点边开始，往侧轴终点边结束。
+**侧轴尺寸（cross size）：**子视图的在侧轴方向的宽度或高度就是项目的侧轴长度，伸缩项目的侧轴长度属性是「width」或「height」属性，由哪一个对着侧轴方向决定。
+接下来看看Layout是怎么定义FlexBox里面的元素的。
+typedef enum { CSS_DIRECTION_INHERIT = 0, CSS_DIRECTION_LTR, CSS_DIRECTION_RTL } css_direction_t; 这个方向是定义的上下文的整体布局的方向，INHERIT是继承，LTR是Left To Right，从左到右布局。RTL是Right To Left，从右到左布局。下面分析如果不做特殊说明，都是LTR从左向右布局。如果是RTL就是LTR反向。
+typedef enum { CSS_FLEX_DIRECTION_COLUMN = 0, CSS_FLEX_DIRECTION_COLUMN_REVERSE, CSS_FLEX_DIRECTION_ROW, CSS_FLEX_DIRECTION_ROW_REVERSE } css_flex_direction_t; 这里定义的是Flex的方向。</description></item><item><title>Weex 是如何在 iOS 客户端上跑起来的</title><link>https://new.halfrost.com/weex_ios/</link><pubDate>Sat, 18 Mar 2017 02:29:00 +0000</pubDate><guid>https://new.halfrost.com/weex_ios/</guid><description>前言 2016年4月21日，阿里巴巴在Qcon大会上宣布跨平台移动开发工具Weex开放内测邀请。Weex能够完美兼顾性能与动态性，让移动开发者通过简捷的前端语法写出Native级别的性能体验，并支持iOS、安卓、YunOS及Web等多端部署。
+近一年来，ReactNative 和 Weex 这些跨平台技术对Native开发者来说，冲击是巨大的。Native在开发App的时候存在一些弊端，比如客户端需要频繁更新，iOS更新时间还要受到审核的牵制；iOS、Android和前端同时开发同一个需求，在人员成本上消耗大；Hybrid的性能和Native相比又差了一点。
+ReactNative 和 Weex的出现，就是为了解决这些痛点的。
+从4月21号宣布内测以后，短短两周就有超过5000名开发者申请。
+2016年6月30日阿里巴巴正式宣布Weex开源。号称可以用Web方式，开发Native级性能体验的亿级应用匠心打造跨平台移动开发工具Weex在开源首日就登上Github趋势榜首位，截止目前为止，Weex在GitHub上的Star数已经到达了13393了。成为中国2016年在Github上最热门的开源项目之一。
+目录 1.Weex概述 2.Weex工作原理 3.Weex在iOS上是如何跑起来的 4.关于Weex，ReactNative，JSPatch 一. Weex概述 Weex从出生那天起，仿佛就是和ReactNative是“一对”。
+ReactNative宣称“Learn once, write anywhere”，而Weex宣称“Write Once, Run Everywhere”。Weex从出生那天起，就被给予了一统三端的厚望。ReactNative可以支持iOS、Android，而Weex可以支持iOS、Android、HTML5。一统三端就解决了前言里面说的第二个痛点，同时开发浪费人员成本的问题。
+Native移动开发者只需要在本地导入Weex的SDK，就可以通过HTML/CSS/JavaScript网页的这套编程语言来开发Native级别的Weex界面。这意味着可以直接用现有Web开发的编辑器和IDE的代码补全、提示、检查等功能。从而也给前端人员开发Native端，较低的开发成本和学习成本。
+Weex是一种轻量级、可扩展、高性能框架。集成也很方便，可以直接在HTML5页面嵌入，也可嵌在原生UI中。由于和ReactNative一样，都会调用Native端的原生控件，所以在性能上比Hybrid高出一个层次。这就解决了前言里面所说的第三个痛点，性能问题。
+Weex非常轻量，体积小巧，语法简单，方便接入和上手。ReactNative官方只允许将ReactNative基础JS库和业务JS一起打成一个JS bundle，没有提供分包的功能，所以如果想节约流量就必须制作分包打包工具。而Weex默认打的JS bundle只包含业务JS代码，体积小很多，基础JS库包含在Weex SDK中，这一点Weex与Facebook的React Native和微软的Cordova相比，Weex更加轻量，体积小巧。把Weex生成的JS bundle轻松部署到服务器端，然后Push到客户端，或者客户端请求新的资源即可完成发布。如此快速的迭代就解决了前言里面说的第一个痛点，发布无法控制时间，
+Weex中Native组件和API都可以横向扩展，业务方可去中心化横向灵活化定制组件和功能模块。并且还可以直接复用Web前端的工程化管理和监控性能等工具。
+知乎上有一个关于Weex 和 ReactNative很好的对比文章weex&amp;amp;ReactNative对比，推荐大家阅读。
+Weex在2017年2月17日正式发布v0.10.0，这个里程碑的版本开始完美的兼容Vue.js开发Weex界面。
+Weex又于2017年2月24 迁移至 Apache 基金会，阿里巴巴会基于 Apache 的基础设施继续迭代。并启用了全新的 GitHub 仓库：https://github.com/apache/incubator-weex
+故以下源码分析都基于v0.10.0这个版本。
+二. Weex工作原理 上图是官方给的一张原理图，Weex是如何把JS打包成JS Bundle的原理本篇文章暂时不涉及。本篇文章会详细分析Weex是如何在Native端工作的。笔者把Native端的原理再次细分，如下图：
+Weex可以通过自己设计的DSL，书写.we文件或者.vue文件来开发界面，整个页面书写分成了3段，template、style、script，借鉴了成熟的MVVM的思想。
+Weex在性能方面，为了尽可能的提升客户端的性能，DSL的Transformer全部都放在了服务器端实现，Weex会在服务器端将XML + CSS + JavaScript 代码全部都转换成JS Bundle。服务器将JS Bundle部署到Server上和CDN上。
+Weex和React Native不同的是，Weex把JS Framework内置在SDK里面，用来解析从服务器上下载的JS Bundle，这样也减少了每个JS Bundle的体积，不再有React Native需要分包的问题。客户端请求完JS Bundle以后，传给JS Framework，JS Framework解析完成以后会输出Json格式的Virtual DOM，客户端Native只需要专心负责 Virtual DOM 的解析和布局、UI 渲染。然而这一套解析，布局，渲染的逻辑SDK基本实现了。</description></item></channel></rss>

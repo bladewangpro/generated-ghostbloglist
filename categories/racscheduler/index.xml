@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>RACScheduler on prometheus</title><link>https://new.halfrost.com/categories/racscheduler/</link><description>Recent content in RACScheduler on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 31 Dec 2016 01:09:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/racscheduler/index.xml" rel="self" type="application/rss+xml"/><item><title>ReactiveCocoa 中 RACScheduler 是如何封装 GCD 的</title><link>https://new.halfrost.com/reactivecocoa_racscheduler/</link><pubDate>Sat, 31 Dec 2016 01:09:00 +0000</pubDate><guid>https://new.halfrost.com/reactivecocoa_racscheduler/</guid><description>前言 在使用ReactiveCocoa 过程中，Josh Abernathy和Justin Spahr-Summers 两位大神为了能让RAC的使用者更畅快的在沉浸在FRP的世界里，更好的进行并发编程，于是就对GCD进行了一次封装，并与RAC的各大组件进行了完美的整合。
+自从有了RACScheduler以后，使整个RAC并发编程的代码里面更加和谐统一，更加顺手，更加“ReactiveCocoa”。
+目录 1.RACScheduler是如何封装GCD的 2.RACScheduler的一些子类 3.RACScheduler是如何“取消”并发任务的 4.RACScheduler是如何和RAC其他组件进行完美整合的 一. RACScheduler是如何封装GCD的 RACScheduler在ReactiveCocoa中到底是干嘛的呢？处于什么地位呢？官方给出的定义如下：
+Schedulers are used to control when and where work is performedRACScheduler在ReactiveCocoa中是用来控制一个任务，何时何地被执行。它主要是用来解决ReactiveCocoa中并发编程的问题的。
+RACScheduler的实质是对GCD的封装，底层就是GCD实现的。
+要分析RACScheduler，先来回顾一下GCD。
+众所周知，在GCD中，Dispatch Queue主要分为2类，Serial Dispatch Queue 和 Concurrent Dispatch Queue 。其中Serial Dispatch Queue是等待现在执行中处理结束的队列，Concurrent Dispatch Queue是不等待现在执行中处理结束的队列。
+生成Dispatch Queue的方法也有2种，第一种方式是通过GCD的API生成Dispatch Queue。
+生成Serial Dispatch Queue
+dispatch_queue_t serialDispatchQueue = dispatch_queue_create(&amp;#34;com.gcd.SerialDispatchQueue&amp;#34;, DISPATCH_QUEUE_SERIAL); 生成Concurrent Dispatch Queue
+dispatch_queue_t concurrentDispatchQueue = dispatch_queue_create(&amp;#34;com.gcd.ConcurrentDispatchQueue&amp;#34;, DISPATCH_QUEUE_CONCURRENT); 第二种方法是直接获取系统提供的Dispatch Queue。系统提供的也分为2类，Main Dispatch Queue 和 Global Dispatch Queue。Main Dispatch Queue 对应着是Serial Dispatch Queue，Global Dispatch Queue 对应着是Concurrent Dispatch Queue。</description></item></channel></rss>

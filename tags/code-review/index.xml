@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Code review on prometheus</title><link>https://new.halfrost.com/tags/code-review/</link><description>Recent content in Code review on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Mon, 25 Apr 2016 01:54:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/code-review/index.xml" rel="self" type="application/rss+xml"/><item><title>搭建 Phabricator 我遇到的那些坑</title><link>https://new.halfrost.com/phabricator_trouble/</link><pubDate>Mon, 25 Apr 2016 01:54:00 +0000</pubDate><guid>https://new.halfrost.com/phabricator_trouble/</guid><description>一.可能会用到的命令 1.重启phd守护线程 先进入到Fabricator文件夹下面，然后 $./bin/phd/ log
+2.删除一个代码仓库 $ ./bin/remove destroy rMOBILE(代码库的前缀名字)
+3.重启mysql数据库
+sudo launchctl unload -F /Library/LaunchDaemons/com.oracle.oss.mysql.mysqld.plistsudo launchctl load -F /Library/LaunchDaemons/com.oracle.oss.mysql.mysqld.plist4.重启apache服务器命令
+sudo /usr/sbin/apachectl restartsudo apachectl -k restart二.可能会用到的一些坑 1.Mac如果出现“sudo: /etc/sudoers is owned by uid 501, should be 0 ”问题解决办法 先启用root账户 在 OS X 中启用和使用“root”用户 OS X Lion (10.7) 和更高版本
+从 Apple 菜单中选取“系统偏好设置”。 从“显示”菜单中选取“用户与群组”。 点按锁图标并使用管理员帐户进行鉴定。 点按“登录选项”。 点按右下方的“编辑”或“加入”按钮。 点按“打开目录实用工具”按钮。 点按“目录实用工具”窗口中的锁图标。 输入管理员帐户名称和密码，然后点按“好”。 从“编辑”菜单中选取“启用 Root 用户”。 在“密码”和“验证”栏中输入您想要使用的 root 密码，然后点按“好”。 Mac OS X Snow Leopard (10.</description></item><item><title>Code review - Phabricator Use guide introduce</title><link>https://new.halfrost.com/code_review_phabricator_use_guide_introduce/</link><pubDate>Sun, 24 Apr 2016 01:27:00 +0000</pubDate><guid>https://new.halfrost.com/code_review_phabricator_use_guide_introduce/</guid><description>前言 今天给大家分享一下我之前在公司搭建的一个Code Review服务器的一些心得吧。由于现在移动互联网更新迭代速度很快，分布版本的速度基本上决定了创业公司的生命，所以代码质量在决定产品质量上也体现出尤其重要的地位。
+目录 1.Phabricator Summary 2.pre-push code review tool —— Differential 3.code repository browse tool — Diffusion 4.post-push code review tool —— Audit 5.Other Feature Summary 6.Final 一.Phabricator Summary 今天我要向大家分享的是一款非常棒的代码检视工具Phabricator。Phabricator是Facebook保驾护航的11大IT技术之一。在Phabricator的网站中，开发者给出了这样的描述：“Facebook的工程师们毫不掩饰自己对于Phabricator的喜爱之情，他们甚至将它视为’顺利’与’严谨’的代名词”。下面我就将演示使用Phabricator进行代码检视的流程以及它的亮点。
+Facebook 保价护航的11大IT技术
+1.HTML5
+2.Facebook平台
+3.Facebook虚拟币
+4.Facebook应用
+5.开放计算项目
+6.Hadoop
+7.LAMP堆栈
+8.Scuba
+9.HipHop For PHP
+10.Scribe 与 Thift
+11.Phabricator
+这就是搭建好的服务器的界面
+二.Differential Differential是Phabricator核心功能之一，它是开发者相互检视代码，互相讨论代码的主要平台。
+谈到如何生成Diff，此处需要用到Arcanist Tool工具了。
+1.DownLoad Tool 下载Arcanist Tool
+2.Edit Path 配置path路径
+3.install certificate 安装证书
+4.install certificate 验证证书token
+5.creat diff 生成diff</description></item></channel></rss>

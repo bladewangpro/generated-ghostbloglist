@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>TCP_IP on prometheus</title><link>https://new.halfrost.com/categories/tcp_ip/</link><description>Recent content in TCP_IP on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Thu, 16 Feb 2017 11:24:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/tcp_ip/index.xml" rel="self" type="application/rss+xml"/><item><title>TCP 进阶</title><link>https://new.halfrost.com/advance_tcp/</link><pubDate>Thu, 16 Feb 2017 11:24:00 +0000</pubDate><guid>https://new.halfrost.com/advance_tcp/</guid><description>一. 端口号 标准的端口号由 Internet 号码分配机构(IANA)分配。这组数字被划分为特定范围，包括 熟知端口号(0 - 1023)、注册端口号(1024 - 49151)和动态/私有端口号(49152 - 65535)。
+如果我们测试这些标准服务和其他 TCP/IP 服务(Telnet、 FTP、 SMTP等) 使用的端口号，会发现它们大多数是奇数。这是有历史原困的，这些端口号从 NCP 端口号派生而来(NCP 是网络控制协议，在 TCP 之前作为 ARPANET 的传输层协议)。NCP 虽然简单，但不是全双工的，困此每个应用需要两个连接，并为每个应用保留奇偶成对的端口号。当 TCP 和 UDP 成为标准的传输层协议时，每个应用只需要一个端口号，因此来自 NCP 的奇数端口号被使用。
+二. TCP 初始序列号 在 TCP 数据报中，有一个 序列号 (Sequence Number)。如果序列号被人猜出来，就会展现出 TCP 的脆弱性。
+如果选择合适的序列号、IP地址以及端口号，那么任何人都能伪造出一个 TCP 报文段，从而 打断 TCP 的正常连接[RFC5961]。一种抵御上述行为的方法是使初始序列号(或者临时端口 号[RFC6056])变得相对难以被猜出，而另一种方法则是加密。
+Linux 系统采用一个相对复杂的过程来选择它的初始序列号。它采用基于时钟的方案，并且针对每一个连接为时钟设置随机的偏移量。随机偏移量是在连接标识(由 2 个 IP 地址与 2 个端口号构成的 4 元组，即 4 元组)的基础上利用加密散列函数得到的。散列函数的输人每隔 5 分钟就会改变一次。在 32 位的初始序列号中，最高的 8 位是一个保密的序列号，而剩余的备位则由散列函数生成。上述方法所生成的序列号很难被猜出，但依然会随着时间而逐步增加。据报告显示， Windows 系统使用了一种基于 RC4[S94] 的类似方案。</description></item><item><title>TCP/IP 指南</title><link>https://new.halfrost.com/tcp_ip/</link><pubDate>Wed, 15 Feb 2017 10:31:00 +0000</pubDate><guid>https://new.halfrost.com/tcp_ip/</guid><description>一. OSI 模型 OSI 参考模型终究只是一个“模型”，它也只是对各层的作用做了一系列粗略的界定，并没有对协议和接口进行详细的定义。它对学习和设计协议只能起到一个引导的作用。因此，若想要了解协议的更多细节，还是有必要参考每个协议本身的具体规范。
+上图是 《图解 TCP/IP》书上对七层模型的定义。
+上图是一些协议在 OSI 模型中的位置。值得注意的是 DNS 是应用层协议，SSL 分别位于第五层会话层和第六层表示层。TLS 位于第五层会话层。（DNS、SSL、TLS 这些协议会在后面详细分析与说明）
+上图是 TCP/IP 模型和 OSI 模型的对比图。
+接下来放2张网络上的图，笔者对图上的内容持有争议，至于下面2张图哪里对哪里错，欢迎开 issue 讨论。
+上面这种图说 DNS 是网络层协议，笔者周围很多朋友都一致认为是应用层协议。还有一个错误是 SSL 是跨第六层和第七层的，这里画的还是不对。
+上面这种图中 DNS 位于应用层，这点赞同，并且也画出了 DNS 是基于 UDP 和 TCP 的。这点也非常不错！（至于有些人不知道 DNS 为何也是基于 TCP 的，这点在 DNS 那里详细分析）。但是上图中没有画出 SSL/TLS 是位于第几层的。
+笔者认为上面2张图，虽然看上去非常复杂，内容详尽，但是仔细推敲，还是都有不足和不对的地方。
+二. OSI 参考模型通信举例 上图是 5 层 TCP/IP 模型中通信时候的数据图。值得说明的一点，在数据链路层的以太网帧里面，除去以太网首部 14 字节，FCS 尾部 4 字节，中间的数据长度在 46-1500 字节之间。
+上图是 OSI 7 层模型中通信时候的数据图。从上图的 7 层模型中，物理层传输的是字节流，数据链路层中包的单位叫，帧。IP、TCP、UDP 网络层的包的单位叫，数据报。TCP、UDP 数据流中的信息叫，段。最后，应用层协议中数据的单位叫，消息。</description></item></channel></rss>

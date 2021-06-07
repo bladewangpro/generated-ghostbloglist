@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Aspect on prometheus</title><link>https://new.halfrost.com/tags/aspect/</link><description>Recent content in Aspect on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 15 Oct 2016 09:54:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/aspect/index.xml" rel="self" type="application/rss+xml"/><item><title>iOS 如何实现 Aspect Oriented Programming</title><link>https://new.halfrost.com/ios_aspect/</link><pubDate>Sat, 15 Oct 2016 09:54:00 +0000</pubDate><guid>https://new.halfrost.com/ios_aspect/</guid><description>前言 在“Runtime病院”住院的后两天，分析了一下AOP的实现原理。“出院”后，发现Aspect库还没有详细分析，于是就有了这篇文章，今天就来说说iOS 是如何实现Aspect Oriented Programming。
+目录 1.Aspect Oriented Programming简介 2.什么是Aspects 3.Aspects 中4个基本类 解析 4.Aspects hook前的准备工作 5.Aspects hook过程详解 6.关于Aspects的一些 “坑” 一.Aspect Oriented Programming简介 面向切面的程序设计（aspect-oriented programming，AOP，又译作面向方面的程序设计、观点导向编程、剖面导向程序设计）是计算机科学中的一个术语，指一种程序设计范型。该范型以一种称为侧面（aspect，又译作方面）的语言构造为基础，侧面是一种新的模块化机制，用来描述分散在对象、类或函数中的横切关注点（crosscutting concern）。
+侧面的概念源于对面向对象的程序设计的改进，但并不只限于此，它还可以用来改进传统的函数。与侧面相关的编程概念还包括元对象协议、主题（subject）、混入（mixin）和委托。
+AOP通过预编译方式和运行期动态代理实现程序功能的统一维护的一种技术。
+OOP（面向对象编程）针对业务处理过程的实体及其属性和行为进行抽象封装，以获得更加清晰高效的逻辑单元划分。
+AOP则是针对业务处理过程中的切面进行提取，它所面对的是处理过程中的某个步骤或阶段，以获得逻辑过程中各部分之间低耦合性的隔离效果。
+OOP和AOP属于两个不同的“思考方式”。OOP专注于对象的属性和行为的封装，AOP专注于处理某个步骤和阶段的，从中进行切面的提取。
+举个例子，如果有一个判断权限的需求，OOP的做法肯定是在每个操作前都加入权限判断。那日志记录怎么办？在每个方法的开始结束的地方都加上日志记录。AOP就是把这些重复的逻辑和操作，提取出来，运用动态代理，实现这些模块的解耦。OOP和AOP不是互斥，而是相互配合。
+在iOS里面使用AOP进行编程，可以实现非侵入。不需要更改之前的代码逻辑，就能加入新的功能。主要用来处理一些具有横切性质的系统性服务，如日志记录、权限管理、缓存、对象池管理等。
+二. 什么是Aspects Aspects是一个轻量级的面向切面编程的库。它能允许你在每一个类和每一个实例中存在的方法里面加入任何代码。可以在以下切入点插入代码：before(在原始的方法前执行) / instead(替换原始的方法执行) / after(在原始的方法后执行,默认)。通过Runtime消息转发实现Hook。Aspects会自动的调用super方法，使用method swizzling起来会更加方便。
+这个库很稳定，目前用在数百款app上了。它也是PSPDFKit的一部分，PSPDFKit是一个iOS 看PDF的framework库。作者最终决定把它开源出来。
+三.Aspects 中4个基本类 解析 我们从头文件开始看起。
+1.Aspects.h typedef NS_OPTIONS(NSUInteger, AspectOptions) { AspectPositionAfter = 0, /// Called after the original implementation (default)  AspectPositionInstead = 1, /// Will replace the original implementation.</description></item></channel></rss>

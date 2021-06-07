@@ -1,0 +1,962 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>ReactiveCocoa 中 集合类 RACSequence 和 RACTuple 底层实现分析 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="ReactiveCocoa 中 集合类 RACSequence 和 RACTuple 底层实现分析"><meta property="og:description" content="前言 在OOP的世界里使用FRP的思想来编程，光有函数这种一等公民，还是无法满足我们一些需求的。因此还是需要引用变量来完成各式各样的类的操作行为。
+在前几篇文章中详细的分析了RACStream中RACSignal的底层实现。RACStream还有另外一个子类，RACSequence，这个类是RAC专门为集合而设计的。这篇文章就专门分析一下RACSequence的底层实现。
+目录  1.RACTuple底层实现分析 2.RACSequence底层实现分析 3.RACSequence操作实现分析 4.RACSequence的一些扩展  一. RACTuple底层实现分析 在分析RACSequence之前，先来看看RACTuple的实现。RACTuple是ReactiveCocoa的元组类。
+1. RACTuple @interface RACTuple : NSObject <NSCoding, NSCopying, NSFastEnumeration> @property (nonatomic, readonly) NSUInteger count; @property (nonatomic, readonly) id first; @property (nonatomic, readonly) id second; @property (nonatomic, readonly) id third; @property (nonatomic, readonly) id fourth; @property (nonatomic, readonly) id fifth; @property (nonatomic, readonly) id last; @property (nonatomic, strong) NSArray *backingArray; @property (nonatomic, copy, readonly) RACSequence *rac_sequence; // 这个是专门为sequence提供的一个扩展  @end RACTuple的定义看上去很简单，底层实质就是一个NSArray，只不过封装了一些方法。RACTuple继承了NSCoding, NSCopying, NSFastEnumeration这三个协议。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/reactivecocoa_racsequence_ractuple/"><meta property="article:published_time" content="2016-12-25T07:54:00+00:00"><meta property="article:modified_time" content="2016-12-25T07:54:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="ReactiveCocoa 中 集合类 RACSequence 和 RACTuple 底层实现分析"><meta name=twitter:description content="前言 在OOP的世界里使用FRP的思想来编程，光有函数这种一等公民，还是无法满足我们一些需求的。因此还是需要引用变量来完成各式各样的类的操作行为。
+在前几篇文章中详细的分析了RACStream中RACSignal的底层实现。RACStream还有另外一个子类，RACSequence，这个类是RAC专门为集合而设计的。这篇文章就专门分析一下RACSequence的底层实现。
+目录  1.RACTuple底层实现分析 2.RACSequence底层实现分析 3.RACSequence操作实现分析 4.RACSequence的一些扩展  一. RACTuple底层实现分析 在分析RACSequence之前，先来看看RACTuple的实现。RACTuple是ReactiveCocoa的元组类。
+1. RACTuple @interface RACTuple : NSObject <NSCoding, NSCopying, NSFastEnumeration> @property (nonatomic, readonly) NSUInteger count; @property (nonatomic, readonly) id first; @property (nonatomic, readonly) id second; @property (nonatomic, readonly) id third; @property (nonatomic, readonly) id fourth; @property (nonatomic, readonly) id fifth; @property (nonatomic, readonly) id last; @property (nonatomic, strong) NSArray *backingArray; @property (nonatomic, copy, readonly) RACSequence *rac_sequence; // 这个是专门为sequence提供的一个扩展  @end RACTuple的定义看上去很简单，底层实质就是一个NSArray，只不过封装了一些方法。RACTuple继承了NSCoding, NSCopying, NSFastEnumeration这三个协议。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/reactivecocoa_racsignal_operations3/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/reactivecocoa_racscheduler/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&text=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&name=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8OOP%e7%9a%84%e4%b8%96%e7%95%8c%e9%87%8c%e4%bd%bf%e7%94%a8FRP%e7%9a%84%e6%80%9d%e6%83%b3%e6%9d%a5%e7%bc%96%e7%a8%8b%ef%bc%8c%e5%85%89%e6%9c%89%e5%87%bd%e6%95%b0%e8%bf%99%e7%a7%8d%e4%b8%80%e7%ad%89%e5%85%ac%e6%b0%91%ef%bc%8c%e8%bf%98%e6%98%af%e6%97%a0%e6%b3%95%e6%bb%a1%e8%b6%b3%e6%88%91%e4%bb%ac%e4%b8%80%e4%ba%9b%e9%9c%80%e6%b1%82%e7%9a%84%e3%80%82%e5%9b%a0%e6%ad%a4%e8%bf%98%e6%98%af%e9%9c%80%e8%a6%81%e5%bc%95%e7%94%a8%e5%8f%98%e9%87%8f%e6%9d%a5%e5%ae%8c%e6%88%90%e5%90%84%e5%bc%8f%e5%90%84%e6%a0%b7%e7%9a%84%e7%b1%bb%e7%9a%84%e6%93%8d%e4%bd%9c%e8%a1%8c%e4%b8%ba%e3%80%82%0a%e5%9c%a8%e5%89%8d%e5%87%a0%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e8%af%a6%e7%bb%86%e7%9a%84%e5%88%86%e6%9e%90%e4%ba%86RACStream%e4%b8%adRACSignal%e7%9a%84%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e3%80%82RACStream%e8%bf%98%e6%9c%89%e5%8f%a6%e5%a4%96%e4%b8%80%e4%b8%aa%e5%ad%90%e7%b1%bb%ef%bc%8cRACSequence%ef%bc%8c%e8%bf%99%e4%b8%aa%e7%b1%bb%e6%98%afRAC%e4%b8%93%e9%97%a8%e4%b8%ba%e9%9b%86%e5%90%88%e8%80%8c%e8%ae%be%e8%ae%a1%e7%9a%84%e3%80%82%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e4%b8%93%e9%97%a8%e5%88%86%e6%9e%90%e4%b8%80%e4%b8%8bRACSequence%e7%9a%84%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.RACTuple%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%202.RACSequence%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%203.RACSequence%e6%93%8d%e4%bd%9c%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%204.RACSequence%e7%9a%84%e4%b8%80%e4%ba%9b%e6%89%a9%e5%b1%95%20%20%e4%b8%80.%20RACTuple%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%20%e5%9c%a8%e5%88%86%e6%9e%90RACSequence%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8bRACTuple%e7%9a%84%e5%ae%9e%e7%8e%b0%e3%80%82RACTuple%e6%98%afReactiveCocoa%e7%9a%84%e5%85%83%e7%bb%84%e7%b1%bb%e3%80%82%0a1.%20RACTuple%20%40interface%20RACTuple%20%3a%20NSObject%20%26lt%3bNSCoding%2c%20NSCopying%2c%20NSFastEnumeration%26gt%3b%20%40property%20%28nonatomic%2c%20readonly%29%20NSUInteger%20count%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20first%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20second%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20third%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20fourth%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20fifth%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20last%3b%20%40property%20%28nonatomic%2c%20strong%29%20NSArray%20%2abackingArray%3b%20%40property%20%28nonatomic%2c%20copy%2c%20readonly%29%20RACSequence%20%2arac_sequence%3b%20%2f%2f%20%e8%bf%99%e4%b8%aa%e6%98%af%e4%b8%93%e9%97%a8%e4%b8%basequence%e6%8f%90%e4%be%9b%e7%9a%84%e4%b8%80%e4%b8%aa%e6%89%a9%e5%b1%95%20%20%40end%20RACTuple%e7%9a%84%e5%ae%9a%e4%b9%89%e7%9c%8b%e4%b8%8a%e5%8e%bb%e5%be%88%e7%ae%80%e5%8d%95%ef%bc%8c%e5%ba%95%e5%b1%82%e5%ae%9e%e8%b4%a8%e5%b0%b1%e6%98%af%e4%b8%80%e4%b8%aaNSArray%ef%bc%8c%e5%8f%aa%e4%b8%8d%e8%bf%87%e5%b0%81%e8%a3%85%e4%ba%86%e4%b8%80%e4%ba%9b%e6%96%b9%e6%b3%95%e3%80%82RACTuple%e7%bb%a7%e6%89%bf%e4%ba%86NSCoding%2c%20NSCopying%2c%20NSFastEnumeration%e8%bf%99%e4%b8%89%e4%b8%aa%e5%8d%8f%e8%ae%ae%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&t=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-ractuple底层实现分析>一. RACTuple底层实现分析</a><ul><li><a href=#1-ractuple>1. RACTuple</a></li><li><a href=#2-ractupleunpackingtrampoline>2. RACTupleUnpackingTrampoline</a></li><li><a href=#3-ractuplesequence>3. RACTupleSequence</a></li></ul></li><li><a href=#二-racsequence底层实现分析>二. RACSequence底层实现分析</a><ul><li><a href=#1-积极运算-和-惰性求值>1. 积极运算 和 惰性求值</a></li><li><a href=#2-pull-driver-和-push-driver>2. Pull-driver 和 Push-driver</a></li></ul></li><li><a href=#三-racsequence操作实现分析>三. RACSequence操作实现分析</a><ul><li><a href=#1-foldleftwithstart-reduce>1. foldLeftWithStart: reduce:</a></li><li><a href=#2-foldrightwithstart-reduce>2. foldRightWithStart: reduce:</a></li><li><a href=#3-objectpassingtest>3. objectPassingTest:</a></li><li><a href=#4-any>4. any:</a></li><li><a href=#5-all>5. all:</a></li><li><a href=#6-concat>6. concat:</a></li><li><a href=#7-zipwith>7. zipWith:</a></li></ul></li><li><a href=#四-racsequence的一些扩展>四. RACSequence的一些扩展</a><ul><li><a href=#1-nsarrayracsequenceadditions>1. NSArray+RACSequenceAdditions</a></li><li><a href=#2-nsdictionaryracsequenceadditions>2. NSDictionary+RACSequenceAdditions</a></li><li><a href=#3-nsenumeratorracsequenceadditions>3. NSEnumerator+RACSequenceAdditions</a></li><li><a href=#4-nsindexsetracsequenceadditions>4. NSIndexSet+RACSequenceAdditions</a></li><li><a href=#5-nsorderedsetracsequenceadditions>5. NSOrderedSet+RACSequenceAdditions</a></li><li><a href=#6-nssetracsequenceadditions>6. NSSet+RACSequenceAdditions</a></li><li><a href=#7-nsstringracsequenceadditions>7. NSString+RACSequenceAdditions</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">ReactiveCocoa 中 集合类 RACSequence 和 RACTuple 底层实现分析</h1><div class=meta><div class=postdate><time datetime="2016-12-25 07:54:00 +0000 UTC" itemprop=datePublished>Dec 25</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/reactivecocoa>ReactiveCocoa</a>
+,
+<a class=category-link href=/categories/rac>RAC</a>
+,
+<a class=category-link href=/categories/racsequence>RACSequence</a>
+,
+<a class=category-link href=/categories/ractuple>RACTuple</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/reactivecocoa rel=tag>ReactiveCocoa</a>
+,
+<a class=tag-link href=/tags/rac rel=tag>RAC</a>
+,
+<a class=tag-link href=/tags/racsequence rel=tag>RACSequence</a>
+,
+<a class=tag-link href=/tags/ractuple rel=tag>RACTuple</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>在OOP的世界里使用FRP的思想来编程，光有函数这种一等公民，还是无法满足我们一些需求的。因此还是需要引用变量来完成各式各样的类的操作行为。</p><p>在前几篇文章中详细的分析了RACStream中RACSignal的底层实现。RACStream还有另外一个子类，RACSequence，这个类是RAC专门为集合而设计的。这篇文章就专门分析一下RACSequence的底层实现。</p><h3 id=目录>目录</h3><ul><li>1.RACTuple底层实现分析</li><li>2.RACSequence底层实现分析</li><li>3.RACSequence操作实现分析</li><li>4.RACSequence的一些扩展</li></ul><h3 id=一-ractuple底层实现分析>一. RACTuple底层实现分析</h3><p>在分析RACSequence之前，先来看看RACTuple的实现。RACTuple是ReactiveCocoa的元组类。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_1.png alt></p><h4 id=1-ractuple>1. RACTuple</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACTuple</span> : <span style=color:#a6e22e>NSObject</span> <span style=color:#f92672>&lt;</span>NSCoding, NSCopying, NSFastEnumeration<span style=color:#f92672>&gt;</span>
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) NSUInteger count;
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> first;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> second;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> third;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> fourth;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> fifth;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> last;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSArray <span style=color:#f92672>*</span>backingArray;
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence; <span style=color:#75715e>// 这个是专门为sequence提供的一个扩展
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>RACTuple的定义看上去很简单，底层实质就是一个NSArray，只不过封装了一些方法。RACTuple继承了NSCoding, NSCopying, NSFastEnumeration这三个协议。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)coder {
+    self <span style=color:#f92672>=</span> [self init];
+    <span style=color:#66d9ef>if</span> (self <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> nil;
+    
+    self.backingArray <span style=color:#f92672>=</span> [coder decodeObjectForKey:@keypath(self.backingArray)];
+    <span style=color:#66d9ef>return</span> self;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>encodeWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)coder {
+    <span style=color:#66d9ef>if</span> (self.backingArray <span style=color:#f92672>!=</span> nil) [coder encodeObject:self.backingArray forKey:@keypath(self.backingArray)];
+}
+
+</code></pre></div><p>这里是NSCoding协议。都是对内部的backingArray进行decodeObjectForKey:和encodeObject: 。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>copyWithZone:</span>(NSZone <span style=color:#f92672>*</span>)zone {
+   <span style=color:#75715e>// we&#39;re immutable, bitches!    &lt;---这里是原作者的注释
+</span><span style=color:#75715e></span>   <span style=color:#66d9ef>return</span> self;
+}
+
+</code></pre></div><p>上面这是NSCopying协议。由于内部是基于NSArray的，所以是immutable不可变的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSUInteger)<span style=color:#a6e22e>countByEnumeratingWithState:</span>(NSFastEnumerationState <span style=color:#f92672>*</span>)state <span style=color:#a6e22e>objects:</span>(<span style=color:#66d9ef>id</span> __unsafe_unretained [])buffer <span style=color:#a6e22e>count:</span>(NSUInteger)len {
+    <span style=color:#66d9ef>return</span> [self.backingArray countByEnumeratingWithState:state objects:buffer count:len];
+}
+
+</code></pre></div><p>上面是NSFastEnumeration协议，快速枚举也都是针对NSArray进行的操作。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 三个类方法
+</span><span style=color:#75715e></span>+ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleWithObjectsFromArray:</span>(NSArray <span style=color:#f92672>*</span>)array;
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleWithObjectsFromArray:</span>(NSArray <span style=color:#f92672>*</span>)array <span style=color:#a6e22e>convertNullsToNils:</span>(<span style=color:#66d9ef>BOOL</span>)convert;
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleWithObjects:</span>(<span style=color:#66d9ef>id</span>)object, ... NS_REQUIRES_NIL_TERMINATION;
+
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>objectAtIndex:</span>(NSUInteger)index;
+- (NSArray <span style=color:#f92672>*</span>)<span style=color:#a6e22e>allObjects</span>;
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleByAddingObject:</span>(<span style=color:#66d9ef>id</span>)obj;
+
+</code></pre></div><p>RACTuple的方法也不多，总共就6个方法，3个类方法，3个实例方法。</p><p>先看类方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleWithObjectsFromArray:</span>(NSArray <span style=color:#f92672>*</span>)array {
+    <span style=color:#66d9ef>return</span> [self tupleWithObjectsFromArray:array convertNullsToNils:NO];
+}
+
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>tupleWithObjectsFromArray:</span>(NSArray <span style=color:#f92672>*</span>)array <span style=color:#a6e22e>convertNullsToNils:</span>(<span style=color:#66d9ef>BOOL</span>)convert {
+    RACTuple <span style=color:#f92672>*</span>tuple <span style=color:#f92672>=</span> [[self alloc] init];
+    
+    <span style=color:#66d9ef>if</span> (convert) {
+        NSMutableArray <span style=color:#f92672>*</span>newArray <span style=color:#f92672>=</span> [NSMutableArray arrayWithCapacity:array.count];
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> object <span style=color:#66d9ef>in</span> array) {
+            [newArray addObject:(object <span style=color:#f92672>==</span> NSNull.null <span style=color:#f92672>?</span> RACTupleNil.tupleNil : object)];
+        }       
+        tuple.backingArray <span style=color:#f92672>=</span> newArray;
+    } <span style=color:#66d9ef>else</span> {
+        tuple.backingArray <span style=color:#f92672>=</span> [array <span style=color:#66d9ef>copy</span>];
+    }
+    
+    <span style=color:#66d9ef>return</span> tuple;
+}
+
+</code></pre></div><p>先看这两个类方法，这两个类方法的区别在于是否把NSNull转换成RACTupleNil类型。根据入参array初始化RACTuple内部的NSArray。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_2.png alt></p><p>RACTuplePack( ) 和 RACTuplePack_( )这两个宏的实现也是调用了tupleWithObjectsFromArray:方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTuplePack(...) \
+</span><span style=color:#75715e>    RACTuplePack_(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define RACTuplePack_(...) \
+</span><span style=color:#75715e>    ([RACTuple tupleWithObjectsFromArray:@[ metamacro_foreach(RACTuplePack_object_or_ractuplenil,, __VA_ARGS__) ]])
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这里需要注意的是RACTupleNil</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACTupleNil <span style=color:#f92672>*</span>)<span style=color:#a6e22e>tupleNil</span> {
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    <span style=color:#66d9ef>static</span> RACTupleNil <span style=color:#f92672>*</span>tupleNil <span style=color:#f92672>=</span> nil;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        tupleNil <span style=color:#f92672>=</span> [[self alloc] init];
+    });
+    
+    <span style=color:#66d9ef>return</span> tupleNil;
+}
+
+</code></pre></div><p>RACTupleNil是一个单例。</p><p>重点需要解释的是另外一种类方法：</p><pre><code class=language-objecitvec data-lang=objecitvec>
+
++ (instancetype)tupleWithObjects:(id)object, ... {
+    RACTuple *tuple = [[self alloc] init];
+    
+    va_list args;
+    va_start(args, object);
+    
+    NSUInteger count = 0;
+    for (id currentObject = object; currentObject != nil; currentObject = va_arg(args, id)) {
+        ++count;
+    }
+    
+    va_end(args);
+    
+    if (count == 0) {
+        tuple.backingArray = @[];
+        return tuple;
+    }
+    
+    NSMutableArray *objects = [[NSMutableArray alloc] initWithCapacity:count];
+    
+    va_start(args, object);
+    for (id currentObject = object; currentObject != nil; currentObject = va_arg(args, id)) {
+        [objects addObject:currentObject];
+    }
+    
+    va_end(args);
+    
+    tuple.backingArray = objects;
+    return tuple;
+}
+</code></pre><p>这个类方法的参数是可变参数类型。由于用到了可变参数类型，所以就会用到va_list，va_start，va_arg，va_end。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#ifndef _VA_LIST_T
+</span><span style=color:#75715e>#define _VA_LIST_T
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> __darwin_va_list va_list;
+<span style=color:#75715e>#endif </span><span style=color:#75715e>/* _VA_LIST_T */</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#ifndef _VA_LIST
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> __builtin_va_list va_list;
+<span style=color:#75715e>#define _VA_LIST
+</span><span style=color:#75715e>#endif
+</span><span style=color:#75715e>#define va_start(ap, param) __builtin_va_start(ap, param)
+</span><span style=color:#75715e>#define va_end(ap)          __builtin_va_end(ap)
+</span><span style=color:#75715e>#define va_arg(ap, type)    __builtin_va_arg(ap, type)
+</span><span style=color:#75715e></span>
+</code></pre></div><ol><li>va_list用于声明一个变量，我们知道函数的可变参数列表其实就是一个字符串，所以va_list才被声明为字符型指针，这个类型用于声明一个指向参数列表的字符型指针变量，例如：va_list ap;//ap:arguement pointer</li><li>va_start(ap,v),它的第一个参数是指向可变参数字符串的变量，第二个参数是可变参数函数的第一个参数，通常用于指定可变参数列表中参数的个数。</li><li>va_arg(ap,t),它的第一个参数指向可变参数字符串的变量，第二个参数是可变参数的类型。</li><li>va_end(ap) 用于将存放可变参数字符串的变量清空（赋值为NULL)。</li></ol><p>剩下的3个实例方法都是对数组的操作，没有什么难度。</p><p>一般使用用两个宏，RACTupleUnpack( ) 用来解包，RACTuplePack( ) 用来装包。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+   RACTupleUnpack(NSString <span style=color:#f92672>*</span>string, NSNumber <span style=color:#f92672>*</span>num) <span style=color:#f92672>=</span> [RACTuple tupleWithObjects:<span style=color:#e6db74>@&#34;foo&#34;</span>, <span style=color:#ae81ff>@5</span>, nil];
+
+ 
+   RACTupleUnpack(NSString <span style=color:#f92672>*</span>string, NSNumber <span style=color:#f92672>*</span>num) <span style=color:#f92672>=</span> RACTuplePack(<span style=color:#e6db74>@&#34;foo&#34;</span>,<span style=color:#ae81ff>@(</span><span style=color:#ae81ff>5</span><span style=color:#ae81ff>)</span>);
+
+   NSLog(<span style=color:#e6db74>@&#34;string: %@&#34;</span>, string);
+   NSLog(<span style=color:#e6db74>@&#34;num: %@&#34;</span>, num);
+
+   <span style=color:#75715e>/* 上面的做法等价于下面的 */</span>
+   RACTuple <span style=color:#f92672>*</span>t <span style=color:#f92672>=</span> [RACTuple tupleWithObjects:<span style=color:#e6db74>@&#34;foo&#34;</span>, <span style=color:#ae81ff>@5</span>, nil];
+   NSString <span style=color:#f92672>*</span>string <span style=color:#f92672>=</span> t[<span style=color:#ae81ff>0</span>];
+   NSNumber <span style=color:#f92672>*</span>num <span style=color:#f92672>=</span> t[<span style=color:#ae81ff>1</span>];
+   NSLog(<span style=color:#e6db74>@&#34;string: %@&#34;</span>, string);
+   NSLog(<span style=color:#e6db74>@&#34;num: %@&#34;</span>, num);
+
+
+</code></pre></div><p>关于RACTuple还有2个相关的类，RACTupleUnpackingTrampoline，RACTupleSequence。</p><h4 id=2-ractupleunpackingtrampoline>2. RACTupleUnpackingTrampoline</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACTupleUnpackingTrampoline</span> : <span style=color:#a6e22e>NSObject</span>
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>trampoline</span>;
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setObject:</span>(RACTuple <span style=color:#f92672>*</span>)tuple <span style=color:#a6e22e>forKeyedSubscript:</span>(NSArray <span style=color:#f92672>*</span>)variables;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>首先这个类是一个单例。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>trampoline</span> {
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>id</span> trampoline <span style=color:#f92672>=</span> nil;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        trampoline <span style=color:#f92672>=</span> [[self alloc] init];
+    });    
+    <span style=color:#66d9ef>return</span> trampoline;
+}
+
+
+</code></pre></div><p>RACTupleUnpackingTrampoline这个类也就只有一个作用，就是它对应的实例方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setObject:</span>(RACTuple <span style=color:#f92672>*</span>)tuple <span style=color:#a6e22e>forKeyedSubscript:</span>(NSArray <span style=color:#f92672>*</span>)variables {
+    NSCParameterAssert(variables <span style=color:#f92672>!=</span> nil);
+    
+    [variables enumerateObjectsUsingBlock:<span style=color:#f92672>^</span>(NSValue <span style=color:#f92672>*</span>value, NSUInteger index, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+        <span style=color:#66d9ef>__strong</span> <span style=color:#66d9ef>id</span> <span style=color:#f92672>*</span>ptr <span style=color:#f92672>=</span> (<span style=color:#66d9ef>__strong</span> <span style=color:#66d9ef>id</span> <span style=color:#f92672>*</span>)value.pointerValue;
+        <span style=color:#f92672>*</span>ptr <span style=color:#f92672>=</span> tuple[index];
+    }];
+}
+
+</code></pre></div><p>这个方法里面会遍历入参数组NSArray，然后依次取出数组里面每个value 的指针，用这个指针又赋值给了tuple[index]。</p><p>为了解释清楚这个方法的作用，写出测试代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACTupleUnpackingTrampoline <span style=color:#f92672>*</span>tramp <span style=color:#f92672>=</span> [RACTupleUnpackingTrampoline trampoline];
+    
+    NSString <span style=color:#f92672>*</span>string;
+    NSString <span style=color:#f92672>*</span>string1;
+    NSString <span style=color:#f92672>*</span>string2;
+    
+    NSArray <span style=color:#f92672>*</span>array <span style=color:#f92672>=</span> [NSArray arrayWithObjects:[NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>string],[NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>string1],[NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>string2], nil];
+    
+    NSLog(<span style=color:#e6db74>@&#34;调用方法之前 string = %@,string1 = %@,string2 = %@&#34;</span>,string,string1,string2);
+    
+    [tramp setObject:[RACTuple tupleWithObjectsFromArray:<span style=color:#ae81ff>@[</span>(<span style=color:#e6db74>@&#34;foo&#34;</span>),(<span style=color:#ae81ff>@(</span><span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>),<span style=color:#e6db74>@&#34;32323&#34;</span><span style=color:#ae81ff>]</span>] forKeyedSubscript:array];
+    
+    NSLog(<span style=color:#e6db74>@&#34;调用方法之后 string = %@,string1 = %@,string2 = %@&#34;</span>,string,string1,string2);
+
+
+</code></pre></div><p>输出如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>调用方法之前</span> <span style=color:#a6e22e>string</span> = (<span style=color:#a6e22e>null</span>),<span style=color:#a6e22e>string1</span> = (<span style=color:#a6e22e>null</span>),<span style=color:#a6e22e>string2</span> = (<span style=color:#a6e22e>null</span>)<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>调用方法之后</span> <span style=color:#a6e22e>string</span> = <span style=color:#a6e22e>foo</span>,<span style=color:#a6e22e>string1</span> = <span style=color:#ae81ff>10</span>,<span style=color:#a6e22e>string2</span> = <span style=color:#ae81ff>32323</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>这个函数的作用也就一清二楚了。但是平时我们是很少用到[NSValue valueWithPointer:&string]这种写法的。究竟是什么地方会用到这个函数呢？全局搜索一下，找到了用到这个的地方。</p><p>在RACTuple 中两个非常有用的宏：RACTupleUnpack( ) 用来解包，RACTuplePack( ) 用来装包。RACTuplePack( )的实现在上面分析过了，实际是调用tupleWithObjectsFromArray:方法。那么RACTupleUnpack( ) 的宏是怎么实现的呢？这里就用到了RACTupleUnpackingTrampoline。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_3.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTupleUnpack_(...) \
+</span><span style=color:#75715e>    metamacro_foreach(RACTupleUnpack_decl,, __VA_ARGS__) \
+</span><span style=color:#75715e>    \
+</span><span style=color:#75715e>    int RACTupleUnpack_state = 0; \
+</span><span style=color:#75715e>    \
+</span><span style=color:#75715e>    RACTupleUnpack_after: \
+</span><span style=color:#75715e>        ; \
+</span><span style=color:#75715e>        metamacro_foreach(RACTupleUnpack_assign,, __VA_ARGS__) \
+</span><span style=color:#75715e>        if (RACTupleUnpack_state != 0) RACTupleUnpack_state = 2; \
+</span><span style=color:#75715e>        \
+</span><span style=color:#75715e>        while (RACTupleUnpack_state != 2) \
+</span><span style=color:#75715e>            if (RACTupleUnpack_state == 1) { \
+</span><span style=color:#75715e>                goto RACTupleUnpack_after; \
+</span><span style=color:#75715e>            } else \
+</span><span style=color:#75715e>                for (; RACTupleUnpack_state != 1; RACTupleUnpack_state = 1) \
+</span><span style=color:#75715e>                    [RACTupleUnpackingTrampoline trampoline][ @[ metamacro_foreach(RACTupleUnpack_value,, __VA_ARGS__) ] ]
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>以上就是RACTupleUnpack( ) 具体的宏。看上去很复杂。还是写出测试代码分析分析。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACTupleUnpack(NSString <span style=color:#f92672>*</span>string, NSNumber <span style=color:#f92672>*</span>num) <span style=color:#f92672>=</span> RACTuplePack(<span style=color:#e6db74>@&#34;foo&#34;</span>,<span style=color:#ae81ff>@(</span><span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>);
+
+
+</code></pre></div><p>把上述的代码编译之后的代码贴出来：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    __attribute__((objc_ownership(<span style=color:#66d9ef>strong</span>))) <span style=color:#66d9ef>id</span> RACTupleUnpack284_var0;
+    __attribute__((objc_ownership(<span style=color:#66d9ef>strong</span>))) <span style=color:#66d9ef>id</span> RACTupleUnpack284_var1;
+    
+    <span style=color:#66d9ef>int</span> RACTupleUnpack_state284 <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    RACTupleUnpack_after284: ;
+    __attribute__((objc_ownership(<span style=color:#66d9ef>strong</span>))) NSString <span style=color:#f92672>*</span>string <span style=color:#f92672>=</span> RACTupleUnpack284_var0;
+    __attribute__((objc_ownership(<span style=color:#66d9ef>strong</span>))) NSNumber <span style=color:#f92672>*</span>num <span style=color:#f92672>=</span> RACTupleUnpack284_var1;
+    
+    <span style=color:#66d9ef>if</span> (RACTupleUnpack_state284 <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>)
+        RACTupleUnpack_state284 <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+    
+    <span style=color:#66d9ef>while</span> (RACTupleUnpack_state284 <span style=color:#f92672>!=</span> <span style=color:#ae81ff>2</span>)
+        <span style=color:#66d9ef>if</span> (RACTupleUnpack_state284 <span style=color:#f92672>==</span> <span style=color:#ae81ff>1</span>) {
+            <span style=color:#66d9ef>goto</span> RACTupleUnpack_after284;
+        } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>for</span> (; RACTupleUnpack_state284 <span style=color:#f92672>!=</span> <span style=color:#ae81ff>1</span>; RACTupleUnpack_state284 <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>)
+            [RACTupleUnpackingTrampoline trampoline][ <span style=color:#ae81ff>@[</span> [NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>RACTupleUnpack284_var0], [NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>RACTupleUnpack284_var1], <span style=color:#ae81ff>]</span> ] <span style=color:#f92672>=</span> ([RACTuple tupleWithObjectsFromArray:<span style=color:#ae81ff>@[</span> (<span style=color:#e6db74>@&#34;foo&#34;</span>) <span style=color:#f92672>?:</span> RACTupleNil.tupleNil, (<span style=color:#ae81ff>@(</span><span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>) <span style=color:#f92672>?:</span> RACTupleNil.tupleNil, <span style=color:#ae81ff>]</span>]);
+
+</code></pre></div><p>转换成这样就比较好理解了。RACTupleUnpack_after284: 是一个标号。RACTupleUnpack_state284初始值为0，在下面while里面有一个for循环，在这个循环里面会进行解包操作，也就是会调用setObject:forKeyedSubscript:函数。</p><p>在循环里面，</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[RACTupleUnpackingTrampoline trampoline][ <span style=color:#ae81ff>@[</span> [NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>RACTupleUnpack284_var0], [NSValue valueWithPointer:<span style=color:#f92672>&amp;</span>RACTupleUnpack284_var1], <span style=color:#ae81ff>]</span> ]
+
+
+</code></pre></div><p>这里就是调用了[NSValue valueWithPointer:&string]的写法。</p><p>至此，RACTupleUnpackingTrampoline这个类的作用也已明了，它是被作用设计出来用来实现神奇的RACTupleUnpack( ) 这个宏。</p><p>当然RACTupleUnpackingTrampoline这个类的setObject:forKeyedSubscript:函数也可以使用，只不过要注意写法，注意指针的类型，在NSValue里面包裹的是valueWithPointer，(nullable const void *)pointer类型的。</p><h4 id=3-ractuplesequence>3. RACTupleSequence</h4><p>这个类仅仅只是名字里面带有Tuple而已，它其实是继承自RACSequence。</p><p>需要分析这个类的原因是因为RACTuple里面有一个拓展的属性rac_sequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+   <span style=color:#66d9ef>return</span> [RACTupleSequence sequenceWithTupleBackingArray:self.backingArray offset:<span style=color:#ae81ff>0</span>];
+}
+
+</code></pre></div><p>还是先看看RACTupleSequence的定义。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACTupleSequence</span> : <span style=color:#a6e22e>RACSequence</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) NSArray <span style=color:#f92672>*</span>tupleBackingArray;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>, <span style=color:#66d9ef>readonly</span>) NSUInteger offset;
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>sequenceWithTupleBackingArray:</span>(NSArray <span style=color:#f92672>*</span>)backingArray <span style=color:#a6e22e>offset:</span>(NSUInteger)offset;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个类是继承自RACSequence，而且只有这一个类方法。</p><p>tupleBackingArray是来自于RACTuple里面的backingArray。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>sequenceWithTupleBackingArray:</span>(NSArray <span style=color:#f92672>*</span>)backingArray <span style=color:#a6e22e>offset:</span>(NSUInteger)offset {
+    NSCParameterAssert(offset <span style=color:#f92672>&lt;=</span> backingArray.count);
+    
+    <span style=color:#66d9ef>if</span> (offset <span style=color:#f92672>==</span> backingArray.count) <span style=color:#66d9ef>return</span> self.empty;
+    
+    RACTupleSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> [[self alloc] init];
+    seq<span style=color:#f92672>-&gt;</span>_tupleBackingArray <span style=color:#f92672>=</span> backingArray;
+    seq<span style=color:#f92672>-&gt;</span>_offset <span style=color:#f92672>=</span> offset;
+    <span style=color:#66d9ef>return</span> seq;
+}
+
+
+</code></pre></div><p>RACTupleSequence这个类的目的就是把Tuple转换成Sequence。Sequence里面的数组就是Tuple内部的backingArray。offset从0开始。</p><h3 id=二-racsequence底层实现分析>二. RACSequence底层实现分析</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_4.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACSequence</span> : <span style=color:#a6e22e>RACStream</span> <span style=color:#f92672>&lt;</span>NSCoding, NSCopying, NSFastEnumeration<span style=color:#f92672>&gt;</span>
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) <span style=color:#66d9ef>id</span> head;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>tail;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) NSArray <span style=color:#f92672>*</span>array;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) NSEnumerator <span style=color:#f92672>*</span>objectEnumerator;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>eagerSequence;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>lazySequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>RACSequence是RACStream的子类，主要是ReactiveCocoa里面的集合类。</p><p>先来说说关于RACSequence的一些概念。</p><p>RACSequence有两个很重要的属性就是head和tail。head是一个id，而tail又是一个RACSequence，这个定义有点递归的意味。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACSequence <span style=color:#f92672>*</span>sequence <span style=color:#f92672>=</span> [RACSequence sequenceWithHeadBlock:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span><span style=color:#ae81ff>1</span><span style=color:#ae81ff>)</span>;
+    } tailBlock:<span style=color:#f92672>^</span>RACSequence <span style=color:#f92672>*</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@[</span><span style=color:#ae81ff>@2</span>,<span style=color:#ae81ff>@3</span>,<span style=color:#ae81ff>@4</span><span style=color:#ae81ff>]</span>.rac_sequence;
+    }];
+    
+    NSLog(<span style=color:#e6db74>@&#34;sequence.head = %@ , sequence.tail =  %@&#34;</span>,sequence.head ,sequence.tail);
+
+
+</code></pre></div><p>输出：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>sequence</span>.<span style=color:#a6e22e>head</span> = <span style=color:#ae81ff>1</span> , <span style=color:#a6e22e>sequence</span>.<span style=color:#a6e22e>tail</span> =  &lt;<span style=color:#a6e22e>RACArraySequence</span>: <span style=color:#ae81ff>0</span>x<span style=color:#ae81ff>608000223920</span>&gt;{ <span style=color:#a6e22e>name</span> = , <span style=color:#a6e22e>array</span> = (<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#ae81ff>2</span>,<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#ae81ff>3</span>,<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#ae81ff>4</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>) }<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>这段测试代码就道出了head和tail的定义。更加详细的描述见下图：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_5.png alt></p><p>上述代码里面用到了RACSequence初始化的方法，具体的分析见后面。</p><p>objectEnumerator是一个快速枚举器。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACSequenceEnumerator</span> : <span style=color:#a6e22e>NSEnumerator</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) RACSequence <span style=color:#f92672>*</span>sequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>之所以需要实现这个，是为了更加方便的RACSequence进行遍历。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>nextObject</span> {
+    <span style=color:#66d9ef>id</span> object <span style=color:#f92672>=</span> nil;
+    
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        object <span style=color:#f92672>=</span> self.sequence.head;
+        self.sequence <span style=color:#f92672>=</span> self.sequence.tail;
+    }
+    
+    <span style=color:#66d9ef>return</span> object;
+}
+
+</code></pre></div><p>有了这个NSEnumerator，就可以从RACSequence的head一直遍历到tail。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSEnumerator <span style=color:#f92672>*</span>)<span style=color:#a6e22e>objectEnumerator</span> {
+    RACSequenceEnumerator <span style=color:#f92672>*</span>enumerator <span style=color:#f92672>=</span> [[RACSequenceEnumerator alloc] init];
+    enumerator.sequence <span style=color:#f92672>=</span> self;
+    <span style=color:#66d9ef>return</span> enumerator;
+}
+
+</code></pre></div><p>回到RACSequence的定义里面的objectEnumerator，这里就是取出内部的RACSequenceEnumerator。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSArray <span style=color:#f92672>*</span>)<span style=color:#a6e22e>array</span> {
+    NSMutableArray <span style=color:#f92672>*</span>array <span style=color:#f92672>=</span> [NSMutableArray array];
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> obj <span style=color:#66d9ef>in</span> self) {
+        [array addObject:obj];
+    }   
+    <span style=color:#66d9ef>return</span> [array <span style=color:#66d9ef>copy</span>];
+}
+
+</code></pre></div><p>RACSequence的定义里面还有一个array，这个数组就是返回一个NSArray，这个数组里面装满了RACSequence里面所有的对象。这里之所以能用for-in，是因为实现了NSFastEnumeration协议。至于for-in的效率，完全就看重写NSFastEnumeration协议里面countByEnumeratingWithState: objects: count: 方法里面的执行效率了。</p><p>在分析RACSequence的for-in执行效率之前，先回顾一下NSFastEnumerationState的定义，这里的属性在接下来的实现中会被大量使用。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>struct</span> {
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> state; <span style=color:#75715e>//可以被自定义成任何有意义的变量
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>id</span> __unsafe_unretained _Nullable <span style=color:#f92672>*</span> _Nullable itemsPtr;  <span style=color:#75715e>//返回对象数组的首地址
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> <span style=color:#f92672>*</span> _Nullable mutationsPtr;  <span style=color:#75715e>//指向会随着集合变动而变化的一个值
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> extra[<span style=color:#ae81ff>5</span>]; <span style=color:#75715e>//可以被自定义成任何有意义的数组
+</span><span style=color:#75715e></span>} NSFastEnumerationState;
+
+</code></pre></div><p>接下来要分析的这个函数的入参，stackbuf是为for-in提供的对象数组，len是该数组的长度。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSUInteger)<span style=color:#a6e22e>countByEnumeratingWithState:</span>(NSFastEnumerationState <span style=color:#f92672>*</span>)state <span style=color:#a6e22e>objects:</span>(__unsafe_unretained <span style=color:#66d9ef>id</span> <span style=color:#f92672>*</span>)stackbuf <span style=color:#a6e22e>count:</span>(NSUInteger)len {
+    <span style=color:#75715e>// 定义完成时候的状态为state = ULONG_MAX
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (state<span style=color:#f92672>-&gt;</span>state <span style=color:#f92672>==</span> ULONG_MAX) {
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+    }
+    
+    <span style=color:#75715e>// 由于我们需要遍历sequence多次，所以这里定义state字段来记录sequence的首地址
+</span><span style=color:#75715e></span>    RACSequence <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>getSequence)(<span style=color:#66d9ef>void</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> (<span style=color:#66d9ef>__bridge</span> RACSequence <span style=color:#f92672>*</span>)(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)state<span style=color:#f92672>-&gt;</span>state;
+    };
+    
+    <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>setSequence)(RACSequence <span style=color:#f92672>*</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(RACSequence <span style=color:#f92672>*</span>sequence) {
+        <span style=color:#75715e>// 释放老的sequence
+</span><span style=color:#75715e></span>        CFBridgingRelease((<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)state<span style=color:#f92672>-&gt;</span>state);
+        <span style=color:#75715e>// 保留新的sequence，把sequence的首地址存放入state中
+</span><span style=color:#75715e></span>        state<span style=color:#f92672>-&gt;</span>state <span style=color:#f92672>=</span> (<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span>)CFBridgingRetain(sequence);
+    };
+    
+    <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>complete)(<span style=color:#66d9ef>void</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        <span style=color:#75715e>// 释放sequence，并把state置为完成态
+</span><span style=color:#75715e></span>        setSequence(nil);
+        state<span style=color:#f92672>-&gt;</span>state <span style=color:#f92672>=</span> ULONG_MAX;
+    };
+    
+    <span style=color:#75715e>// state == 0是第一次调用时候的初始值
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (state<span style=color:#f92672>-&gt;</span>state <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) {
+        <span style=color:#75715e>// 在遍历过程中，如果Sequence不再发生变化，那么就让mutationsPtr指向一个定值，指向extra数组的首地址
+</span><span style=color:#75715e></span>        state<span style=color:#f92672>-&gt;</span>mutationsPtr <span style=color:#f92672>=</span> state<span style=color:#f92672>-&gt;</span>extra;
+        <span style=color:#75715e>// 再次刷新state的值
+</span><span style=color:#75715e></span>        setSequence(self);
+    }
+    
+    <span style=color:#75715e>// 将会把返回的对象放进stackbuf中，因此用itemsPtr指向它
+</span><span style=color:#75715e></span>    state<span style=color:#f92672>-&gt;</span>itemsPtr <span style=color:#f92672>=</span> stackbuf;
+    
+    NSUInteger enumeratedCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#66d9ef>while</span> (enumeratedCount <span style=color:#f92672>&lt;</span> len) {
+        RACSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> getSequence();
+        <span style=color:#75715e>// 由于sequence可能是懒加载生成的，所以需要防止在遍历器enumerator遍历到它们的时候被释放了
+</span><span style=color:#75715e></span>
+        <span style=color:#66d9ef>__autoreleasing</span> <span style=color:#66d9ef>id</span> obj <span style=color:#f92672>=</span> seq.head;
+
+        <span style=color:#75715e>// 没有头就结束遍历
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (obj <span style=color:#f92672>==</span> nil) {
+            complete();
+            <span style=color:#66d9ef>break</span>;
+        }
+        <span style=color:#75715e>// 遍历sequence，每次取出来的head都放入stackbuf数组中。
+</span><span style=color:#75715e></span>        stackbuf[enumeratedCount<span style=color:#f92672>++</span>] <span style=color:#f92672>=</span> obj;
+        
+        <span style=color:#75715e>// 没有尾就是完成遍历
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (seq.tail <span style=color:#f92672>==</span> nil) {
+            complete();
+            <span style=color:#66d9ef>break</span>;
+        }
+        
+        <span style=color:#75715e>// 取出tail以后，这次遍历结束的tail，即为下次遍历的head，设置seq.tail为Sequence的head，为下次循环做准备
+</span><span style=color:#75715e></span>        setSequence(seq.tail);
+    }
+    
+    <span style=color:#66d9ef>return</span> enumeratedCount;
+}
+
+
+</code></pre></div><p>整个遍历的过程类似递归的过程，从头到尾依次遍历一遍。</p><p>再来研究研究RACSequence的初始化：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>sequenceWithHeadBlock:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))headBlock <span style=color:#a6e22e>tailBlock:</span>(RACSequence <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))tailBlock;
+
++ (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>sequenceWithHeadBlock:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))headBlock <span style=color:#a6e22e>tailBlock:</span>(RACSequence <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))tailBlock {
+   <span style=color:#66d9ef>return</span> [[RACDynamicSequence sequenceWithHeadBlock:headBlock tailBlock:tailBlock] setNameWithFormat:<span style=color:#e6db74>@&#34;+sequenceWithHeadBlock:tailBlock:&#34;</span>];
+}
+
+</code></pre></div><p>初始化RACSequence，会调用RACDynamicSequence。这里有点类比RACSignal的RACDynamicSignal。</p><p>再来看看RACDynamicSequence的定义。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACDynamicSequence</span> () {
+    <span style=color:#66d9ef>id</span> _head;
+    RACSequence <span style=color:#f92672>*</span>_tail;
+    <span style=color:#66d9ef>id</span> _dependency;
+}
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span> headBlock;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span> tailBlock;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> hasDependency;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>dependencyBlock)(<span style=color:#66d9ef>void</span>);
+
+<span style=color:#66d9ef>@end</span>
+
+
+</code></pre></div><p>这里需要说明的是此处的headBlock，tailBlock，dependencyBlock的修饰符都是用了strong，而不是copy。这里是一个很奇怪的bug导致的。在<a href=https://github.com/ReactiveCocoa/ReactiveCocoa/issues/505>https://github.com/ReactiveCocoa/ReactiveCocoa/issues/505</a>中详细记录了用copy关键字会导致内存泄露的bug。具体代码如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[[[<span style=color:#ae81ff>@[</span><span style=color:#ae81ff>@1</span>,<span style=color:#ae81ff>@2</span>,<span style=color:#ae81ff>@3</span>,<span style=color:#ae81ff>@4</span>,<span style=color:#ae81ff>@5</span><span style=color:#ae81ff>]</span> rac_sequence] filter:<span style=color:#f92672>^</span><span style=color:#66d9ef>BOOL</span>(<span style=color:#66d9ef>id</span> value) {
+    <span style=color:#66d9ef>return</span> [value intValue] <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>1</span>;
+}] array];
+
+</code></pre></div><p>最终发现这个问题的人把copy改成strong就神奇的修复了这个bug。最终整个ReactiveCocoa库里面就只有这里把block的关键字从copy改成了strong，而不是所有的地方都改成strong。</p><p>原作者<a href=https://github.com/jspahrsummers>Justin Spahr-Summers</a>大神对这个问题的<a href=https://github.com/ReactiveCocoa/ReactiveCocoa/pull/506>最终解释</a>是：</p><blockquote><p>Maybe there&rsquo;s just something weird with how we override dealloc, set the blocks from a class method, cast them, or something else.</p></blockquote><p>所以日常我们写block的时候，没有特殊情况，依旧需要继续用copy进行修饰。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>sequenceWithHeadBlock:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))headBlock <span style=color:#a6e22e>tailBlock:</span>(RACSequence <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))tailBlock {
+   NSCParameterAssert(headBlock <span style=color:#f92672>!=</span> nil);
+
+   RACDynamicSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> [[RACDynamicSequence alloc] init];
+   seq.headBlock <span style=color:#f92672>=</span> [headBlock <span style=color:#66d9ef>copy</span>];
+   seq.tailBlock <span style=color:#f92672>=</span> [tailBlock <span style=color:#66d9ef>copy</span>];
+   seq.hasDependency <span style=color:#f92672>=</span> NO;
+   <span style=color:#66d9ef>return</span> seq;
+}
+
+</code></pre></div><p>hasDependency这个变量是代表是否有dependencyBlock。这个函数里面就只把headBlock和tailBlock保存起来了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>sequenceWithLazyDependency:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))dependencyBlock <span style=color:#a6e22e>headBlock:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> dependency))headBlock <span style=color:#a6e22e>tailBlock:</span>(RACSequence <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> dependency))tailBlock {
+    NSCParameterAssert(dependencyBlock <span style=color:#f92672>!=</span> nil);
+    NSCParameterAssert(headBlock <span style=color:#f92672>!=</span> nil);
+    
+    RACDynamicSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> [[RACDynamicSequence alloc] init];
+    seq.headBlock <span style=color:#f92672>=</span> [headBlock <span style=color:#66d9ef>copy</span>];
+    seq.tailBlock <span style=color:#f92672>=</span> [tailBlock <span style=color:#66d9ef>copy</span>];
+    seq.dependencyBlock <span style=color:#f92672>=</span> [dependencyBlock <span style=color:#66d9ef>copy</span>];
+    seq.hasDependency <span style=color:#f92672>=</span> YES;
+    <span style=color:#66d9ef>return</span> seq;
+}
+
+</code></pre></div><p>另外一个类方法sequenceWithLazyDependency: headBlock: tailBlock:是带有dependencyBlock的，这个方法里面会保存headBlock，tailBlock，dependencyBlock这3个block。</p><p>从RACSequence这两个唯一的初始化方法之间就引出了RACSequence两大核心问题之一，积极运算 和 惰性求值。</p><h4 id=1-积极运算-和-惰性求值>1. 积极运算 和 惰性求值</h4><p>在RACSequence的定义中还有两个RACSequence —— eagerSequence 和 lazySequence。这两个RACSequence就是分别对应着积极运算的RACSequence和惰性求值的RACSequence。</p><p>关于这两个概念最最新形象的比喻还是臧老师博客里面的这篇文章<a href=http://williamzang.com/blog/2016/11/07/liao-yi-liao-ioskai-fa-zhong-de-duo-xing-ji-suan/>聊一聊iOS开发中的惰性计算</a>里面写的一段笑话。引入如下：</p><blockquote><p>有一只小白兔，跑到蔬菜店里问老板：“老板，有100个胡萝卜吗？”。老板说：“没有那么多啊。”，小白兔失望的说道：“哎，连100个胡萝卜都没有。。。”。第二天小白兔又来到蔬菜店问老板：“今天有100个胡萝卜了吧？”，老板尴尬的说：“今天还是缺点，明天就能好了。”，小白兔又很失望的走了。第三天小白兔刚一推门，老板就高兴的说道：“有了有了，从前天就进货的100个胡萝卜到货了。”，小白兔说：“太好了，我要买2根！”。。。</p></blockquote><p>如果日常我们遇到了这种问题，就很浪费内存空间了。比如在内存里面开了一个100W大小的数组，结果实际只使用到100个数值。这个时候就需要用到惰性运算了。</p><p>在RACSequence里面这两种方式都支持，我们来看看底层源码是如何实现的。</p><p>先来看看平时我们很熟悉的情况——积极运算。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_6.png alt></p><p>在RACSequence中积极运算的代表是RACSequence的一个子类RACArraySequence的子类——RACEagerSequence。它的积极运算表现在其bind函数上。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>bind:</span>(RACStreamBindBlock (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> nil);
+    RACStreamBindBlock bindBlock <span style=color:#f92672>=</span> block();
+    NSArray <span style=color:#f92672>*</span>currentArray <span style=color:#f92672>=</span> self.array;
+    NSMutableArray <span style=color:#f92672>*</span>resultArray <span style=color:#f92672>=</span> [NSMutableArray arrayWithCapacity:currentArray.count];
+    
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> value <span style=color:#66d9ef>in</span> currentArray) {
+        <span style=color:#66d9ef>BOOL</span> stop <span style=color:#f92672>=</span> NO;
+        RACSequence <span style=color:#f92672>*</span>boundValue <span style=color:#f92672>=</span> (<span style=color:#66d9ef>id</span>)bindBlock(value, <span style=color:#f92672>&amp;</span>stop);
+        <span style=color:#66d9ef>if</span> (boundValue <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>break</span>;
+        
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> x <span style=color:#66d9ef>in</span> boundValue) {
+            [resultArray addObject:x];
+        }
+        
+        <span style=color:#66d9ef>if</span> (stop) <span style=color:#66d9ef>break</span>;
+    }
+    
+    <span style=color:#66d9ef>return</span> [[self.<span style=color:#66d9ef>class</span> sequenceWithArray:resultArray offset:<span style=color:#ae81ff>0</span>] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -bind:&#34;</span>, self.name];
+}
+
+
+
+
+</code></pre></div><p>从上述代码中能看到主要是进行了2层循环，最外层循环遍历的自己RACSequence中的值，然后拿到这个值传入闭包bindBlock( )中，返回一个RACSequence，最后用一个NSMutableArray依次把每个RACSequence里面的值都装起来。</p><p>第二个for-in循环是在遍历RACSequence，之所以可以用for-in的方式遍历就是因为实现了NSFastEnumeration协议，实现了countByEnumeratingWithState: objects: count: 方法，这个方法在上面详细分析过了，这里不再赘述。</p><p>这里就是一个积极运算的例子，在每次循环中都会把闭包block( )的值计算出来。值得说明的是，最后返回的RACSequence的类型是self.class类型的，即还是RACEagerSequence类型的。</p><p>再来看看RACSequence中的惰性求值是怎么实现的。</p><p>在RACSequence中，bind函数是下面这个样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>bind:</span>(RACStreamBindBlock (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    RACStreamBindBlock bindBlock <span style=color:#f92672>=</span> block();
+    <span style=color:#66d9ef>return</span> [[self bind:bindBlock passingThroughValuesFromSequence:nil] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -bind:&#34;</span>, self.name];
+}
+
+</code></pre></div><p>实际上调用了bind: passingThroughValuesFromSequence:方法，第二个入参传入nil。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>bind:</span>(RACStreamBindBlock)bindBlock <span style=color:#a6e22e>passingThroughValuesFromSequence:</span>(RACSequence <span style=color:#f92672>*</span>)passthroughSequence {
+
+    <span style=color:#66d9ef>__block</span> RACSequence <span style=color:#f92672>*</span>valuesSeq <span style=color:#f92672>=</span> self;
+    <span style=color:#66d9ef>__block</span> RACSequence <span style=color:#f92672>*</span>current <span style=color:#f92672>=</span> passthroughSequence;
+    <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>BOOL</span> stop <span style=color:#f92672>=</span> NO;
+    
+    RACSequence <span style=color:#f92672>*</span>sequence <span style=color:#f92672>=</span> [RACDynamicSequence sequenceWithLazyDependency:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> {
+        <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>    } headBlock:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> _) {
+        <span style=color:#66d9ef>return</span> current.head;
+    } tailBlock:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> (<span style=color:#66d9ef>id</span> _) {
+        <span style=color:#66d9ef>if</span> (stop) <span style=color:#66d9ef>return</span> nil;
+        <span style=color:#66d9ef>return</span> [valuesSeq bind:bindBlock passingThroughValuesFromSequence:current.tail];
+    }];
+    
+    sequence.name <span style=color:#f92672>=</span> self.name;
+    <span style=color:#66d9ef>return</span> sequence;
+}
+
+
+</code></pre></div><p>在bind: passingThroughValuesFromSequence:方法的实现中，就是用sequenceWithLazyDependency: headBlock: tailBlock:方法生成了一个RACSequence，并返回。在sequenceWithLazyDependency: headBlock: tailBlock:上面分析过源码，主要目的是为了保存3个闭包，headBlock，tailBlock，dependencyBlock。</p><p>通过调用RACSequence里面的bind操作，并没有执行3个闭包里面的值，只是保存起来了。这里就是惰性求值的表现——等到要用的时候才会计算。</p><p>通过上述源码的分析，可以写出如下的测试代码加深理解。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    NSArray <span style=color:#f92672>*</span>array <span style=color:#f92672>=</span> <span style=color:#ae81ff>@[</span><span style=color:#ae81ff>@1</span>,<span style=color:#ae81ff>@2</span>,<span style=color:#ae81ff>@3</span>,<span style=color:#ae81ff>@4</span>,<span style=color:#ae81ff>@5</span><span style=color:#ae81ff>]</span>;
+    
+    RACSequence <span style=color:#f92672>*</span>lazySequence <span style=color:#f92672>=</span> [array.rac_sequence map:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(<span style=color:#66d9ef>id</span> value) {
+        NSLog(<span style=color:#e6db74>@&#34;lazySequence&#34;</span>);
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span><span style=color:#ae81ff>101</span><span style=color:#ae81ff>)</span>;
+    }];
+    
+    RACSequence <span style=color:#f92672>*</span>eagerSequence <span style=color:#f92672>=</span> [array.rac_sequence.eagerSequence map:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(<span style=color:#66d9ef>id</span> value) {
+        NSLog(<span style=color:#e6db74>@&#34;eagerSequence&#34;</span>);
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span><span style=color:#ae81ff>100</span><span style=color:#ae81ff>)</span>;
+    }];
+
+
+</code></pre></div><p>上述代码运行之后，会输出如下信息：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>eagerSequence</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>eagerSequence</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>eagerSequence</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>eagerSequence</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>eagerSequence</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>只输出了5遍eagerSequence，lazySequence并没有输出。原因是因为bind闭包只在eagerSequence中真正被调用执行了，而在lazySequence中bind闭包仅仅只是被copy了。</p><p>那如何让lazySequence执行bind闭包呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    [lazySequence array];
+
+</code></pre></div><p>通过执行上述代码，就可以输出5遍“lazySequence”了。因为bind闭包再次会被调用执行。</p><p>积极运算 和 惰性求值在这里就区分出来了。在RACSequence中，除去RACEagerSequence只积极运算，其他的Sequence都是惰性求值的。</p><p>接下来再继续分析RACSequence是如何实现惰性求值的。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_7.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACSequence <span style=color:#f92672>*</span>sequence <span style=color:#f92672>=</span> [RACDynamicSequence sequenceWithLazyDependency:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> {
+    <span style=color:#66d9ef>while</span> (current.head <span style=color:#f92672>==</span> nil) {
+        <span style=color:#66d9ef>if</span> (stop) <span style=color:#66d9ef>return</span> nil;
+        
+        <span style=color:#75715e>// 遍历当前sequence，取出下一个值
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> valuesSeq.head;
+        
+        <span style=color:#66d9ef>if</span> (value <span style=color:#f92672>==</span> nil) {
+            <span style=color:#75715e>// 遍历完sequence所有的值
+</span><span style=color:#75715e></span>            stop <span style=color:#f92672>=</span> YES;
+            <span style=color:#66d9ef>return</span> nil;
+        }
+        
+        current <span style=color:#f92672>=</span> (<span style=color:#66d9ef>id</span>)bindBlock(value, <span style=color:#f92672>&amp;</span>stop);
+        <span style=color:#66d9ef>if</span> (current <span style=color:#f92672>==</span> nil) {
+            stop <span style=color:#f92672>=</span> YES;
+            <span style=color:#66d9ef>return</span> nil;
+        }
+        
+        valuesSeq <span style=color:#f92672>=</span> valuesSeq.tail;
+    }
+    
+    NSCAssert([current isKindOfClass:RACSequence.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-bind: block returned an object that is not a sequence: %@&#34;</span>, current);
+    <span style=color:#66d9ef>return</span> nil;
+} headBlock:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> _) {
+    <span style=color:#66d9ef>return</span> current.head;
+} tailBlock:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> (<span style=color:#66d9ef>id</span> _) {
+    <span style=color:#66d9ef>if</span> (stop) <span style=color:#66d9ef>return</span> nil;
+    
+    <span style=color:#66d9ef>return</span> [valuesSeq bind:bindBlock passingThroughValuesFromSequence:current.tail];
+}];
+
+</code></pre></div><p>在bind操作中创建了这样一个lazySequence，3个block闭包保存了如何创建一个lazySequence的做法。</p><p>headBlock是入参为id，返回值也是一个id。在创建lazySequence的head的时候，并不关心入参，直接返回passthroughSequence的head。</p><p>tailBlock是入参为id，返回值为RACSequence。由于RACSequence的定义类似递归定义的，所以tailBlock会再次递归调用bind:passingThroughValuesFromSequence:产生一个RACSequence作为新的sequence的tail。</p><p>dependencyBlock的返回值是作为headBlock和tailBlock的入参。不过现在headBlock和tailBlock都不关心这个入参。那么dependencyBlock就是成为了headBlock和tailBlock闭包执行之前要执行的闭包。</p><p>dependencyBlock的目的是为了把原来的sequence里面的值，都进行一次变换。current是入参passthroughSequence，valuesSeq就是原sequence的引用。每次循环一次就取出原sequence的头，直到取不到为止，就是遍历完成。</p><p>取出valuesSeq的head，传入bindBlock( )闭包进行变换，返回值是一个current 的sequence。在每次headBlock和tailBlock之前都会调用这个dependencyBlock，变换后新的sequence的head就是current的head，新的sequence的tail就是递归调用传入的current.tail。</p><p>RACDynamicSequence创建的lazyDependency的过程就是保存了3个block的过程。那这些闭包什么时候会被调用呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>head</span> {
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        <span style=color:#66d9ef>id</span> untypedHeadBlock <span style=color:#f92672>=</span> self.headBlock;
+        <span style=color:#66d9ef>if</span> (untypedHeadBlock <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> _head;
+        
+        <span style=color:#66d9ef>if</span> (self.hasDependency) {
+            <span style=color:#66d9ef>if</span> (self.dependencyBlock <span style=color:#f92672>!=</span> nil) {
+                _dependency <span style=color:#f92672>=</span> self.dependencyBlock();
+                self.dependencyBlock <span style=color:#f92672>=</span> nil;
+            }
+            
+            <span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>headBlock)(<span style=color:#66d9ef>id</span>) <span style=color:#f92672>=</span> untypedHeadBlock;
+            _head <span style=color:#f92672>=</span> headBlock(_dependency);
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>headBlock)(<span style=color:#66d9ef>void</span>) <span style=color:#f92672>=</span> untypedHeadBlock;
+            _head <span style=color:#f92672>=</span> headBlock();
+        }
+        
+        self.headBlock <span style=color:#f92672>=</span> nil;
+        <span style=color:#66d9ef>return</span> _head;
+    }
+}
+
+
+</code></pre></div><p>上面的源码就是获取RACDynamicSequence中head的实现。当要取出sequence的head的时候，就会调用headBlock( )。如果保存了dependencyBlock闭包，在执行headBlock( )之前会先执行dependencyBlock( )进行一次变换。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>tail</span> {
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        <span style=color:#66d9ef>id</span> untypedTailBlock <span style=color:#f92672>=</span> self.tailBlock;
+        <span style=color:#66d9ef>if</span> (untypedTailBlock <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> _tail;
+        
+        <span style=color:#66d9ef>if</span> (self.hasDependency) {
+            <span style=color:#66d9ef>if</span> (self.dependencyBlock <span style=color:#f92672>!=</span> nil) {
+                _dependency <span style=color:#f92672>=</span> self.dependencyBlock();
+                self.dependencyBlock <span style=color:#f92672>=</span> nil;
+            }
+            
+            RACSequence <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>tailBlock)(<span style=color:#66d9ef>id</span>) <span style=color:#f92672>=</span> untypedTailBlock;
+            _tail <span style=color:#f92672>=</span> tailBlock(_dependency);
+        } <span style=color:#66d9ef>else</span> {
+            RACSequence <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>tailBlock)(<span style=color:#66d9ef>void</span>) <span style=color:#f92672>=</span> untypedTailBlock;
+            _tail <span style=color:#f92672>=</span> tailBlock();
+        }
+        
+        <span style=color:#66d9ef>if</span> (_tail.name <span style=color:#f92672>==</span> nil) _tail.name <span style=color:#f92672>=</span> self.name;
+        
+        self.tailBlock <span style=color:#f92672>=</span> nil;
+        <span style=color:#66d9ef>return</span> _tail;
+    }
+}
+
+
+</code></pre></div><p>获取RACDynamicSequence中tail的时候，和获取head是一样的，当需要取出tail的时候才会调用tailBlock( )。当有dependencyBlock闭包，会先执行dependencyBlock闭包，再调用tailBlock( )。</p><p><strong>总结一下：</strong></p><ol><li>RACSequence的惰性求值，除去RACEagerSequence的bind函数以外，其他所有的Sequence都是基于惰性求值的。只有到取出来运算之前才会去把相应的闭包执行一遍。</li><li>在RACSequence所有函数中，只有bind函数会传入dependencyBlock( )闭包，（RACEagerSequence会重写这个bind函数），所以看到dependencyBlock( )闭包一定可以推断出是RACSequence做了变换操作了。</li></ol><h4 id=2-pull-driver-和-push-driver>2. Pull-driver 和 Push-driver</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_8.png alt></p><p>在RACSequence中有一个方法可以让RACSequence和RACSignal进行关联上。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>signal</span> {
+    <span style=color:#66d9ef>return</span> [[self signalWithScheduler:[RACScheduler scheduler]] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -signal&#34;</span>, self.name];
+}
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>signalWithScheduler:</span>(RACScheduler <span style=color:#f92672>*</span>)scheduler {
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        <span style=color:#66d9ef>__block</span> RACSequence <span style=color:#f92672>*</span>sequence <span style=color:#f92672>=</span> self;
+        
+        <span style=color:#66d9ef>return</span> [scheduler scheduleRecursiveBlock:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>reschedule)(<span style=color:#66d9ef>void</span>)) {
+            <span style=color:#66d9ef>if</span> (sequence.head <span style=color:#f92672>==</span> nil) {
+                [subscriber sendCompleted];
+                <span style=color:#66d9ef>return</span>;
+            }            
+            [subscriber sendNext:sequence.head];           
+            sequence <span style=color:#f92672>=</span> sequence.tail;
+            reschedule();
+        }];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -signalWithScheduler: %@&#34;</span>, self.name, scheduler];
+}
+
+</code></pre></div><p>RACSequence中的signal方法会调用signalWithScheduler:方法。在signalWithScheduler:方法中会创建一个新的信号。这个新的信号的RACDisposable信号由scheduleRecursiveBlock:产生。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>scheduleRecursiveBlock:</span>(RACSchedulerRecursiveBlock)recursiveBlock <span style=color:#a6e22e>addingToDisposable:</span>(RACCompoundDisposable <span style=color:#f92672>*</span>)disposable {
+    <span style=color:#66d9ef>@autoreleasepool</span> {
+        RACCompoundDisposable <span style=color:#f92672>*</span>selfDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+        [disposable addDisposable:selfDisposable];
+        
+        <span style=color:#66d9ef>__weak</span> RACDisposable <span style=color:#f92672>*</span>weakSelfDisposable <span style=color:#f92672>=</span> selfDisposable;
+        
+        RACDisposable <span style=color:#f92672>*</span>schedulingDisposable <span style=color:#f92672>=</span> [self schedule:<span style=color:#f92672>^</span>{
+     
+            <span style=color:#66d9ef>if</span> (disposable.disposed) <span style=color:#66d9ef>return</span>;
+            
+            <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>reallyReschedule)(<span style=color:#66d9ef>void</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+                <span style=color:#66d9ef>if</span> (disposable.disposed) <span style=color:#66d9ef>return</span>;          
+                <span style=color:#75715e>// 这里是递归
+</span><span style=color:#75715e></span>                [self scheduleRecursiveBlock:recursiveBlock addingToDisposable:disposable];
+            };
+            
+            <span style=color:#75715e>// 这里实际上不需要__block关键字，但是由于Clang编译器的特性，为了保护下面的变量，所以加上了__block关键字
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>__block</span> NSLock <span style=color:#f92672>*</span>lock <span style=color:#f92672>=</span> [[NSLock alloc] init];
+            lock.name <span style=color:#f92672>=</span> [NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ %s&#34;</span>, self, sel_getName(_cmd)];
+            
+            <span style=color:#66d9ef>__block</span> NSUInteger rescheduleCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+            
+            <span style=color:#75715e>// 一旦同步操作执行完成，rescheduleImmediately就应该被设为YES
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>BOOL</span> rescheduleImmediately <span style=color:#f92672>=</span> NO;
+            
+            <span style=color:#66d9ef>@autoreleasepool</span> {
+                recursiveBlock(<span style=color:#f92672>^</span>{
+                    [lock lock];
+                    <span style=color:#66d9ef>BOOL</span> immediate <span style=color:#f92672>=</span> rescheduleImmediately;
+                    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>immediate) <span style=color:#f92672>++</span>rescheduleCount;
+                    [lock unlock];
+                    
+                    <span style=color:#66d9ef>if</span> (immediate) reallyReschedule();
+                });
+            }
+            
+            [lock lock];
+            NSUInteger synchronousCount <span style=color:#f92672>=</span> rescheduleCount;
+            rescheduleImmediately <span style=color:#f92672>=</span> YES;
+            [lock unlock];
+            
+            <span style=color:#66d9ef>for</span> (NSUInteger i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> synchronousCount; i<span style=color:#f92672>++</span>) {
+                reallyReschedule();
+            }
+        }];
+        
+        [selfDisposable addDisposable:schedulingDisposable];
+    }
+}
+
+</code></pre></div><p>这段代码虽然长，但是拆分分析一下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>__block</span> NSUInteger rescheduleCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; 
+
+<span style=color:#75715e>// 一旦同步操作执行完成，rescheduleImmediately就应该被设为YES 
+</span><span style=color:#75715e></span><span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>BOOL</span> rescheduleImmediately <span style=color:#f92672>=</span> NO;
+
+</code></pre></div><p>rescheduleCount 是递归次数计数。rescheduleImmediately这个BOOL是决定是否立即执行reallyReschedule( )闭包。</p><p>recursiveBlock是入参，它实际是下面这段闭包代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+{
+   <span style=color:#66d9ef>if</span> (sequence.head <span style=color:#f92672>==</span> nil) {
+    [subscriber sendCompleted];
+    <span style=color:#66d9ef>return</span>;
+   }
+
+   [subscriber sendNext:sequence.head];
+
+   sequence <span style=color:#f92672>=</span> sequence.tail;
+   reschedule();
+  }
+
+</code></pre></div><p>recursiveBlock的入参是reschedule( )。执行完上面的代码之后开始执行入参reschedule( )的代码，入参reschedule( 闭包的代码是如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#f92672>^</span>{
+            [lock lock];
+            <span style=color:#66d9ef>BOOL</span> immediate <span style=color:#f92672>=</span> rescheduleImmediately;
+            <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>immediate) <span style=color:#f92672>++</span>rescheduleCount;
+            [lock unlock];
+                    
+            <span style=color:#66d9ef>if</span> (immediate) reallyReschedule();
+    }
+
+</code></pre></div><p>在这段block中会统计rescheduleCount，如果rescheduleImmediately为YES还会继续开始执行递归操作reallyReschedule( )。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+   <span style=color:#66d9ef>for</span> (NSUInteger i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> synchronousCount; i<span style=color:#f92672>++</span>) {
+    reallyReschedule();
+   }
+
+</code></pre></div><p>最终会在这个循环里面递归调用reallyReschedule( )闭包。reallyReschedule( )闭包执行的操作就是再次执行scheduleRecursiveBlock:recursiveBlock addingToDisposable:disposable方法。</p><p>每次执行一次递归就会取出sequence的head值发送出来，直到sequence.head = = nil发送完成信号。</p><p>既然RACSequence也可以转换成RACSignal，那么就需要总结一下两者的异同点。</p><p><strong>总结一下：</strong></p><p>RACSequence 和 RACSignal 异同点对比：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_9.png alt></p><ol><li>RACSequence除去RACEagerSequence，其他所有的都是基于惰性计算的，这和RACSignal是一样的。</li><li>RACSequence是在时间上是连续的，一旦把RACSequence变成signal，再订阅，会立即把所有的值一口气都发送出来。RACSignal是在时间上是离散的，当有事件到来的时候，才会发送出数据流。</li><li>RACSequence是Pull-driver，由订阅者来决定是否发送值，只要订阅者订阅了，就会发送数据流。RACSignal是Push-driver，它发送数据流是不由订阅者决定的，不管有没有订阅者，它有离散事件产生了，就会发送数据流。</li><li>RACSequence发送的全是数据，RACSignal发送的全是事件。事件不仅仅包括数据，还包括事件的状态，比如说事件是否出错，事件是否完成。</li></ol><h3 id=三-racsequence操作实现分析>三. RACSequence操作实现分析</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_10.png alt></p><p>RACSequence还有以下几个操作。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>foldLeftWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> accumulator, <span style=color:#66d9ef>id</span> value))reduce;
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>foldRightWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> first, RACSequence <span style=color:#f92672>*</span>rest))reduce;
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>any:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block;
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>all:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block;
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>objectPassingTest:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block;
+
+</code></pre></div><h4 id=1-foldleftwithstart-reduce>1. foldLeftWithStart: reduce:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>foldLeftWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>))reduce {
+    NSCParameterAssert(reduce <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>if</span> (self.head <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> start;
+    
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> value <span style=color:#66d9ef>in</span> self) {
+        start <span style=color:#f92672>=</span> reduce(start, value);
+    }
+    
+    <span style=color:#66d9ef>return</span> start;
+}
+
+
+</code></pre></div><p>这个函数传入了一个初始值start，然后依次循环执行reduce( )，循环之后，最终的值作为返回值返回。这个函数就是折叠函数，从左边折叠到右边。</p><h4 id=2-foldrightwithstart-reduce>2. foldRightWithStart: reduce:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>foldRightWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>, RACSequence <span style=color:#f92672>*</span>))reduce {
+    NSCParameterAssert(reduce <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>if</span> (self.head <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> start;
+    
+    RACSequence <span style=color:#f92672>*</span>rest <span style=color:#f92672>=</span> [RACSequence sequenceWithHeadBlock:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> [self.tail foldRightWithStart:start reduce:reduce];
+    } tailBlock:nil];
+    
+    <span style=color:#66d9ef>return</span> reduce(self.head, rest);
+}
+
+
+</code></pre></div><p>这个函数和上一个foldLeftWithStart: reduce:是一样的，只不过方向是从右往左。</p><h4 id=3-objectpassingtest>3. objectPassingTest:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>objectPassingTest:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+
+    <span style=color:#66d9ef>return</span> [self filter:block].head;
+}
+
+</code></pre></div><p>objectPassingTest:里面会调用RACStream中的filter:函数，这个函数在前几篇文章分析过了。如果block(value)为YES，就代表通过了Test，那么就会返回value的sequence。取出head返回。</p><h4 id=4-any>4. any:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>any:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [self objectPassingTest:block] <span style=color:#f92672>!=</span> nil;
+}
+
+</code></pre></div><p>any:会调用objectPassingTest:函数，如果不为nil就代表有value值通过了Test，有通过了value的就返回YES，反之返回NO。</p><h4 id=5-all>5. all:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>all:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    NSNumber <span style=color:#f92672>*</span>result <span style=color:#f92672>=</span> [self foldLeftWithStart:<span style=color:#ae81ff>@YES</span> reduce:<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>accumulator, <span style=color:#66d9ef>id</span> value) {
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>accumulator.boolValue <span style=color:#f92672>&amp;&amp;</span> block(value)<span style=color:#ae81ff>)</span>;
+    }];
+    
+    <span style=color:#66d9ef>return</span> result.boolValue;
+}
+
+</code></pre></div><p>all:会从左往右依次对每个值进行block( ) Test，然后每个值依次进行&&操作。</p><h4 id=6-concat>6. concat:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>concat:</span>(RACStream <span style=color:#f92672>*</span>)stream {
+    NSCParameterAssert(stream <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>return</span> [[[RACArraySequence sequenceWithArray:<span style=color:#ae81ff>@[</span> self, stream <span style=color:#ae81ff>]</span> offset:<span style=color:#ae81ff>0</span>]
+             flatten]
+            setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -concat: %@&#34;</span>, self.name, stream];
+}
+
+
+</code></pre></div><p>concat:的操作和RACSignal的作用是一样的。它会把原sequence和入参stream连接到一起，组合成一个高阶sequence，最后调用flatten“拍扁”。关于flatten的实现见前几篇RACStream里面的flatten实现分析。</p><h4 id=7-zipwith>7. zipWith:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>zipWith:</span>(RACSequence <span style=color:#f92672>*</span>)sequence {
+    NSCParameterAssert(sequence <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>return</span> [[RACSequence
+             sequenceWithHeadBlock:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> {
+                 <span style=color:#66d9ef>if</span> (self.head <span style=color:#f92672>==</span> nil <span style=color:#f92672>||</span> sequence.head <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> nil;
+                 <span style=color:#66d9ef>return</span> RACTuplePack(self.head, sequence.head);
+             } tailBlock:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> {
+                 <span style=color:#66d9ef>if</span> (self.tail <span style=color:#f92672>==</span> nil <span style=color:#f92672>||</span> [[RACSequence empty] isEqual:self.tail]) <span style=color:#66d9ef>return</span> nil;
+                 <span style=color:#66d9ef>if</span> (sequence.tail <span style=color:#f92672>==</span> nil <span style=color:#f92672>||</span> [[RACSequence empty] isEqual:sequence.tail]) <span style=color:#66d9ef>return</span> nil;
+                 
+                 <span style=color:#66d9ef>return</span> [self.tail zipWith:sequence.tail];
+             }]
+            setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -zipWith: %@&#34;</span>, self.name, sequence];
+}
+
+</code></pre></div><p>由于sequence的定义是递归形式的，所以zipWith:也是递归来进行的。zipWith:新的sequence的head是原来2个sequence的head组合成RACTuplePack。新的sequence的tail是原来2个sequence的tail递归调用zipWith:。</p><h3 id=四-racsequence的一些扩展>四. RACSequence的一些扩展</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_11.png alt></p><p>关于RACSequence有以下9个子类，其中RACEagerSequence是继承自RACArraySequence。这些子类看名字就知道sequence里面装的是什么类型的数据。RACUnarySequence里面装的是单元sequence。它只有head值，没有tail值。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/36_12.png alt></p><p>RACSequenceAdditions 总共有7个Category。这7个Category分别对iOS 里面的集合类进行了RACSequence的扩展，使我们能更加方便的使用RACSequence。</p><h4 id=1-nsarrayracsequenceadditions>1. NSArray+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSArray</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个Category能把任意一个NSArray数组转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+ <span style=color:#66d9ef>return</span> [RACArraySequence sequenceWithArray:self offset:<span style=color:#ae81ff>0</span>];
+}
+
+</code></pre></div><p>根据NSArray创建一个RACArraySequence并返回。</p><h4 id=2-nsdictionaryracsequenceadditions>2. NSDictionary+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSDictionary</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_keySequence;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_valueSequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个Category能把任意一个NSDictionary字典转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+   NSDictionary <span style=color:#f92672>*</span>immutableDict <span style=color:#f92672>=</span> [self <span style=color:#66d9ef>copy</span>];
+     <span style=color:#66d9ef>return</span> [immutableDict.allKeys.rac_sequence map:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> key) {
+      <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> immutableDict[key];
+      <span style=color:#66d9ef>return</span> RACTuplePack(key, value);
+   }];
+}
+
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_keySequence</span> {
+   <span style=color:#66d9ef>return</span> self.allKeys.rac_sequence;
+}
+
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_valueSequence</span> {
+   <span style=color:#66d9ef>return</span> self.allValues.rac_sequence;
+}
+
+</code></pre></div><p>rac_sequence会把字典都转化为一个装满RACTuplePack的RACSequence，在这个RACSequence中，第一个位置是key，第二个位置是value。</p><p>rac_keySequence是装满所有key的RACSequence。</p><p>rac_valueSequence是装满所有value的RACSequence。</p><h4 id=3-nsenumeratorracsequenceadditions>3. NSEnumerator+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSEnumerator</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+
+</code></pre></div><p>这个Category能把任意一个NSEnumerator转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+    <span style=color:#66d9ef>return</span> [RACSequence sequenceWithHeadBlock:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> [self nextObject];
+    } tailBlock:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> self.rac_sequence;
+    }];
+}
+
+</code></pre></div><p>返回的RACSequence的head是当前的sequence的head，tail就是当前的sequence。</p><h4 id=4-nsindexsetracsequenceadditions>4. NSIndexSet+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSIndexSet</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+
+</code></pre></div><p>这个Category能把任意一个NSIndexSet转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+    <span style=color:#66d9ef>return</span> [RACIndexSetSequence sequenceWithIndexSet:self];
+}
+
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>sequenceWithIndexSet:</span>(NSIndexSet <span style=color:#f92672>*</span>)indexSet {
+    NSUInteger count <span style=color:#f92672>=</span> indexSet.count;
+    <span style=color:#66d9ef>if</span> (count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) <span style=color:#66d9ef>return</span> self.empty;
+    NSUInteger sizeInBytes <span style=color:#f92672>=</span> <span style=color:#66d9ef>sizeof</span>(NSUInteger) <span style=color:#f92672>*</span> count;
+    NSMutableData <span style=color:#f92672>*</span>data <span style=color:#f92672>=</span> [[NSMutableData alloc] initWithCapacity:sizeInBytes];
+    [indexSet getIndexes:data.mutableBytes maxCount:count inIndexRange:NULL];
+    
+    RACIndexSetSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> [[self alloc] init];
+    seq<span style=color:#f92672>-&gt;</span>_data <span style=color:#f92672>=</span> data;
+    seq<span style=color:#f92672>-&gt;</span>_indexes <span style=color:#f92672>=</span> data.bytes;
+    seq<span style=color:#f92672>-&gt;</span>_count <span style=color:#f92672>=</span> count;
+    <span style=color:#66d9ef>return</span> seq;
+}
+
+
+</code></pre></div><p>返回RACIndexSetSequence，在这个IndexSetSequence中，data里面装的NSData，indexes里面装的NSUInteger，count里面装的是index的总数。</p><h4 id=5-nsorderedsetracsequenceadditions>5. NSOrderedSet+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSOrderedSet</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个Category能把任意一个NSOrderedSet转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+    <span style=color:#66d9ef>return</span> self.array.rac_sequence;
+}
+
+</code></pre></div><p>返回的NSOrderedSet中的数组转换成sequence。</p><h4 id=6-nssetracsequenceadditions>6. NSSet+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSSet</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个Category能把任意一个NSSet转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+   <span style=color:#66d9ef>return</span> self.allObjects.rac_sequence;
+}
+
+</code></pre></div><p>根据NSSet的allObjects数组创建一个RACArraySequence并返回。</p><h4 id=7-nsstringracsequenceadditions>7. NSString+RACSequenceAdditions</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSString</span> (RACSequenceAdditions)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSequence <span style=color:#f92672>*</span>rac_sequence;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这个Category能把任意一个NSString转换成RACSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+    <span style=color:#66d9ef>return</span> [RACStringSequence sequenceWithString:self offset:<span style=color:#ae81ff>0</span>];
+}
+
+
+</code></pre></div><p>返回的是一个装满string字符的数组对应的sequence。</p><h3 id=最后>最后</h3><p>关于RACSequence 和 RACTuple底层实现分析都已经分析完成。最后请大家多多指教。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-ractuple底层实现分析>一. RACTuple底层实现分析</a><ul><li><a href=#1-ractuple>1. RACTuple</a></li><li><a href=#2-ractupleunpackingtrampoline>2. RACTupleUnpackingTrampoline</a></li><li><a href=#3-ractuplesequence>3. RACTupleSequence</a></li></ul></li><li><a href=#二-racsequence底层实现分析>二. RACSequence底层实现分析</a><ul><li><a href=#1-积极运算-和-惰性求值>1. 积极运算 和 惰性求值</a></li><li><a href=#2-pull-driver-和-push-driver>2. Pull-driver 和 Push-driver</a></li></ul></li><li><a href=#三-racsequence操作实现分析>三. RACSequence操作实现分析</a><ul><li><a href=#1-foldleftwithstart-reduce>1. foldLeftWithStart: reduce:</a></li><li><a href=#2-foldrightwithstart-reduce>2. foldRightWithStart: reduce:</a></li><li><a href=#3-objectpassingtest>3. objectPassingTest:</a></li><li><a href=#4-any>4. any:</a></li><li><a href=#5-all>5. all:</a></li><li><a href=#6-concat>6. concat:</a></li><li><a href=#7-zipwith>7. zipWith:</a></li></ul></li><li><a href=#四-racsequence的一些扩展>四. RACSequence的一些扩展</a><ul><li><a href=#1-nsarrayracsequenceadditions>1. NSArray+RACSequenceAdditions</a></li><li><a href=#2-nsdictionaryracsequenceadditions>2. NSDictionary+RACSequenceAdditions</a></li><li><a href=#3-nsenumeratorracsequenceadditions>3. NSEnumerator+RACSequenceAdditions</a></li><li><a href=#4-nsindexsetracsequenceadditions>4. NSIndexSet+RACSequenceAdditions</a></li><li><a href=#5-nsorderedsetracsequenceadditions>5. NSOrderedSet+RACSequenceAdditions</a></li><li><a href=#6-nssetracsequenceadditions>6. NSSet+RACSequenceAdditions</a></li><li><a href=#7-nsstringracsequenceadditions>7. NSString+RACSequenceAdditions</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&text=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&name=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8OOP%e7%9a%84%e4%b8%96%e7%95%8c%e9%87%8c%e4%bd%bf%e7%94%a8FRP%e7%9a%84%e6%80%9d%e6%83%b3%e6%9d%a5%e7%bc%96%e7%a8%8b%ef%bc%8c%e5%85%89%e6%9c%89%e5%87%bd%e6%95%b0%e8%bf%99%e7%a7%8d%e4%b8%80%e7%ad%89%e5%85%ac%e6%b0%91%ef%bc%8c%e8%bf%98%e6%98%af%e6%97%a0%e6%b3%95%e6%bb%a1%e8%b6%b3%e6%88%91%e4%bb%ac%e4%b8%80%e4%ba%9b%e9%9c%80%e6%b1%82%e7%9a%84%e3%80%82%e5%9b%a0%e6%ad%a4%e8%bf%98%e6%98%af%e9%9c%80%e8%a6%81%e5%bc%95%e7%94%a8%e5%8f%98%e9%87%8f%e6%9d%a5%e5%ae%8c%e6%88%90%e5%90%84%e5%bc%8f%e5%90%84%e6%a0%b7%e7%9a%84%e7%b1%bb%e7%9a%84%e6%93%8d%e4%bd%9c%e8%a1%8c%e4%b8%ba%e3%80%82%0a%e5%9c%a8%e5%89%8d%e5%87%a0%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e8%af%a6%e7%bb%86%e7%9a%84%e5%88%86%e6%9e%90%e4%ba%86RACStream%e4%b8%adRACSignal%e7%9a%84%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e3%80%82RACStream%e8%bf%98%e6%9c%89%e5%8f%a6%e5%a4%96%e4%b8%80%e4%b8%aa%e5%ad%90%e7%b1%bb%ef%bc%8cRACSequence%ef%bc%8c%e8%bf%99%e4%b8%aa%e7%b1%bb%e6%98%afRAC%e4%b8%93%e9%97%a8%e4%b8%ba%e9%9b%86%e5%90%88%e8%80%8c%e8%ae%be%e8%ae%a1%e7%9a%84%e3%80%82%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e4%b8%93%e9%97%a8%e5%88%86%e6%9e%90%e4%b8%80%e4%b8%8bRACSequence%e7%9a%84%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.RACTuple%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%202.RACSequence%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%203.RACSequence%e6%93%8d%e4%bd%9c%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%204.RACSequence%e7%9a%84%e4%b8%80%e4%ba%9b%e6%89%a9%e5%b1%95%20%20%e4%b8%80.%20RACTuple%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%20%e5%9c%a8%e5%88%86%e6%9e%90RACSequence%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8bRACTuple%e7%9a%84%e5%ae%9e%e7%8e%b0%e3%80%82RACTuple%e6%98%afReactiveCocoa%e7%9a%84%e5%85%83%e7%bb%84%e7%b1%bb%e3%80%82%0a1.%20RACTuple%20%40interface%20RACTuple%20%3a%20NSObject%20%26lt%3bNSCoding%2c%20NSCopying%2c%20NSFastEnumeration%26gt%3b%20%40property%20%28nonatomic%2c%20readonly%29%20NSUInteger%20count%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20first%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20second%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20third%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20fourth%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20fifth%3b%20%40property%20%28nonatomic%2c%20readonly%29%20id%20last%3b%20%40property%20%28nonatomic%2c%20strong%29%20NSArray%20%2abackingArray%3b%20%40property%20%28nonatomic%2c%20copy%2c%20readonly%29%20RACSequence%20%2arac_sequence%3b%20%2f%2f%20%e8%bf%99%e4%b8%aa%e6%98%af%e4%b8%93%e9%97%a8%e4%b8%basequence%e6%8f%90%e4%be%9b%e7%9a%84%e4%b8%80%e4%b8%aa%e6%89%a9%e5%b1%95%20%20%40end%20RACTuple%e7%9a%84%e5%ae%9a%e4%b9%89%e7%9c%8b%e4%b8%8a%e5%8e%bb%e5%be%88%e7%ae%80%e5%8d%95%ef%bc%8c%e5%ba%95%e5%b1%82%e5%ae%9e%e8%b4%a8%e5%b0%b1%e6%98%af%e4%b8%80%e4%b8%aaNSArray%ef%bc%8c%e5%8f%aa%e4%b8%8d%e8%bf%87%e5%b0%81%e8%a3%85%e4%ba%86%e4%b8%80%e4%ba%9b%e6%96%b9%e6%b3%95%e3%80%82RACTuple%e7%bb%a7%e6%89%bf%e4%ba%86NSCoding%2c%20NSCopying%2c%20NSFastEnumeration%e8%bf%99%e4%b8%89%e4%b8%aa%e5%8d%8f%e8%ae%ae%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsequence_ractuple%2f&t=ReactiveCocoa%20%e4%b8%ad%20%e9%9b%86%e5%90%88%e7%b1%bb%20RACSequence%20%e5%92%8c%20RACTuple%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

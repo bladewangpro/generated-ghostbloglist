@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Router on prometheus</title><link>https://new.halfrost.com/tags/router/</link><description>Recent content in Router on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 25 Feb 2017 03:39:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/router/index.xml" rel="self" type="application/rss+xml"/><item><title>iOS 组件化 —— 路由设计思路分析</title><link>https://new.halfrost.com/ios_router/</link><pubDate>Sat, 25 Feb 2017 03:39:00 +0000</pubDate><guid>https://new.halfrost.com/ios_router/</guid><description>前言 随着用户的需求越来越多，对App的用户体验也变的要求越来越高。为了更好的应对各种需求，开发人员从软件工程的角度，将App架构由原来简单的MVC变成MVVM，VIPER等复杂架构。更换适合业务的架构，是为了后期能更好的维护项目。
+但是用户依旧不满意，继续对开发人员提出了更多更高的要求，不仅需要高质量的用户体验，还要求快速迭代，最好一天出一个新功能，而且用户还要求不更新就能体验到新功能。为了满足用户需求，于是开发人员就用H5，ReactNative，Weex等技术对已有的项目进行改造。项目架构也变得更加的复杂，纵向的会进行分层，网络层，UI层，数据持久层。每一层横向的也会根据业务进行组件化。尽管这样做了以后会让开发更加有效率，更加好维护，但是如何解耦各层，解耦各个界面和各个组件，降低各个组件之间的耦合度，如何能让整个系统不管多么复杂的情况下都能保持“高内聚，低耦合”的特点？这一系列的问题都摆在开发人员面前，亟待解决。今天就来谈谈解决这个问题的一些思路。
+目录 1.引子 2.App路由能解决哪些问题 3.App之间跳转实现 4.App内组件间路由设计 5.各个方案优缺点 6.最好的方案 一. 引子 大前端发展这么多年了，相信也一定会遇到相似的问题。近两年SPA发展极其迅猛，React 和 Vue一直处于风口浪尖，那我们就看看他们是如何处理好这一问题的。
+在SPA单页面应用，路由起到了很关键的作用。路由的作用主要是保证视图和 URL 的同步。在前端的眼里看来，视图是被看成是资源的一种表现。当用户在页面中进行操作时，应用会在若干个交互状态中切换，路由则可以记录下某些重要的状态，比如用户查看一个网站，用户是否登录、在访问网站的哪一个页面。而这些变化同样会被记录在浏览器的历史中，用户可以通过浏览器的前进、后退按钮切换状态。总的来说，用户可以通过手动输入或者与页面进行交互来改变 URL，然后通过同步或者异步的方式向服务端发送请求获取资源，成功后重新绘制 UI，原理如下图所示：
+react-router通过传入的location到最终渲染新的UI，流程如下：
+location的来源有2种，一种是浏览器的回退和前进，另外一种是直接点了一个链接。新的 location 对象后，路由内部的 matchRoutes 方法会匹配出 Route 组件树中与当前 location 对象匹配的一个子集，并且得到了 nextState，在this.setState(nextState) 时就可以实现重新渲染 Router 组件。
+大前端的做法大概是这样的，我们可以把这些思想借鉴到iOS这边来。上图中的Back / Forward 在iOS这边很多情况下都可以被UINavgation所管理。所以iOS的Router主要处理绿色的那一块。
+二. App路由能解决哪些问题 既然前端能在SPA上解决URL和UI的同步问题，那这种思想可以在App上解决哪些问题呢？
+思考如下的问题，平时我们开发中是如何优雅的解决的：
+1.3D-Touch功能或者点击推送消息，要求外部跳转到App内部一个很深层次的一个界面。
+比如微信的3D-Touch可以直接跳转到“我的二维码”。“我的二维码”界面在我的里面的第三级界面。或者再极端一点，产品需求给了更加变态的需求，要求跳转到App内部第十层的界面，怎么处理？
+2.自家的一系列App之间如何相互跳转？
+如果自己App有几个，相互之间还想相互跳转，怎么处理？
+3.如何解除App组件之间和App页面之间的耦合性？
+随着项目越来越复杂，各个组件，各个页面之间的跳转逻辑关联性越来越多，如何能优雅的解除各个组件和页面之间的耦合性？
+4.如何能统一iOS和Android两端的页面跳转逻辑？甚至如何能统一三端的请求资源的方式？
+项目里面某些模块会混合ReactNative，Weex，H5界面，这些界面还会调用Native的界面，以及Native的组件。那么，如何能统一Web端和Native端请求资源的方式？
+5.如果使用了动态下发配置文件来配置App的跳转逻辑，那么如果做到iOS和Android两边只要共用一套配置文件？
+6.如果App出现bug了，如何不用JSPatch，就能做到简单的热修复功能？
+比如App上线突然遇到了紧急bug，能否把页面动态降级成H5，ReactNative，Weex？或者是直接换成一个本地的错误界面？
+7.如何在每个组件间调用和页面跳转时都进行埋点统计？每个跳转的地方都手写代码埋点？利用Runtime AOP ？
+8.如何在每个组件间调用的过程中，加入调用的逻辑检查，令牌机制，配合灰度进行风控逻辑？
+9.如何在App任何界面都可以调用同一个界面或者同一个组件？只能在AppDelegate里面注册单例来实现？
+比如App出现问题了，用户可能在任何界面，如何随时随地的让用户强制登出？或者强制都跳转到同一个本地的error界面？或者跳转到相应的H5，ReactNative，Weex界面？如何让用户在任何界面，随时随地的弹出一个View ？
+以上这些问题其实都可以通过在App端设计一个路由来解决。那么我们怎么设计一个路由呢？
+三. App之间跳转实现 在谈App内部的路由之前，先来谈谈在iOS系统间，不同App之间是怎么实现跳转的。
+1. URL Scheme方式 iOS系统是默认支持URL Scheme的，具体见官方文档。</description></item></channel></rss>

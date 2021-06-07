@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Retain Circle on prometheus</title><link>https://new.halfrost.com/tags/retain-circle/</link><description>Recent content in Retain Circle on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 04 Sep 2016 11:38:04 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/retain-circle/index.xml" rel="self" type="application/rss+xml"/><item><title>深入研究 Block 用 weakSelf、strongSelf、@weakify、@strongify 解决循环引用</title><link>https://new.halfrost.com/ios_block_retain_circle/</link><pubDate>Sun, 04 Sep 2016 11:38:04 +0000</pubDate><guid>https://new.halfrost.com/ios_block_retain_circle/</guid><description>前言 在上篇中，仔细分析了一下Block的实现原理以及__block捕获外部变量的原理。然而实际使用Block过程中，还是会遇到一些问题，比如Retain Circle的问题。
+####目录
+1.Retain Circle的由来 2.__weak、__strong的实现原理 3.weakSelf、strongSelf的用途 4.@weakify、@strongify实现原理 一. Retain Circle的由来 循环引用的问题相信大家都很理解了，这里还是简单的提一下。
+当A对象里面强引用了B对象，B对象又强引用了A对象，这样两者的retainCount值一直都无法为0，于是内存始终无法释放，导致内存泄露。所谓的内存泄露就是本应该释放的对象，在其生命周期结束之后依旧存在。
+这是2个对象之间的，相应的，这种循环还能存在于3，4……个对象之间，只要相互形成环，就会导致Retain Cicle的问题。
+当然也存在自身引用自身的，当一个对象内部的一个obj，强引用的自身，也会导致循环引用的问题出现。常见的就是block里面引用的问题。
+二.__weak、__strong的实现原理 在ARC环境下，id类型和对象类型和C语言其他类型不同，类型前必须加上所有权的修饰符。
+所有权修饰符总共有4种：
+1.__strong修饰符 2.__weak修饰符 3.__unsafe_unretained修饰符 4.__autoreleasing修饰符
+一般我们如果不写，默认的修饰符是__strong。
+要想弄清楚__strong，__weak的实现原理，我们就需要研究研究clang(LLVM编译器)和objc4 Objective-C runtime库了。
+关于clang有一份关于ARC详细的文档，有兴趣的可以仔细研究一下文档里面的说明和例子，很有帮助。
+以下的讲解，也会来自于上述文档中的函数说明。
+1.__strong的实现原理 (1)对象持有自己 首先我们先来看看生成的对象持有自己的情况，利用alloc/new/copy/mutableCopy生成对象。
+当我们声明了一个__strong对象
+{ id __strong obj = [[NSObject alloc] init]; } LLVM编译器会把上述代码转换成下面的样子
+id __attribute__((objc_ownership(strong))) obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass(&amp;#34;NSObject&amp;#34;), sel_registerName(&amp;#34;alloc&amp;#34;)), sel_registerName(&amp;#34;init&amp;#34;)); 相应的会调用
+id obj = objc_msgSend(NSObject, @selector(alloc)); objc_msgSend(obj,selector(init)); objc_release(obj); 上述这些方法都好理解。在ARC有效的时候就会自动插入release代码，在作用域结束的时候自动释放。
+(2)对象不持有自己 生成对象的时候不用alloc/new/copy/mutableCopy等方法。</description></item></channel></rss>

@@ -1,0 +1,249 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>iOS Hybrid 框架 —— PhoneGap | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="iOS Hybrid 框架 —— PhoneGap"><meta property="og:description" content="####前言
+Hybrid App（混合模式移动应用）是指介于web-app、native-app这两者之间的app，兼具“Native App良好用户交互体验的优势”和“Web App跨平台开发的优势”。
+Hybrid App按网页语言与程序语言的混合，通常分为三种类型：多View混合型，单View混合型，Web主体型，3种类型比较如下：
+今天我来谈谈Web主体型中Hybrid框架里面比较有名的PhoneGap
+####一.Cordova 说到PhoneGap，就不得不说到Cordova
+Cordova 是一个可以让 JS 与原生代码(包括 Android 的 java，iOS 的 Objective-C 等)互相通信的一个库，并且提供了一系列的插件类，比如 JS 直接操作本地数据库的插件类。
+Cordova的设计概念，是在APP上透过Web控件来呈现Web页面，让Web开发人员可以操作熟悉的语言、工具来开发APP.
+为了让Web页面能够满足更多的APP功能需求，Cordova提供了Plugin机制，让Web页面能够挂载并调用Native开发技术所开发的功能模块
+Cordova在系统中的层级应该是这样子的:
+Cordova的层级结构是下图这样的:
+Cordova又可以和Angular相结合，变成ngCordova
+Cordova + Angular = ngCordova ####二.JS 与 Objective-C 通信 JS 使用了两种方式来与 Objective-C 通信，一种是使用 XMLHttpRequest 发起请求的方式，另一种则是通过设置透明的 iframe 的 src 属性。
+我接下来说的主要是第二种方式，iframe bridge。
+通过在 JS 端创建一个透明的 iframe，设置这个 ifame 的 src 为自定义的协议，而 ifame 的 src 更改时，UIWebView 会先回调其 delegate 的 webView:shouldStartLoadWithRequest:navigationType: 方法
+说的还是很抽象的，来实际看一段代码
+在cordova.js 里面，是这样子实现的
+function iOSExec() { ."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/ios_hybrid_phonegap/"><meta property="article:published_time" content="2016-05-01T21:59:00+00:00"><meta property="article:modified_time" content="2016-05-01T21:59:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="iOS Hybrid 框架 —— PhoneGap"><meta name=twitter:description content="####前言
+Hybrid App（混合模式移动应用）是指介于web-app、native-app这两者之间的app，兼具“Native App良好用户交互体验的优势”和“Web App跨平台开发的优势”。
+Hybrid App按网页语言与程序语言的混合，通常分为三种类型：多View混合型，单View混合型，Web主体型，3种类型比较如下：
+今天我来谈谈Web主体型中Hybrid框架里面比较有名的PhoneGap
+####一.Cordova 说到PhoneGap，就不得不说到Cordova
+Cordova 是一个可以让 JS 与原生代码(包括 Android 的 java，iOS 的 Objective-C 等)互相通信的一个库，并且提供了一系列的插件类，比如 JS 直接操作本地数据库的插件类。
+Cordova的设计概念，是在APP上透过Web控件来呈现Web页面，让Web开发人员可以操作熟悉的语言、工具来开发APP.
+为了让Web页面能够满足更多的APP功能需求，Cordova提供了Plugin机制，让Web页面能够挂载并调用Native开发技术所开发的功能模块
+Cordova在系统中的层级应该是这样子的:
+Cordova的层级结构是下图这样的:
+Cordova又可以和Angular相结合，变成ngCordova
+Cordova + Angular = ngCordova ####二.JS 与 Objective-C 通信 JS 使用了两种方式来与 Objective-C 通信，一种是使用 XMLHttpRequest 发起请求的方式，另一种则是通过设置透明的 iframe 的 src 属性。
+我接下来说的主要是第二种方式，iframe bridge。
+通过在 JS 端创建一个透明的 iframe，设置这个 ifame 的 src 为自定义的协议，而 ifame 的 src 更改时，UIWebView 会先回调其 delegate 的 webView:shouldStartLoadWithRequest:navigationType: 方法
+说的还是很抽象的，来实际看一段代码
+在cordova.js 里面，是这样子实现的
+function iOSExec() { ."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/ios_interview/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/remote_debugging_on_ios_with_safari_web_inspector/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&text=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&is_video=false&description=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&name=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap&description=%23%23%23%23%e5%89%8d%e8%a8%80%0aHybrid%20App%ef%bc%88%e6%b7%b7%e5%90%88%e6%a8%a1%e5%bc%8f%e7%a7%bb%e5%8a%a8%e5%ba%94%e7%94%a8%ef%bc%89%e6%98%af%e6%8c%87%e4%bb%8b%e4%ba%8eweb-app%e3%80%81native-app%e8%bf%99%e4%b8%a4%e8%80%85%e4%b9%8b%e9%97%b4%e7%9a%84app%ef%bc%8c%e5%85%bc%e5%85%b7%e2%80%9cNative%20App%e8%89%af%e5%a5%bd%e7%94%a8%e6%88%b7%e4%ba%a4%e4%ba%92%e4%bd%93%e9%aa%8c%e7%9a%84%e4%bc%98%e5%8a%bf%e2%80%9d%e5%92%8c%e2%80%9cWeb%20App%e8%b7%a8%e5%b9%b3%e5%8f%b0%e5%bc%80%e5%8f%91%e7%9a%84%e4%bc%98%e5%8a%bf%e2%80%9d%e3%80%82%0aHybrid%20App%e6%8c%89%e7%bd%91%e9%a1%b5%e8%af%ad%e8%a8%80%e4%b8%8e%e7%a8%8b%e5%ba%8f%e8%af%ad%e8%a8%80%e7%9a%84%e6%b7%b7%e5%90%88%ef%bc%8c%e9%80%9a%e5%b8%b8%e5%88%86%e4%b8%ba%e4%b8%89%e7%a7%8d%e7%b1%bb%e5%9e%8b%ef%bc%9a%e5%a4%9aView%e6%b7%b7%e5%90%88%e5%9e%8b%ef%bc%8c%e5%8d%95View%e6%b7%b7%e5%90%88%e5%9e%8b%ef%bc%8cWeb%e4%b8%bb%e4%bd%93%e5%9e%8b%ef%bc%8c3%e7%a7%8d%e7%b1%bb%e5%9e%8b%e6%af%94%e8%be%83%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%e4%bb%8a%e5%a4%a9%e6%88%91%e6%9d%a5%e8%b0%88%e8%b0%88Web%e4%b8%bb%e4%bd%93%e5%9e%8b%e4%b8%adHybrid%e6%a1%86%e6%9e%b6%e9%87%8c%e9%9d%a2%e6%af%94%e8%be%83%e6%9c%89%e5%90%8d%e7%9a%84PhoneGap%0a%23%23%23%23%e4%b8%80.Cordova%20%e8%af%b4%e5%88%b0PhoneGap%ef%bc%8c%e5%b0%b1%e4%b8%8d%e5%be%97%e4%b8%8d%e8%af%b4%e5%88%b0Cordova%0aCordova%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%8f%af%e4%bb%a5%e8%ae%a9%20JS%20%e4%b8%8e%e5%8e%9f%e7%94%9f%e4%bb%a3%e7%a0%81%28%e5%8c%85%e6%8b%ac%20Android%20%e7%9a%84%20java%ef%bc%8ciOS%20%e7%9a%84%20Objective-C%20%e7%ad%89%29%e4%ba%92%e7%9b%b8%e9%80%9a%e4%bf%a1%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ba%93%ef%bc%8c%e5%b9%b6%e4%b8%94%e6%8f%90%e4%be%9b%e4%ba%86%e4%b8%80%e7%b3%bb%e5%88%97%e7%9a%84%e6%8f%92%e4%bb%b6%e7%b1%bb%ef%bc%8c%e6%af%94%e5%a6%82%20JS%20%e7%9b%b4%e6%8e%a5%e6%93%8d%e4%bd%9c%e6%9c%ac%e5%9c%b0%e6%95%b0%e6%8d%ae%e5%ba%93%e7%9a%84%e6%8f%92%e4%bb%b6%e7%b1%bb%e3%80%82%0aCordova%e7%9a%84%e8%ae%be%e8%ae%a1%e6%a6%82%e5%bf%b5%ef%bc%8c%e6%98%af%e5%9c%a8APP%e4%b8%8a%e9%80%8f%e8%bf%87Web%e6%8e%a7%e4%bb%b6%e6%9d%a5%e5%91%88%e7%8e%b0Web%e9%a1%b5%e9%9d%a2%ef%bc%8c%e8%ae%a9Web%e5%bc%80%e5%8f%91%e4%ba%ba%e5%91%98%e5%8f%af%e4%bb%a5%e6%93%8d%e4%bd%9c%e7%86%9f%e6%82%89%e7%9a%84%e8%af%ad%e8%a8%80%e3%80%81%e5%b7%a5%e5%85%b7%e6%9d%a5%e5%bc%80%e5%8f%91APP.%0a%e4%b8%ba%e4%ba%86%e8%ae%a9Web%e9%a1%b5%e9%9d%a2%e8%83%bd%e5%a4%9f%e6%bb%a1%e8%b6%b3%e6%9b%b4%e5%a4%9a%e7%9a%84APP%e5%8a%9f%e8%83%bd%e9%9c%80%e6%b1%82%ef%bc%8cCordova%e6%8f%90%e4%be%9b%e4%ba%86Plugin%e6%9c%ba%e5%88%b6%ef%bc%8c%e8%ae%a9Web%e9%a1%b5%e9%9d%a2%e8%83%bd%e5%a4%9f%e6%8c%82%e8%bd%bd%e5%b9%b6%e8%b0%83%e7%94%a8Native%e5%bc%80%e5%8f%91%e6%8a%80%e6%9c%af%e6%89%80%e5%bc%80%e5%8f%91%e7%9a%84%e5%8a%9f%e8%83%bd%e6%a8%a1%e5%9d%97%0aCordova%e5%9c%a8%e7%b3%bb%e7%bb%9f%e4%b8%ad%e7%9a%84%e5%b1%82%e7%ba%a7%e5%ba%94%e8%af%a5%e6%98%af%e8%bf%99%e6%a0%b7%e5%ad%90%e7%9a%84%3a%0aCordova%e7%9a%84%e5%b1%82%e7%ba%a7%e7%bb%93%e6%9e%84%e6%98%af%e4%b8%8b%e5%9b%be%e8%bf%99%e6%a0%b7%e7%9a%84%3a%0aCordova%e5%8f%88%e5%8f%af%e4%bb%a5%e5%92%8cAngular%e7%9b%b8%e7%bb%93%e5%90%88%ef%bc%8c%e5%8f%98%e6%88%90ngCordova%0aCordova%20%2b%20Angular%20%3d%20ngCordova%20%23%23%23%23%e4%ba%8c.JS%20%e4%b8%8e%20Objective-C%20%e9%80%9a%e4%bf%a1%20JS%20%e4%bd%bf%e7%94%a8%e4%ba%86%e4%b8%a4%e7%a7%8d%e6%96%b9%e5%bc%8f%e6%9d%a5%e4%b8%8e%20Objective-C%20%e9%80%9a%e4%bf%a1%ef%bc%8c%e4%b8%80%e7%a7%8d%e6%98%af%e4%bd%bf%e7%94%a8%20XMLHttpRequest%20%e5%8f%91%e8%b5%b7%e8%af%b7%e6%b1%82%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%8c%e5%8f%a6%e4%b8%80%e7%a7%8d%e5%88%99%e6%98%af%e9%80%9a%e8%bf%87%e8%ae%be%e7%bd%ae%e9%80%8f%e6%98%8e%e7%9a%84%20iframe%20%e7%9a%84%20src%20%e5%b1%9e%e6%80%a7%e3%80%82%0a%e6%88%91%e6%8e%a5%e4%b8%8b%e6%9d%a5%e8%af%b4%e7%9a%84%e4%b8%bb%e8%a6%81%e6%98%af%e7%ac%ac%e4%ba%8c%e7%a7%8d%e6%96%b9%e5%bc%8f%ef%bc%8ciframe%20bridge%e3%80%82%0a%e9%80%9a%e8%bf%87%e5%9c%a8%20JS%20%e7%ab%af%e5%88%9b%e5%bb%ba%e4%b8%80%e4%b8%aa%e9%80%8f%e6%98%8e%e7%9a%84%20iframe%ef%bc%8c%e8%ae%be%e7%bd%ae%e8%bf%99%e4%b8%aa%20ifame%20%e7%9a%84%20src%20%e4%b8%ba%e8%87%aa%e5%ae%9a%e4%b9%89%e7%9a%84%e5%8d%8f%e8%ae%ae%ef%bc%8c%e8%80%8c%20ifame%20%e7%9a%84%20src%20%e6%9b%b4%e6%94%b9%e6%97%b6%ef%bc%8cUIWebView%20%e4%bc%9a%e5%85%88%e5%9b%9e%e8%b0%83%e5%85%b6%20delegate%20%e7%9a%84%20webView%3ashouldStartLoadWithRequest%3anavigationType%3a%20%e6%96%b9%e6%b3%95%0a%e8%af%b4%e7%9a%84%e8%bf%98%e6%98%af%e5%be%88%e6%8a%bd%e8%b1%a1%e7%9a%84%ef%bc%8c%e6%9d%a5%e5%ae%9e%e9%99%85%e7%9c%8b%e4%b8%80%e6%ae%b5%e4%bb%a3%e7%a0%81%0a%e5%9c%a8cordova.js%20%e9%87%8c%e9%9d%a2%ef%bc%8c%e6%98%af%e8%bf%99%e6%a0%b7%e5%ad%90%e5%ae%9e%e7%8e%b0%e7%9a%84%0afunction%20iOSExec%28%29%20%7b%20."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&t=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">iOS Hybrid 框架 —— PhoneGap</h1><div class=meta><div class=postdate><time datetime="2016-05-01 21:59:00 +0000 UTC" itemprop=datePublished>May 01</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/phonegap>PhoneGap</a>
+,
+<a class=category-link href=/categories/ios-hybrid>iOS Hybrid</a>
+,
+<a class=category-link href=/categories/cordova>Cordova</a>
+,
+<a class=category-link href=/categories/ngcordova>ngCordova</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/phonegap rel=tag>PhoneGap</a>
+,
+<a class=tag-link href=/tags/ios-hybrid rel=tag>iOS Hybrid</a>
+,
+<a class=tag-link href=/tags/cordova rel=tag>Cordova</a>
+,
+<a class=tag-link href=/tags/ngcordova rel=tag>ngCordova</a></div></div></header><div class=content itemprop=articleBody><p>####前言</p><p>Hybrid App（混合模式移动应用）是指介于web-app、native-app这两者之间的app，兼具“Native App良好用户交互体验的优势”和“Web App跨平台开发的优势”。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_7.png alt></p><p>Hybrid App按网页语言与程序语言的混合，通常分为三种类型：多View混合型，单View混合型，Web主体型，3种类型比较如下：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_2.png alt></p><p>今天我来谈谈Web主体型中Hybrid框架里面比较有名的PhoneGap</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_3.png alt></p><p>####一.Cordova
+说到PhoneGap，就不得不说到Cordova</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_8.png alt></p><p>Cordova 是一个可以让 JS 与原生代码(包括 Android 的 java，iOS 的 Objective-C 等)互相通信的一个库，并且提供了一系列的插件类，比如 JS 直接操作本地数据库的插件类。</p><p>Cordova的设计概念，是在APP上透过Web控件来呈现Web页面，让Web开发人员可以操作熟悉的语言、工具来开发APP.</p><p>为了让Web页面能够满足更多的APP功能需求，Cordova提供了Plugin机制，让Web页面能够挂载并调用Native开发技术所开发的功能模块</p><p>Cordova在系统中的层级应该是这样子的:</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_4.png alt></p><p>Cordova的层级结构是下图这样的:</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/4_5.jpg alt></p><p>Cordova又可以和Angular相结合，变成ngCordova</p><p>Cordova + Angular = ngCordova
+<img src=https://img.halfrost.com/Blog/ArticleImage/4_6.png alt></p><p>####二.JS 与 Objective-C 通信
+JS 使用了两种方式来与 Objective-C 通信，一种是使用 XMLHttpRequest 发起请求的方式，另一种则是通过设置透明的 iframe 的 src 属性。</p><p>我接下来说的主要是第二种方式，iframe bridge。<br>通过在 JS 端创建一个透明的 iframe，设置这个 ifame 的 src 为自定义的协议，而 ifame 的 src 更改时，UIWebView 会先回调其 delegate 的 webView:shouldStartLoadWithRequest:navigationType: 方法</p><p>说的还是很抽象的，来实际看一段代码</p><p>在cordova.js 里面，是这样子实现的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>iOSExec</span>() {
+    ...
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>isInContextOfEvalJs</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>commandQueue</span>.<span style=color:#a6e22e>length</span> <span style=color:#f92672>==</span> <span style=color:#ae81ff>1</span>)  {
+        <span style=color:#75715e>// 如果支持 XMLHttpRequest，则使用 XMLHttpRequest 方式
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>bridgeMode</span> <span style=color:#f92672>!=</span> <span style=color:#a6e22e>jsToNativeModes</span>.<span style=color:#a6e22e>IFRAME_NAV</span>) {
+            <span style=color:#75715e>// This prevents sending an XHR when there is already one being sent.
+</span><span style=color:#75715e></span>            <span style=color:#75715e>// This should happen only in rare circumstances (refer to unit tests).
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>execXhr</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>readyState</span> <span style=color:#f92672>!=</span> <span style=color:#ae81ff>4</span>) {
+                <span style=color:#a6e22e>execXhr</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>null</span>;
+            }
+            <span style=color:#75715e>// Re-using the XHR improves exec() performance by about 10%.
+</span><span style=color:#75715e></span>            <span style=color:#a6e22e>execXhr</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>execXhr</span> <span style=color:#f92672>||</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>XMLHttpRequest</span>();
+            <span style=color:#75715e>// Changing this to a GET will make the XHR reach the URIProtocol on 4.2.
+</span><span style=color:#75715e></span>            <span style=color:#75715e>// For some reason it still doesn&#39;t work though...
+</span><span style=color:#75715e></span>            <span style=color:#75715e>// Add a timestamp to the query param to prevent caching.
+</span><span style=color:#75715e></span>            <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>open</span>(<span style=color:#e6db74>&#39;HEAD&#39;</span>, <span style=color:#e6db74>&#34;/!gap_exec?&#34;</span> <span style=color:#f92672>+</span> (<span style=color:#f92672>+</span><span style=color:#66d9ef>new</span> Date()), <span style=color:#66d9ef>true</span>);
+            <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>vcHeaderValue</span>) {
+                <span style=color:#a6e22e>vcHeaderValue</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>/.*\((.*)\)/</span>.<span style=color:#a6e22e>exec</span>(<span style=color:#a6e22e>navigator</span>.<span style=color:#a6e22e>userAgent</span>)[<span style=color:#ae81ff>1</span>];
+            }
+            <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>setRequestHeader</span>(<span style=color:#e6db74>&#39;vc&#39;</span>, <span style=color:#a6e22e>vcHeaderValue</span>);
+            <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>setRequestHeader</span>(<span style=color:#e6db74>&#39;rc&#39;</span>, <span style=color:#f92672>++</span><span style=color:#a6e22e>requestCount</span>);
+            <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>shouldBundleCommandJson</span>()) {
+                <span style=color:#75715e>// 设置请求的数据
+</span><span style=color:#75715e></span>                <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>setRequestHeader</span>(<span style=color:#e6db74>&#39;cmds&#39;</span>, <span style=color:#a6e22e>iOSExec</span>.<span style=color:#a6e22e>nativeFetchMessages</span>());
+            }
+            <span style=color:#75715e>// 发起请求
+</span><span style=color:#75715e></span>            <span style=color:#a6e22e>execXhr</span>.<span style=color:#a6e22e>send</span>(<span style=color:#66d9ef>null</span>);
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#75715e>// 如果不支持 XMLHttpRequest，则使用透明 iframe 的方式，设置 iframe 的 src 属性
+</span><span style=color:#75715e></span>            <span style=color:#a6e22e>execIframe</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>execIframe</span> <span style=color:#f92672>||</span> <span style=color:#a6e22e>createExecIframe</span>();
+            <span style=color:#a6e22e>execIframe</span>.<span style=color:#a6e22e>src</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;gap://ready&#34;</span>;
+        }
+    }
+    ...
+}
+</code></pre></div><p>iOS这边对应的要在WebView里面写响应的方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// UIWebView 加载 URL 前回调的方法，返回 YES，则开始加载此 URL，返回 NO，则忽略此 URL
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>webView:</span>(UIWebView<span style=color:#f92672>*</span>)theWebView
+              <span style=color:#a6e22e>shouldStartLoadWithRequest:</span>(NSURLRequest<span style=color:#f92672>*</span>)request
+              <span style=color:#a6e22e>navigationType:</span>(UIWebViewNavigationType)navigationType
+{
+    NSURL<span style=color:#f92672>*</span> url <span style=color:#f92672>=</span> [request URL];
+    
+    <span style=color:#75715e>/*
+</span><span style=color:#75715e>     * Execute any commands queued with cordova.exec() on the JS side.
+</span><span style=color:#75715e>     * The part of the URL after gap:// is irrelevant.
+</span><span style=color:#75715e>     */</span>
+    <span style=color:#75715e>// 判断是否 Cordova 的请求，对于 JS 代码中 execIframe.src = &#34;gap://ready&#34; 这句
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([[url scheme] isEqualToString:<span style=color:#e6db74>@&#34;gap&#34;</span>]) {
+        <span style=color:#75715e>// 获取请求的数据，并对数据进行分析、处理
+</span><span style=color:#75715e></span>        [_commandQueue fetchCommandsFromJs];
+        <span style=color:#66d9ef>return</span> NO;
+    }
+    ...
+}
+
+</code></pre></div><p>这样就完成了JS和OC的通信了</p><p>####三.Objective-C 与 JS 通信</p><p>首先OC获取JS的请求数据</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fetchCommandsFromJs</span>
+{
+    <span style=color:#75715e>// Grab all the queued commands from the JS side.
+</span><span style=color:#75715e></span>    NSString<span style=color:#f92672>*</span> queuedCommandsJSON <span style=color:#f92672>=</span> [_viewController.webView
+                                    stringByEvaluatingJavaScriptFromString:
+                                    <span style=color:#e6db74>@&#34;cordova.require(&#39;cordova/exec&#39;).nativeFetchMessages()&#34;</span>];
+    
+    [self enqueCommandBatch:queuedCommandsJSON];
+    <span style=color:#66d9ef>if</span> ([queuedCommandsJSON length] <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>) {
+        CDV_EXEC_LOG(<span style=color:#e6db74>@&#34;Exec: Retrieved new exec messages by request.&#34;</span>);
+    }
+}
+</code></pre></div><p>然后OC处理JS传过来的请求</p><p>OC再把处理结果返回JS</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>NSString <span style=color:#f92672>*</span>ret <span style=color:#f92672>=</span> [((HFNativeFunction<span style=color:#f92672>*</span>)strongSelf.actionDict[funcName]) doCall:argArr];
+        NSString <span style=color:#f92672>*</span>js <span style=color:#f92672>=</span> [NSString stringWithFormat:<span style=color:#e6db74>@&#34;if(typeof %@ == &#39;string&#39;) { paf.nativeInvocationObject=%@;} else {   paf.nativeInvocationObject=JSON.stringify(%@);} &#34;</span>, ret, ret, ret];
+        DLog(<span style=color:#e6db74>@&#34;</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>js call fun=%@ ret=%@</span><span style=color:#ae81ff>\n\n</span><span style=color:#e6db74>&#34;</span>, funcName, ret);
+        [self.webView stringByEvaluatingJavaScriptFromString: js];
+</code></pre></div><p>####四.Cordova - JS工作原理</p><p>Cordova JS 端请求方法的格式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javaScript data-lang=javaScript><span style=color:#75715e>// successCallback : 成功回调方法  
+</span><span style=color:#75715e>// failCallback    : 失败回调方法  
+</span><span style=color:#75715e>// server          : 所要请求的服务名字  
+</span><span style=color:#75715e>// action          : 所要请求的服务具体操作  
+</span><span style=color:#75715e>// actionArgs      : 请求操作所带的参数  
+</span><span style=color:#75715e></span>
+</code></pre></div><p>cordova.exec(successCallback, failCallback, service, action, actionArgs);</p><p>传进来的这五个参数并不是直接传送给原生代码的，Cordova JS 端会做以下的处理：</p><p>1.会为每个请求生成一个叫 callbackId 的唯一标识：这个参数需传给 Objective-C 端，Objective-C 处理完后，会把 callbackId 连同处理结果一起返回给 JS 端。</p><p>2.以 callbackId 为 key，{success:successCallback, fail:failCallback} 为 value，把这个键值对保存在 JS 端的字典里，successCallback 与 failCallback 这两个参数不需要传给 Objective-C 端，Objective-C 返回结果时带上 callbackId，JS 端就可以根据 callbackId 找到回调方法。</p><p>3.每次 JS 请求，最后发到 Objective-C 的数据包括：callbackId, service, action, actionArgs。</p><p>JS处理请求</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>iOSExec</span>() {
+    ...
+    <span style=color:#75715e>// 生成一个 callbackId 的唯一标识，并把此标志与成功、失败回调方法一起保存在 JS 端
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// Register the callbacks and add the callbackId to the positional
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// arguments if given.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>successCallback</span> <span style=color:#f92672>||</span> <span style=color:#a6e22e>failCallback</span>) {
+        <span style=color:#a6e22e>callbackId</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>service</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>cordova</span>.<span style=color:#a6e22e>callbackId</span><span style=color:#f92672>++</span>;
+        <span style=color:#a6e22e>cordova</span>.<span style=color:#a6e22e>callbacks</span>[<span style=color:#a6e22e>callbackId</span>] <span style=color:#f92672>=</span>
+        {<span style=color:#a6e22e>success</span><span style=color:#f92672>:</span><span style=color:#a6e22e>successCallback</span>, <span style=color:#a6e22e>fail</span><span style=color:#f92672>:</span><span style=color:#a6e22e>failCallback</span>};
+    }
+    
+    <span style=color:#a6e22e>actionArgs</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>massageArgsJsToNative</span>(<span style=color:#a6e22e>actionArgs</span>);
+    
+    <span style=color:#75715e>// 把 callbackId，service，action，actionArgs 保持到 commandQueue 中
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// 这四个参数就是最后发给原生代码的数据
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>command</span> <span style=color:#f92672>=</span> [<span style=color:#a6e22e>callbackId</span>, <span style=color:#a6e22e>service</span>, <span style=color:#a6e22e>action</span>, <span style=color:#a6e22e>actionArgs</span>];
+    <span style=color:#a6e22e>commandQueue</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>JSON</span>.<span style=color:#a6e22e>stringify</span>(<span style=color:#a6e22e>command</span>));
+    ...
+}
+
+<span style=color:#75715e>// 获取请求的数据，包括 callbackId, service, action, actionArgs
+</span><span style=color:#75715e></span><span style=color:#a6e22e>iOSExec</span>.<span style=color:#a6e22e>nativeFetchMessages</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span>() {
+    <span style=color:#75715e>// Each entry in commandQueue is a JSON string already.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>commandQueue</span>.<span style=color:#a6e22e>length</span>) {
+        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>&#39;&#39;</span>;
+    }
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>json</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;[&#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>commandQueue</span>.<span style=color:#a6e22e>join</span>(<span style=color:#e6db74>&#39;,&#39;</span>) <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39;]&#39;</span>;
+    <span style=color:#a6e22e>commandQueue</span>.<span style=color:#a6e22e>length</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>json</span>;
+};
+</code></pre></div><p>####五.Cordova - OC工作原理</p><p>Native OC拿到 callbackId、service、action 及 actionArgs 后，会做以下的处理：</p><p>1.根据 service 参数找到对应的插件类</p><p>2.根据 action 参数找到插件类中对应的处理方法，并把 actionArgs 作为处理方法请求参数的一部分传给处理方法</p><p>3.处理完成后，把处理结果及 callbackId 返回给 JS 端，JS 端收到后会根据 callbackId 找到回调方法，并把处理结果传给回调方法</p><p> Objective-C 返回结果给 JS 端</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>sendPluginResult:</span>(CDVPluginResult<span style=color:#f92672>*</span>)result <span style=color:#a6e22e>callbackId:</span>(NSString<span style=color:#f92672>*</span>)callbackId
+{
+    CDV_EXEC_LOG(<span style=color:#e6db74>@&#34;Exec(%@): Sending result. Status=%@&#34;</span>, callbackId, result.status);
+    <span style=color:#75715e>// This occurs when there is are no win/fail callbacks for the call.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([<span style=color:#e6db74>@&#34;INVALID&#34;</span> isEqualToString : callbackId]) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    <span style=color:#66d9ef>int</span> status <span style=color:#f92672>=</span> [result.status intValue];
+    <span style=color:#66d9ef>BOOL</span> keepCallback <span style=color:#f92672>=</span> [result.keepCallback boolValue];
+    NSString<span style=color:#f92672>*</span> argumentsAsJSON <span style=color:#f92672>=</span> [result argumentsAsJSON];
+    
+    <span style=color:#75715e>// 将请求的处理结果及 callbackId 通过调用 JS 方法返回给 JS 端
+</span><span style=color:#75715e></span>    NSString<span style=color:#f92672>*</span> js <span style=color:#f92672>=</span> [NSString stringWithFormat:
+                    <span style=color:#e6db74>@&#34;cordova.require(&#39;cordova/exec&#39;).nativeCallback(&#39;%@&#39;,%d,%@,%d)&#34;</span>,
+                    callbackId, status, argumentsAsJSON, keepCallback];
+    
+    [self evalJsHelper:js];
+}
+</code></pre></div><p>举个具体的例子：</p><p>1.将收到的json转换成Command</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>// Execute the commands one-at-a-time.
+</span><span style=color:#75715e></span>     NSArray<span style=color:#f92672>*</span> jsonEntry <span style=color:#f92672>=</span> [commandBatch dequeue];
+     <span style=color:#66d9ef>if</span> ([commandBatch count] <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) {
+                  [_queue removeObjectAtIndex:<span style=color:#ae81ff>0</span>];
+      }
+     HFCDVInvokedUrlCommand<span style=color:#f92672>*</span> command <span style=color:#f92672>=</span> [HFCDVInvokedUrlCommand commandFromJson:jsonEntry];
+     HF_CDV_EXEC_LOG(<span style=color:#e6db74>@&#34;Exec(%@): Calling %@.%@&#34;</span>, command.callbackId, command.className, command.methodName);
+</code></pre></div><p>2.OC 执行</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>execute:</span>(HFCDVInvokedUrlCommand<span style=color:#f92672>*</span>)command
+{
+    <span style=color:#66d9ef>if</span> ((command.className <span style=color:#f92672>==</span> nil) <span style=color:#f92672>||</span> (command.methodName <span style=color:#f92672>==</span> nil)) {
+        DLog(<span style=color:#e6db74>@&#34;ERROR: Classname and/or methodName not found for command.&#34;</span>);
+        <span style=color:#66d9ef>return</span> NO;
+    }
+    
+    <span style=color:#66d9ef>if</span> ([command.className isEqualToString:<span style=color:#e6db74>@&#34;DeviceReadyDummyClass&#34;</span>] <span style=color:#f92672>&amp;&amp;</span>
+        [command.methodName isEqualToString:<span style=color:#e6db74>@&#34;deviceReady&#34;</span>]) {
+        [[NSNotificationCenter defaultCenter]postNotificationName:k_NOTIF_DEVICE_READY object:_viewController];
+        <span style=color:#66d9ef>return</span> YES;
+    }
+
+    <span style=color:#75715e>// Fetch an instance of this class
+</span><span style=color:#75715e></span>    HFCDVPlugin<span style=color:#f92672>*</span> obj <span style=color:#f92672>=</span> [_viewController.commandDelegate getCommandInstance:command.className];
+
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>([obj isKindOfClass:[HFCDVPlugin <span style=color:#66d9ef>class</span>]])) {
+        DLog(<span style=color:#e6db74>@&#34;ERROR: Plugin &#39;%@&#39; not found, or is not a HFCDVPlugin. Check your plugin mapping in config.xml.&#34;</span>, command.className);
+        <span style=color:#66d9ef>return</span> NO;
+    }
+    <span style=color:#66d9ef>BOOL</span> retVal <span style=color:#f92672>=</span> YES;
+    <span style=color:#66d9ef>double</span> started <span style=color:#f92672>=</span> [[NSDate date] timeIntervalSince1970] <span style=color:#f92672>*</span> <span style=color:#ae81ff>1000.0</span>;
+    <span style=color:#75715e>// Find the proper selector to call.
+</span><span style=color:#75715e></span>    NSString<span style=color:#f92672>*</span> methodName <span style=color:#f92672>=</span> [NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@:&#34;</span>, command.methodName];
+    <span style=color:#66d9ef>SEL</span> normalSelector <span style=color:#f92672>=</span> NSSelectorFromString(methodName);
+    <span style=color:#66d9ef>if</span> ([obj respondsToSelector:normalSelector]) {
+        <span style=color:#75715e>// [obj performSelector:normalSelector withObject:command];
+</span><span style=color:#75715e></span>        ((<span style=color:#66d9ef>void</span> (<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>, <span style=color:#66d9ef>id</span>))objc_msgSend)(obj, normalSelector, command);
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#75715e>// There&#39;s no method to call, so throw an error.
+</span><span style=color:#75715e></span>        DLog(<span style=color:#e6db74>@&#34;ERROR: Method &#39;%@&#39; not defined in Plugin &#39;%@&#39;&#34;</span>, methodName, command.className);
+        retVal <span style=color:#f92672>=</span> NO;
+    }
+    <span style=color:#66d9ef>double</span> elapsed <span style=color:#f92672>=</span> [[NSDate date] timeIntervalSince1970] <span style=color:#f92672>*</span> <span style=color:#ae81ff>1000.0</span> <span style=color:#f92672>-</span> started;
+    <span style=color:#66d9ef>if</span> (elapsed <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>10</span>) {
+        DLog(<span style=color:#e6db74>@&#34;THREAD WARNING: [&#39;%@&#39;] took &#39;%f&#39; ms. Plugin should use a background thread.&#34;</span>, command.className, elapsed);
+    }
+    <span style=color:#66d9ef>return</span> retVal;
+}
+
+</code></pre></div><p>####六.回调方法</p><p>JS端拿到数据根据 callbackId 回调</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript><span style=color:#75715e>// 根据 callbackId 及是否成功标识，找到回调方法，并把处理结果传给回调方法
+</span><span style=color:#75715e></span><span style=color:#a6e22e>callbackFromNative</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>callbackId</span>, <span style=color:#a6e22e>success</span>, <span style=color:#a6e22e>status</span>, <span style=color:#a6e22e>args</span>, <span style=color:#a6e22e>keepCallback</span>) {
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>callback</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cordova</span>.<span style=color:#a6e22e>callbacks</span>[<span style=color:#a6e22e>callbackId</span>];
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>callback</span>) {
+        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>success</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>status</span> <span style=color:#f92672>==</span> <span style=color:#a6e22e>cordova</span>.<span style=color:#a6e22e>callbackStatus</span>.<span style=color:#a6e22e>OK</span>) {
+            <span style=color:#a6e22e>callback</span>.<span style=color:#a6e22e>success</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>callback</span>.<span style=color:#a6e22e>success</span>.<span style=color:#a6e22e>apply</span>(<span style=color:#66d9ef>null</span>, <span style=color:#a6e22e>args</span>);
+        } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>success</span>) {
+            <span style=color:#a6e22e>callback</span>.<span style=color:#a6e22e>fail</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>callback</span>.<span style=color:#a6e22e>fail</span>.<span style=color:#a6e22e>apply</span>(<span style=color:#66d9ef>null</span>, <span style=color:#a6e22e>args</span>);
+        }
+        
+        <span style=color:#75715e>// Clear callback if not expecting any more results
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>keepCallback</span>) {
+            <span style=color:#66d9ef>delete</span> <span style=color:#a6e22e>cordova</span>.<span style=color:#a6e22e>callbacks</span>[<span style=color:#a6e22e>callbackId</span>];
+        }
+    }
+}
+</code></pre></div><blockquote><p>GitHub Repo：<a href=https://github.com/halfrost/Halfrost-Field>Halfrost-Field</a></p><p>Follow: <a href=https://github.com/halfrost>halfrost · GitHub</a></p><p>Source: <a href=https://halfrost.com/ios_hybrid_phonegap/>https://halfrost.com/ios_hybrid_phonegap/</a></p></blockquote><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&text=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&is_video=false&description=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&title=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&name=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap&description=%23%23%23%23%e5%89%8d%e8%a8%80%0aHybrid%20App%ef%bc%88%e6%b7%b7%e5%90%88%e6%a8%a1%e5%bc%8f%e7%a7%bb%e5%8a%a8%e5%ba%94%e7%94%a8%ef%bc%89%e6%98%af%e6%8c%87%e4%bb%8b%e4%ba%8eweb-app%e3%80%81native-app%e8%bf%99%e4%b8%a4%e8%80%85%e4%b9%8b%e9%97%b4%e7%9a%84app%ef%bc%8c%e5%85%bc%e5%85%b7%e2%80%9cNative%20App%e8%89%af%e5%a5%bd%e7%94%a8%e6%88%b7%e4%ba%a4%e4%ba%92%e4%bd%93%e9%aa%8c%e7%9a%84%e4%bc%98%e5%8a%bf%e2%80%9d%e5%92%8c%e2%80%9cWeb%20App%e8%b7%a8%e5%b9%b3%e5%8f%b0%e5%bc%80%e5%8f%91%e7%9a%84%e4%bc%98%e5%8a%bf%e2%80%9d%e3%80%82%0aHybrid%20App%e6%8c%89%e7%bd%91%e9%a1%b5%e8%af%ad%e8%a8%80%e4%b8%8e%e7%a8%8b%e5%ba%8f%e8%af%ad%e8%a8%80%e7%9a%84%e6%b7%b7%e5%90%88%ef%bc%8c%e9%80%9a%e5%b8%b8%e5%88%86%e4%b8%ba%e4%b8%89%e7%a7%8d%e7%b1%bb%e5%9e%8b%ef%bc%9a%e5%a4%9aView%e6%b7%b7%e5%90%88%e5%9e%8b%ef%bc%8c%e5%8d%95View%e6%b7%b7%e5%90%88%e5%9e%8b%ef%bc%8cWeb%e4%b8%bb%e4%bd%93%e5%9e%8b%ef%bc%8c3%e7%a7%8d%e7%b1%bb%e5%9e%8b%e6%af%94%e8%be%83%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%e4%bb%8a%e5%a4%a9%e6%88%91%e6%9d%a5%e8%b0%88%e8%b0%88Web%e4%b8%bb%e4%bd%93%e5%9e%8b%e4%b8%adHybrid%e6%a1%86%e6%9e%b6%e9%87%8c%e9%9d%a2%e6%af%94%e8%be%83%e6%9c%89%e5%90%8d%e7%9a%84PhoneGap%0a%23%23%23%23%e4%b8%80.Cordova%20%e8%af%b4%e5%88%b0PhoneGap%ef%bc%8c%e5%b0%b1%e4%b8%8d%e5%be%97%e4%b8%8d%e8%af%b4%e5%88%b0Cordova%0aCordova%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%8f%af%e4%bb%a5%e8%ae%a9%20JS%20%e4%b8%8e%e5%8e%9f%e7%94%9f%e4%bb%a3%e7%a0%81%28%e5%8c%85%e6%8b%ac%20Android%20%e7%9a%84%20java%ef%bc%8ciOS%20%e7%9a%84%20Objective-C%20%e7%ad%89%29%e4%ba%92%e7%9b%b8%e9%80%9a%e4%bf%a1%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ba%93%ef%bc%8c%e5%b9%b6%e4%b8%94%e6%8f%90%e4%be%9b%e4%ba%86%e4%b8%80%e7%b3%bb%e5%88%97%e7%9a%84%e6%8f%92%e4%bb%b6%e7%b1%bb%ef%bc%8c%e6%af%94%e5%a6%82%20JS%20%e7%9b%b4%e6%8e%a5%e6%93%8d%e4%bd%9c%e6%9c%ac%e5%9c%b0%e6%95%b0%e6%8d%ae%e5%ba%93%e7%9a%84%e6%8f%92%e4%bb%b6%e7%b1%bb%e3%80%82%0aCordova%e7%9a%84%e8%ae%be%e8%ae%a1%e6%a6%82%e5%bf%b5%ef%bc%8c%e6%98%af%e5%9c%a8APP%e4%b8%8a%e9%80%8f%e8%bf%87Web%e6%8e%a7%e4%bb%b6%e6%9d%a5%e5%91%88%e7%8e%b0Web%e9%a1%b5%e9%9d%a2%ef%bc%8c%e8%ae%a9Web%e5%bc%80%e5%8f%91%e4%ba%ba%e5%91%98%e5%8f%af%e4%bb%a5%e6%93%8d%e4%bd%9c%e7%86%9f%e6%82%89%e7%9a%84%e8%af%ad%e8%a8%80%e3%80%81%e5%b7%a5%e5%85%b7%e6%9d%a5%e5%bc%80%e5%8f%91APP.%0a%e4%b8%ba%e4%ba%86%e8%ae%a9Web%e9%a1%b5%e9%9d%a2%e8%83%bd%e5%a4%9f%e6%bb%a1%e8%b6%b3%e6%9b%b4%e5%a4%9a%e7%9a%84APP%e5%8a%9f%e8%83%bd%e9%9c%80%e6%b1%82%ef%bc%8cCordova%e6%8f%90%e4%be%9b%e4%ba%86Plugin%e6%9c%ba%e5%88%b6%ef%bc%8c%e8%ae%a9Web%e9%a1%b5%e9%9d%a2%e8%83%bd%e5%a4%9f%e6%8c%82%e8%bd%bd%e5%b9%b6%e8%b0%83%e7%94%a8Native%e5%bc%80%e5%8f%91%e6%8a%80%e6%9c%af%e6%89%80%e5%bc%80%e5%8f%91%e7%9a%84%e5%8a%9f%e8%83%bd%e6%a8%a1%e5%9d%97%0aCordova%e5%9c%a8%e7%b3%bb%e7%bb%9f%e4%b8%ad%e7%9a%84%e5%b1%82%e7%ba%a7%e5%ba%94%e8%af%a5%e6%98%af%e8%bf%99%e6%a0%b7%e5%ad%90%e7%9a%84%3a%0aCordova%e7%9a%84%e5%b1%82%e7%ba%a7%e7%bb%93%e6%9e%84%e6%98%af%e4%b8%8b%e5%9b%be%e8%bf%99%e6%a0%b7%e7%9a%84%3a%0aCordova%e5%8f%88%e5%8f%af%e4%bb%a5%e5%92%8cAngular%e7%9b%b8%e7%bb%93%e5%90%88%ef%bc%8c%e5%8f%98%e6%88%90ngCordova%0aCordova%20%2b%20Angular%20%3d%20ngCordova%20%23%23%23%23%e4%ba%8c.JS%20%e4%b8%8e%20Objective-C%20%e9%80%9a%e4%bf%a1%20JS%20%e4%bd%bf%e7%94%a8%e4%ba%86%e4%b8%a4%e7%a7%8d%e6%96%b9%e5%bc%8f%e6%9d%a5%e4%b8%8e%20Objective-C%20%e9%80%9a%e4%bf%a1%ef%bc%8c%e4%b8%80%e7%a7%8d%e6%98%af%e4%bd%bf%e7%94%a8%20XMLHttpRequest%20%e5%8f%91%e8%b5%b7%e8%af%b7%e6%b1%82%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%8c%e5%8f%a6%e4%b8%80%e7%a7%8d%e5%88%99%e6%98%af%e9%80%9a%e8%bf%87%e8%ae%be%e7%bd%ae%e9%80%8f%e6%98%8e%e7%9a%84%20iframe%20%e7%9a%84%20src%20%e5%b1%9e%e6%80%a7%e3%80%82%0a%e6%88%91%e6%8e%a5%e4%b8%8b%e6%9d%a5%e8%af%b4%e7%9a%84%e4%b8%bb%e8%a6%81%e6%98%af%e7%ac%ac%e4%ba%8c%e7%a7%8d%e6%96%b9%e5%bc%8f%ef%bc%8ciframe%20bridge%e3%80%82%0a%e9%80%9a%e8%bf%87%e5%9c%a8%20JS%20%e7%ab%af%e5%88%9b%e5%bb%ba%e4%b8%80%e4%b8%aa%e9%80%8f%e6%98%8e%e7%9a%84%20iframe%ef%bc%8c%e8%ae%be%e7%bd%ae%e8%bf%99%e4%b8%aa%20ifame%20%e7%9a%84%20src%20%e4%b8%ba%e8%87%aa%e5%ae%9a%e4%b9%89%e7%9a%84%e5%8d%8f%e8%ae%ae%ef%bc%8c%e8%80%8c%20ifame%20%e7%9a%84%20src%20%e6%9b%b4%e6%94%b9%e6%97%b6%ef%bc%8cUIWebView%20%e4%bc%9a%e5%85%88%e5%9b%9e%e8%b0%83%e5%85%b6%20delegate%20%e7%9a%84%20webView%3ashouldStartLoadWithRequest%3anavigationType%3a%20%e6%96%b9%e6%b3%95%0a%e8%af%b4%e7%9a%84%e8%bf%98%e6%98%af%e5%be%88%e6%8a%bd%e8%b1%a1%e7%9a%84%ef%bc%8c%e6%9d%a5%e5%ae%9e%e9%99%85%e7%9c%8b%e4%b8%80%e6%ae%b5%e4%bb%a3%e7%a0%81%0a%e5%9c%a8cordova.js%20%e9%87%8c%e9%9d%a2%ef%bc%8c%e6%98%af%e8%bf%99%e6%a0%b7%e5%ad%90%e5%ae%9e%e7%8e%b0%e7%9a%84%0afunction%20iOSExec%28%29%20%7b%20."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_hybrid_phonegap%2f&t=iOS%20Hybrid%20%e6%a1%86%e6%9e%b6%20%e2%80%94%e2%80%94%20PhoneGap"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

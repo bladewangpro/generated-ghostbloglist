@@ -1,0 +1,392 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>ReactiveCocoa 中 RACCommand 底层实现分析 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="ReactiveCocoa 中 RACCommand 底层实现分析"><meta property="og:description" content="前言 在ReactiveCocoa 过程中，除去RACSignal和RACSubject这些信号类以外，有些时候我们可能还需要封装一些固定的操作集合。这些操作集合都是固定的，每次只要一触发就会执行事先定义好的一个过程。在iOS开发过程中，按钮的点击事件就可能有这种需求。那么RACCommand就可以实现这种需求。
+当然除了封装一个操作集合以外，RACCommand还能集中处理错误等等功能。今天就来从底层来看看RACCommand是如何实现的。
+目录  1.RACCommand的定义 2.initWithEnabled: signalBlock: 底层实现分析 3.execute:底层实现分析 4.RACCommand的一些Category  一. RACCommand的定义 首先说说RACCommand的作用。 RACCommand 在ReactiveCocoa 中是对一个动作的触发条件以及它产生的触发事件的封装。
+  触发条件：初始化RACCommand的入参enabledSignal就决定了RACCommand是否能开始执行。入参enabledSignal就是触发条件。举个例子，一个按钮是否能点击，是否能触发点击事情，就由入参enabledSignal决定。
+  触发事件：初始化RACCommand的另外一个入参(RACSignal * (^)(id input))signalBlock就是对触发事件的封装。RACCommand每次执行都会调用一次signalBlock闭包。
+  RACCommand最常见的例子就是在注册登录的时候，点击获取验证码的按钮，这个按钮的点击事件和触发条件就可以用RACCommand来封装，触发条件是一个信号，它可以是验证手机号，验证邮箱，验证身份证等一些验证条件产生的enabledSignal。触发事件就是按钮点击之后执行的事件，可以是发送验证码的网络请求。
+RACCommand在ReactiveCocoa中算是很特别的一种存在，因为它的实现并不是FRP实现的，是OOP实现的。RACCommand的本质就是一个对象，在这个对象里面封装了4个信号。
+关于RACCommand的定义如下：
+@interface RACCommand : NSObject @property (nonatomic, strong, readonly) RACSignal *executionSignals; @property (nonatomic, strong, readonly) RACSignal *executing; @property (nonatomic, strong, readonly) RACSignal *enabled; @property (nonatomic, strong, readonly) RACSignal *errors; @property (atomic, assign) BOOL allowsConcurrentExecution; volatile uint32_t _allowsConcurrentExecution; @property (atomic, copy, readonly) NSArray *activeExecutionSignals; NSMutableArray *_activeExecutionSignals; @property (nonatomic, strong, readonly) RACSignal *immediateEnabled; @property (nonatomic, copy, readonly) RACSignal * (^signalBlock)(id input); @end RACCommand中4个最重要的信号就是定义开头的那4个信号，executionSignals，executing，enabled，errors。需要注意的是，这4个信号基本都是（并不是完全是）在主线程上执行的。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/reactivecocoa_raccommand/"><meta property="article:published_time" content="2017-01-07T01:59:00+00:00"><meta property="article:modified_time" content="2017-01-07T01:59:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="ReactiveCocoa 中 RACCommand 底层实现分析"><meta name=twitter:description content="前言 在ReactiveCocoa 过程中，除去RACSignal和RACSubject这些信号类以外，有些时候我们可能还需要封装一些固定的操作集合。这些操作集合都是固定的，每次只要一触发就会执行事先定义好的一个过程。在iOS开发过程中，按钮的点击事件就可能有这种需求。那么RACCommand就可以实现这种需求。
+当然除了封装一个操作集合以外，RACCommand还能集中处理错误等等功能。今天就来从底层来看看RACCommand是如何实现的。
+目录  1.RACCommand的定义 2.initWithEnabled: signalBlock: 底层实现分析 3.execute:底层实现分析 4.RACCommand的一些Category  一. RACCommand的定义 首先说说RACCommand的作用。 RACCommand 在ReactiveCocoa 中是对一个动作的触发条件以及它产生的触发事件的封装。
+  触发条件：初始化RACCommand的入参enabledSignal就决定了RACCommand是否能开始执行。入参enabledSignal就是触发条件。举个例子，一个按钮是否能点击，是否能触发点击事情，就由入参enabledSignal决定。
+  触发事件：初始化RACCommand的另外一个入参(RACSignal * (^)(id input))signalBlock就是对触发事件的封装。RACCommand每次执行都会调用一次signalBlock闭包。
+  RACCommand最常见的例子就是在注册登录的时候，点击获取验证码的按钮，这个按钮的点击事件和触发条件就可以用RACCommand来封装，触发条件是一个信号，它可以是验证手机号，验证邮箱，验证身份证等一些验证条件产生的enabledSignal。触发事件就是按钮点击之后执行的事件，可以是发送验证码的网络请求。
+RACCommand在ReactiveCocoa中算是很特别的一种存在，因为它的实现并不是FRP实现的，是OOP实现的。RACCommand的本质就是一个对象，在这个对象里面封装了4个信号。
+关于RACCommand的定义如下：
+@interface RACCommand : NSObject @property (nonatomic, strong, readonly) RACSignal *executionSignals; @property (nonatomic, strong, readonly) RACSignal *executing; @property (nonatomic, strong, readonly) RACSignal *enabled; @property (nonatomic, strong, readonly) RACSignal *errors; @property (atomic, assign) BOOL allowsConcurrentExecution; volatile uint32_t _allowsConcurrentExecution; @property (atomic, copy, readonly) NSArray *activeExecutionSignals; NSMutableArray *_activeExecutionSignals; @property (nonatomic, strong, readonly) RACSignal *immediateEnabled; @property (nonatomic, copy, readonly) RACSignal * (^signalBlock)(id input); @end RACCommand中4个最重要的信号就是定义开头的那4个信号，executionSignals，executing，enabled，errors。需要注意的是，这4个信号基本都是（并不是完全是）在主线程上执行的。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/reactivecocoa_racscheduler/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/reactivecocoa_macro/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&text=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&name=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8ReactiveCocoa%20%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e9%99%a4%e5%8e%bbRACSignal%e5%92%8cRACSubject%e8%bf%99%e4%ba%9b%e4%bf%a1%e5%8f%b7%e7%b1%bb%e4%bb%a5%e5%a4%96%ef%bc%8c%e6%9c%89%e4%ba%9b%e6%97%b6%e5%80%99%e6%88%91%e4%bb%ac%e5%8f%af%e8%83%bd%e8%bf%98%e9%9c%80%e8%a6%81%e5%b0%81%e8%a3%85%e4%b8%80%e4%ba%9b%e5%9b%ba%e5%ae%9a%e7%9a%84%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e3%80%82%e8%bf%99%e4%ba%9b%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e9%83%bd%e6%98%af%e5%9b%ba%e5%ae%9a%e7%9a%84%ef%bc%8c%e6%af%8f%e6%ac%a1%e5%8f%aa%e8%a6%81%e4%b8%80%e8%a7%a6%e5%8f%91%e5%b0%b1%e4%bc%9a%e6%89%a7%e8%a1%8c%e4%ba%8b%e5%85%88%e5%ae%9a%e4%b9%89%e5%a5%bd%e7%9a%84%e4%b8%80%e4%b8%aa%e8%bf%87%e7%a8%8b%e3%80%82%e5%9c%a8iOS%e5%bc%80%e5%8f%91%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e6%8c%89%e9%92%ae%e7%9a%84%e7%82%b9%e5%87%bb%e4%ba%8b%e4%bb%b6%e5%b0%b1%e5%8f%af%e8%83%bd%e6%9c%89%e8%bf%99%e7%a7%8d%e9%9c%80%e6%b1%82%e3%80%82%e9%82%a3%e4%b9%88RACCommand%e5%b0%b1%e5%8f%af%e4%bb%a5%e5%ae%9e%e7%8e%b0%e8%bf%99%e7%a7%8d%e9%9c%80%e6%b1%82%e3%80%82%0a%e5%bd%93%e7%84%b6%e9%99%a4%e4%ba%86%e5%b0%81%e8%a3%85%e4%b8%80%e4%b8%aa%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e4%bb%a5%e5%a4%96%ef%bc%8cRACCommand%e8%bf%98%e8%83%bd%e9%9b%86%e4%b8%ad%e5%a4%84%e7%90%86%e9%94%99%e8%af%af%e7%ad%89%e7%ad%89%e5%8a%9f%e8%83%bd%e3%80%82%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e4%bb%8e%e5%ba%95%e5%b1%82%e6%9d%a5%e7%9c%8b%e7%9c%8bRACCommand%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.RACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%202.initWithEnabled%3a%20signalBlock%3a%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%203.execute%3a%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%204.RACCommand%e7%9a%84%e4%b8%80%e4%ba%9bCategory%20%20%e4%b8%80.%20RACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%20%e9%a6%96%e5%85%88%e8%af%b4%e8%af%b4RACCommand%e7%9a%84%e4%bd%9c%e7%94%a8%e3%80%82%20RACCommand%20%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%e6%98%af%e5%af%b9%e4%b8%80%e4%b8%aa%e5%8a%a8%e4%bd%9c%e7%9a%84%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e4%bb%a5%e5%8f%8a%e5%ae%83%e4%ba%a7%e7%94%9f%e7%9a%84%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e7%9a%84%e5%b0%81%e8%a3%85%e3%80%82%0a%20%20%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%ef%bc%9a%e5%88%9d%e5%a7%8b%e5%8c%96RACCommand%e7%9a%84%e5%85%a5%e5%8f%82enabledSignal%e5%b0%b1%e5%86%b3%e5%ae%9a%e4%ba%86RACCommand%e6%98%af%e5%90%a6%e8%83%bd%e5%bc%80%e5%a7%8b%e6%89%a7%e8%a1%8c%e3%80%82%e5%85%a5%e5%8f%82enabledSignal%e5%b0%b1%e6%98%af%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e3%80%82%e4%b8%be%e4%b8%aa%e4%be%8b%e5%ad%90%ef%bc%8c%e4%b8%80%e4%b8%aa%e6%8c%89%e9%92%ae%e6%98%af%e5%90%a6%e8%83%bd%e7%82%b9%e5%87%bb%ef%bc%8c%e6%98%af%e5%90%a6%e8%83%bd%e8%a7%a6%e5%8f%91%e7%82%b9%e5%87%bb%e4%ba%8b%e6%83%85%ef%bc%8c%e5%b0%b1%e7%94%b1%e5%85%a5%e5%8f%82enabledSignal%e5%86%b3%e5%ae%9a%e3%80%82%0a%20%20%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%ef%bc%9a%e5%88%9d%e5%a7%8b%e5%8c%96RACCommand%e7%9a%84%e5%8f%a6%e5%a4%96%e4%b8%80%e4%b8%aa%e5%85%a5%e5%8f%82%28RACSignal%20%2a%20%28%5e%29%28id%20input%29%29signalBlock%e5%b0%b1%e6%98%af%e5%af%b9%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e7%9a%84%e5%b0%81%e8%a3%85%e3%80%82RACCommand%e6%af%8f%e6%ac%a1%e6%89%a7%e8%a1%8c%e9%83%bd%e4%bc%9a%e8%b0%83%e7%94%a8%e4%b8%80%e6%ac%a1signalBlock%e9%97%ad%e5%8c%85%e3%80%82%0a%20%20RACCommand%e6%9c%80%e5%b8%b8%e8%a7%81%e7%9a%84%e4%be%8b%e5%ad%90%e5%b0%b1%e6%98%af%e5%9c%a8%e6%b3%a8%e5%86%8c%e7%99%bb%e5%bd%95%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8c%e7%82%b9%e5%87%bb%e8%8e%b7%e5%8f%96%e9%aa%8c%e8%af%81%e7%a0%81%e7%9a%84%e6%8c%89%e9%92%ae%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%8c%89%e9%92%ae%e7%9a%84%e7%82%b9%e5%87%bb%e4%ba%8b%e4%bb%b6%e5%92%8c%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e5%b0%b1%e5%8f%af%e4%bb%a5%e7%94%a8RACCommand%e6%9d%a5%e5%b0%81%e8%a3%85%ef%bc%8c%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e6%98%af%e4%b8%80%e4%b8%aa%e4%bf%a1%e5%8f%b7%ef%bc%8c%e5%ae%83%e5%8f%af%e4%bb%a5%e6%98%af%e9%aa%8c%e8%af%81%e6%89%8b%e6%9c%ba%e5%8f%b7%ef%bc%8c%e9%aa%8c%e8%af%81%e9%82%ae%e7%ae%b1%ef%bc%8c%e9%aa%8c%e8%af%81%e8%ba%ab%e4%bb%bd%e8%af%81%e7%ad%89%e4%b8%80%e4%ba%9b%e9%aa%8c%e8%af%81%e6%9d%a1%e4%bb%b6%e4%ba%a7%e7%94%9f%e7%9a%84enabledSignal%e3%80%82%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e5%b0%b1%e6%98%af%e6%8c%89%e9%92%ae%e7%82%b9%e5%87%bb%e4%b9%8b%e5%90%8e%e6%89%a7%e8%a1%8c%e7%9a%84%e4%ba%8b%e4%bb%b6%ef%bc%8c%e5%8f%af%e4%bb%a5%e6%98%af%e5%8f%91%e9%80%81%e9%aa%8c%e8%af%81%e7%a0%81%e7%9a%84%e7%bd%91%e7%bb%9c%e8%af%b7%e6%b1%82%e3%80%82%0aRACCommand%e5%9c%a8ReactiveCocoa%e4%b8%ad%e7%ae%97%e6%98%af%e5%be%88%e7%89%b9%e5%88%ab%e7%9a%84%e4%b8%80%e7%a7%8d%e5%ad%98%e5%9c%a8%ef%bc%8c%e5%9b%a0%e4%b8%ba%e5%ae%83%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%b9%b6%e4%b8%8d%e6%98%afFRP%e5%ae%9e%e7%8e%b0%e7%9a%84%ef%bc%8c%e6%98%afOOP%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82RACCommand%e7%9a%84%e6%9c%ac%e8%b4%a8%e5%b0%b1%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%9c%a8%e8%bf%99%e4%b8%aa%e5%af%b9%e8%b1%a1%e9%87%8c%e9%9d%a2%e5%b0%81%e8%a3%85%e4%ba%864%e4%b8%aa%e4%bf%a1%e5%8f%b7%e3%80%82%0a%e5%85%b3%e4%ba%8eRACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%40interface%20RACCommand%20%3a%20NSObject%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aexecutionSignals%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aexecuting%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aenabled%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aerrors%3b%20%40property%20%28atomic%2c%20assign%29%20BOOL%20allowsConcurrentExecution%3b%20volatile%20uint32_t%20_allowsConcurrentExecution%3b%20%40property%20%28atomic%2c%20copy%2c%20readonly%29%20NSArray%20%2aactiveExecutionSignals%3b%20NSMutableArray%20%2a_activeExecutionSignals%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aimmediateEnabled%3b%20%40property%20%28nonatomic%2c%20copy%2c%20readonly%29%20RACSignal%20%2a%20%28%5esignalBlock%29%28id%20input%29%3b%20%40end%20RACCommand%e4%b8%ad4%e4%b8%aa%e6%9c%80%e9%87%8d%e8%a6%81%e7%9a%84%e4%bf%a1%e5%8f%b7%e5%b0%b1%e6%98%af%e5%ae%9a%e4%b9%89%e5%bc%80%e5%a4%b4%e7%9a%84%e9%82%a34%e4%b8%aa%e4%bf%a1%e5%8f%b7%ef%bc%8cexecutionSignals%ef%bc%8cexecuting%ef%bc%8cenabled%ef%bc%8cerrors%e3%80%82%e9%9c%80%e8%a6%81%e6%b3%a8%e6%84%8f%e7%9a%84%e6%98%af%ef%bc%8c%e8%bf%994%e4%b8%aa%e4%bf%a1%e5%8f%b7%e5%9f%ba%e6%9c%ac%e9%83%bd%e6%98%af%ef%bc%88%e5%b9%b6%e4%b8%8d%e6%98%af%e5%ae%8c%e5%85%a8%e6%98%af%ef%bc%89%e5%9c%a8%e4%b8%bb%e7%ba%bf%e7%a8%8b%e4%b8%8a%e6%89%a7%e8%a1%8c%e7%9a%84%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&t=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-raccommand的定义>一. RACCommand的定义</a><ul><li><a href=#1-racsignal-executionsignals>1. RACSignal *executionSignals</a></li><li><a href=#2-racsignal-executing>2. RACSignal *executing</a></li><li><a href=#3-racsignal-enabled>3. RACSignal *enabled</a></li><li><a href=#4-racsignal-errors>4. RACSignal *errors</a></li><li><a href=#5-bool-allowsconcurrentexecution>5. BOOL allowsConcurrentExecution</a></li><li><a href=#6-nsarray-activeexecutionsignals>6. NSArray *activeExecutionSignals</a></li><li><a href=#7-racsignal-immediateenabled>7. RACSignal *immediateEnabled</a></li><li><a href=#8-racsignal--signalblockid-input>8. RACSignal * (^signalBlock)(id input)</a></li></ul></li><li><a href=#二-initwithenabled-signalblock-底层实现分析>二. initWithEnabled: signalBlock: 底层实现分析</a><ul><li><a href=#1-executionsignals信号的初始化>1. executionSignals信号的初始化</a></li><li><a href=#2-errors信号的初始化>2. errors信号的初始化</a></li><li><a href=#3-executing信号的初始化>3. executing信号的初始化</a></li><li><a href=#4-enabled信号的初始化>4. enabled信号的初始化</a></li></ul></li><li><a href=#三-execute底层实现分析>三. execute:底层实现分析</a></li><li><a href=#四-raccommand的一些category>四. RACCommand的一些Category</a><ul><li><a href=#1-uibarbuttonitemraccommandsupport>1. UIBarButtonItem+RACCommandSupport</a></li><li><a href=#2-uibuttonraccommandsupport>2. UIButton+RACCommandSupport</a></li><li><a href=#3-uirefreshcontrolraccommandsupport>3. UIRefreshControl+RACCommandSupport</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">ReactiveCocoa 中 RACCommand 底层实现分析</h1><div class=meta><div class=postdate><time datetime="2017-01-07 01:59:00 +0000 UTC" itemprop=datePublished>Jan 07</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/reactivecocoa>ReactiveCocoa</a>
+,
+<a class=category-link href=/categories/rac>RAC</a>
+,
+<a class=category-link href=/categories/raccommand>RACCommand</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/reactivecocoa rel=tag>ReactiveCocoa</a>
+,
+<a class=tag-link href=/tags/rac rel=tag>RAC</a>
+,
+<a class=tag-link href=/tags/raccommand rel=tag>RACCommand</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>在ReactiveCocoa 过程中，除去RACSignal和RACSubject这些信号类以外，有些时候我们可能还需要封装一些固定的操作集合。这些操作集合都是固定的，每次只要一触发就会执行事先定义好的一个过程。在iOS开发过程中，按钮的点击事件就可能有这种需求。那么RACCommand就可以实现这种需求。</p><p>当然除了封装一个操作集合以外，RACCommand还能集中处理错误等等功能。今天就来从底层来看看RACCommand是如何实现的。</p><h3 id=目录>目录</h3><ul><li>1.RACCommand的定义</li><li>2.initWithEnabled: signalBlock: 底层实现分析</li><li>3.execute:底层实现分析</li><li>4.RACCommand的一些Category</li></ul><h3 id=一-raccommand的定义>一. RACCommand的定义</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_1.png alt></p><p>首先说说RACCommand的作用。
+RACCommand 在ReactiveCocoa 中是对一个动作的触发条件以及它产生的触发事件的封装。</p><ul><li><p>触发条件：初始化RACCommand的入参enabledSignal就决定了RACCommand是否能开始执行。入参enabledSignal就是触发条件。举个例子，一个按钮是否能点击，是否能触发点击事情，就由入参enabledSignal决定。</p></li><li><p>触发事件：初始化RACCommand的另外一个入参(RACSignal * (^)(id input))signalBlock就是对触发事件的封装。RACCommand每次执行都会调用一次signalBlock闭包。</p></li></ul><p>RACCommand最常见的例子就是在注册登录的时候，点击获取验证码的按钮，这个按钮的点击事件和触发条件就可以用RACCommand来封装，触发条件是一个信号，它可以是验证手机号，验证邮箱，验证身份证等一些验证条件产生的enabledSignal。触发事件就是按钮点击之后执行的事件，可以是发送验证码的网络请求。</p><p>RACCommand在ReactiveCocoa中算是很特别的一种存在，因为它的实现并不是FRP实现的，是OOP实现的。RACCommand的本质就是一个对象，在这个对象里面封装了4个信号。</p><p>关于RACCommand的定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACCommand</span> : <span style=color:#a6e22e>NSObject</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span>executionSignals;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span>executing;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span>enabled;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span>errors;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>atomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> allowsConcurrentExecution;
+<span style=color:#66d9ef>volatile</span> uint32_t _allowsConcurrentExecution;
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>atomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) NSArray <span style=color:#f92672>*</span>activeExecutionSignals;
+NSMutableArray <span style=color:#f92672>*</span>_activeExecutionSignals;
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span>immediateEnabled;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>, <span style=color:#66d9ef>readonly</span>) RACSignal <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>signalBlock)(<span style=color:#66d9ef>id</span> input);
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>RACCommand中4个最重要的信号就是定义开头的那4个信号，executionSignals，executing，enabled，errors。需要注意的是，<strong>这4个信号基本都是（并不是完全是）在主线程上执行的</strong>。</p><h4 id=1-racsignal-executionsignals>1. RACSignal *executionSignals</h4><p>executionSignals是一个高阶信号，所以在使用的时候需要进行降阶操作，降价操作在前面分析过了，在ReactiveCocoa v2.5中只支持3种降阶方式，flatten，switchToLatest，concat。降阶的方式就根据需求来选取。</p><p>还有选择原则是，如果在不允许Concurrent并发的RACCommand中一般使用switchToLatest。如果在允许Concurrent并发的RACCommand中一般使用flatten。</p><h4 id=2-racsignal-executing>2. RACSignal *executing</h4><p>executing这个信号就表示了当前RACCommand是否在执行，信号里面的值都是BOOL类型的。YES表示的是RACCommand正在执行过程中，命名也说明的是正在进行时ing。NO表示的是RACCommand没有被执行或者已经执行结束。</p><h4 id=3-racsignal-enabled>3. RACSignal *enabled</h4><p>enabled信号就是一个开关，RACCommand是否可用。这个信号除去以下2种情况会返回NO：</p><ul><li>RACCommand 初始化传入的enabledSignal信号，如果返回NO，那么enabled信号就返回NO。</li><li>RACCommand开始执行中，allowsConcurrentExecution为NO，那么enabled信号就返回NO。</li></ul><p>除去以上2种情况以外，enabled信号基本都是返回YES。</p><h4 id=4-racsignal-errors>4. RACSignal *errors</h4><p>errors信号就是RACCommand执行过程中产生的错误信号。这里特别需要注意的是：在对RACCommand进行错误处理的时候，<strong>我们不应该使用subscribeError:对RACCommand的executionSignals
+进行错误的订阅</strong>，因为executionSignals这个信号是不会发送error事件的，那当RACCommand包裹的信号发送error事件时，我们要怎样去订阅到它呢？应该<strong>用subscribeNext:去订阅错误信号</strong>。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[commandSignal.errors subscribeNext:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>x) {     
+    NSLog(<span style=color:#e6db74>@&#34;ERROR! --&gt; %@&#34;</span>,x);
+}];
+
+</code></pre></div><h4 id=5-bool-allowsconcurrentexecution>5. BOOL allowsConcurrentExecution</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_2.png alt></p><p>allowsConcurrentExecution是一个BOOL变量，它是用来表示当前RACCommand是否允许并发执行。默认值是NO。</p><p>如果allowsConcurrentExecution为NO，那么RACCommand在执行过程中，enabled信号就一定都返回NO，不允许并发执行。如果allowsConcurrentExecution为YES，允许并发执行。</p><p>如果是允许并发执行的话，就会出现多个信号就会出现一起发送值的情况。那么这种情况产生的高阶信号一般可以采取flatten(等效于flatten:0，+merge:)的方式进行降阶。</p><p>这个变量在具体实现中是用的volatile原子的操作，在实现中重写了它的get和set方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 重写 get方法
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>allowsConcurrentExecution</span> {
+    <span style=color:#66d9ef>return</span> _allowsConcurrentExecution <span style=color:#f92672>!=</span> <span style=color:#ae81ff>0</span>;
+}
+
+<span style=color:#75715e>// 重写 set方法
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setAllowsConcurrentExecution:</span>(<span style=color:#66d9ef>BOOL</span>)allowed {
+    [self willChangeValueForKey:@keypath(self.allowsConcurrentExecution)];
+    
+    <span style=color:#66d9ef>if</span> (allowed) {
+        OSAtomicOr32Barrier(<span style=color:#ae81ff>1</span>, <span style=color:#f92672>&amp;</span>_allowsConcurrentExecution);
+    } <span style=color:#66d9ef>else</span> {
+        OSAtomicAnd32Barrier(<span style=color:#ae81ff>0</span>, <span style=color:#f92672>&amp;</span>_allowsConcurrentExecution);
+    }
+    
+    [self didChangeValueForKey:@keypath(self.allowsConcurrentExecution)];
+}
+
+
+</code></pre></div><p>OSAtomicOr32Barrier是原子运算，它的意义是进行逻辑的“或”运算。通过原子性操作访问被volatile修饰的_allowsConcurrentExecution对象即可保障函数只执行一次。相应的OSAtomicAnd32Barrier也是原子运算，它的意义是进行逻辑的“与”运算。</p><h4 id=6-nsarray-activeexecutionsignals>6. NSArray *activeExecutionSignals</h4><p>这个NSArray数组里面装了一个个有序排列的，执行中的信号。NSArray的数组是可以被KVO监听的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSArray <span style=color:#f92672>*</span>)<span style=color:#a6e22e>activeExecutionSignals</span> {
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        <span style=color:#66d9ef>return</span> [_activeExecutionSignals <span style=color:#66d9ef>copy</span>];
+    }
+}
+
+</code></pre></div><p>当然内部还有一个NSMutableArray的版本，NSArray数组是它的copy版本，使用它的时候需要加上线程锁，进行线程安全的保护。</p><p>在RACCommand内部，是对NSMutableArray数组进行操作的，在这里可变数组里面进行增加和删除的操作。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addActiveExecutionSignal:</span>(RACSignal <span style=color:#f92672>*</span>)signal {
+    NSCParameterAssert([signal isKindOfClass:RACSignal.<span style=color:#66d9ef>class</span>]);
+    
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        NSIndexSet <span style=color:#f92672>*</span>indexes <span style=color:#f92672>=</span> [NSIndexSet indexSetWithIndex:_activeExecutionSignals.count];
+        [self willChange:NSKeyValueChangeInsertion valuesAtIndexes:indexes forKey:@keypath(self.activeExecutionSignals)];
+        [_activeExecutionSignals addObject:signal];
+        [self didChange:NSKeyValueChangeInsertion valuesAtIndexes:indexes forKey:@keypath(self.activeExecutionSignals)];
+    }
+}
+
+
+</code></pre></div><p>在往数组里面添加数据的时候是满足KVO的，这里对index进行了NSKeyValueChangeInsertion监听。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>removeActiveExecutionSignal:</span>(RACSignal <span style=color:#f92672>*</span>)signal {
+    NSCParameterAssert([signal isKindOfClass:RACSignal.<span style=color:#66d9ef>class</span>]);
+    
+    <span style=color:#66d9ef>@synchronized</span> (self) {
+        NSIndexSet <span style=color:#f92672>*</span>indexes <span style=color:#f92672>=</span> [_activeExecutionSignals indexesOfObjectsPassingTest:<span style=color:#f92672>^</span> <span style=color:#66d9ef>BOOL</span> (RACSignal <span style=color:#f92672>*</span>obj, NSUInteger index, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            <span style=color:#66d9ef>return</span> obj <span style=color:#f92672>==</span> signal;
+        }];
+        
+        <span style=color:#66d9ef>if</span> (indexes.count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) <span style=color:#66d9ef>return</span>;
+        
+        [self willChange:NSKeyValueChangeRemoval valuesAtIndexes:indexes forKey:@keypath(self.activeExecutionSignals)];
+        [_activeExecutionSignals removeObjectsAtIndexes:indexes];
+        [self didChange:NSKeyValueChangeRemoval valuesAtIndexes:indexes forKey:@keypath(self.activeExecutionSignals)];
+    }
+}
+
+
+
+</code></pre></div><p>在移除数组里面也是依照indexes来进行移除的。注意，增加和删除的操作都必须包在@synchronized (self)中保证线程安全。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>automaticallyNotifiesObserversForKey:</span>(NSString <span style=color:#f92672>*</span>)key {
+    <span style=color:#66d9ef>return</span> NO;
+}
+
+
+</code></pre></div><p>从上面增加和删除的操作中我们可以看见了RAC的作者在手动发送change notification，手动调用willChange: 和 didChange:方法。作者的目的在于防止一些不必要的swizzling可能会影响到增加和删除的操作，所以这里选择的手动发送通知的方式。</p><p>美团博客上这篇<a href=http://tech.meituan.com/ReactiveCocoaSignalFlow.html>ReactiveCocoa核心元素与信号流</a>文章里面对activeExecutionSignals的变化引起的一些变化画了一张数据流图：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_3.png alt></p><p>除去没有影响到enabled信号，activeExecutionSignals的变化会影响到其他三个信号。</p><h4 id=7-racsignal-immediateenabled>7. RACSignal *immediateEnabled</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_4.png alt></p><p>这个信号也是一个enabled信号，但是和之前的enabled信号不同的是，它并不能保证在main thread主线程上，它可以在任意一个线程上。</p><h4 id=8-racsignal--signalblockid-input>8. RACSignal * (^signalBlock)(id input)</h4><p>这个闭包返回值是一个信号，这个闭包是在初始化RACCommand的时候会用到，下面分析源码的时候会出现。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithSignalBlock:</span>(RACSignal <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> input))signalBlock;
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithEnabled:</span>(RACSignal <span style=color:#f92672>*</span>)enabledSignal <span style=color:#a6e22e>signalBlock:</span>(RACSignal <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> input))signalBlock;
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>execute:</span>(<span style=color:#66d9ef>id</span>)input;
+
+</code></pre></div><p>RACCommand 暴露出来的就3个方法，2个初始化方法和1个execute:的方法，接下来就来分析一下这些方法的底层实现。</p><h3 id=二-initwithenabled-signalblock-底层实现分析>二. initWithEnabled: signalBlock: 底层实现分析</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_5.png alt></p><p>首先先来看看比较短的那个初始化方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithSignalBlock:</span>(RACSignal <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> input))signalBlock {
+    <span style=color:#66d9ef>return</span> [self initWithEnabled:nil signalBlock:signalBlock];
+}
+
+</code></pre></div><p>initWithSignalBlock:方法实际就是调用了initWithEnabled: signalBlock:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithEnabled:</span>(RACSignal <span style=color:#f92672>*</span>)enabledSignal <span style=color:#a6e22e>signalBlock:</span>(RACSignal <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> input))signalBlock {
+
+}
+
+
+</code></pre></div><p>initWithSignalBlock:方法相当于第一个参数传的是nil的initWithEnabled: signalBlock:方法。第一个参数是enabledSignal，第二个参数是signalBlock的闭包。enabledSignal如果传的是nil，那么就相当于是传进了[RACSignal return:@YES]。</p><p>接下来详细分析一下initWithEnabled: signalBlock:方法的实现。</p><p>这个方法的实现非常长，需要分段来分析。RACCommand的初始化就是对自己的4个信号，executionSignals，executing，enabled，errors的初始化。</p><h4 id=1-executionsignals信号的初始化>1. executionSignals信号的初始化</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACSignal <span style=color:#f92672>*</span>newActiveExecutionSignals <span style=color:#f92672>=</span> [[[[[self rac_valuesAndChangesForKeyPath:@keypath(self.activeExecutionSignals) options:NSKeyValueObservingOptionNew observer:nil]
+                                           
+    reduceEach:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> _, NSDictionary <span style=color:#f92672>*</span>change) {
+    NSArray <span style=color:#f92672>*</span>signals <span style=color:#f92672>=</span> change[NSKeyValueChangeNewKey];
+    <span style=color:#66d9ef>if</span> (signals <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> [RACSignal empty];
+    
+    <span style=color:#66d9ef>return</span> [signals.rac_sequence signalWithScheduler:RACScheduler.immediateScheduler];
+    }]
+   concat]
+   publish]
+   autoconnect];
+
+
+
+</code></pre></div><p>通过rac_valuesAndChangesForKeyPath: options: observer: 方法监听self.activeExecutionSignals数组里面是否有增加新的信号。rac_valuesAndChangesForKeyPath: options: observer: 方法的返回时是一个RACTuple，它的定义是这样的:RACTuplePack(value, change)。</p><p>只要每次数组里面加入了新的信号，那么rac_valuesAndChangesForKeyPath: options: observer: 方法就会把新加的值和change字典包装成RACTuple返回。再对这个信号进行一次reduceEach:操作。</p><p>举个例子，change字典可能是如下的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>{<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#a6e22e>indexes</span> = <span style=color:#e6db74>&#34;&lt;_NSCachedIndexSet: 0x60000023b8a0&gt;[number of indexes: 1 (in 1 ranges), indexes: (0)]&#34;</span>;<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#a6e22e>kind</span> = <span style=color:#ae81ff>2</span>;<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#a6e22e>new</span> =     (<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>        &#34;&lt;RACReplaySubject: 0x6000006613c0&gt; name: &#34;</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    );<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>}<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>取出change[NSKeyValueChangeNewKey]就能取出每次变化新增的信号数组，然后把这个数组通过signalWithScheduler:转换成信号。</p><p>把原信号中每个值是里面装满RACTuple的信号通过变换，变换成了装满RACSingnal的三阶信号，通过concat进行降阶操作，降阶成了二阶信号。最后通过publish和autoconnect操作，把冷信号转换成热信号。</p><p>newActiveExecutionSignals最终是一个二阶热信号。</p><p>接下来再看看executionSignals是如何变换而来的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+_executionSignals <span style=color:#f92672>=</span> [[[newActiveExecutionSignals
+                       map:<span style=color:#f92672>^</span>(RACSignal <span style=color:#f92672>*</span>signal) {
+                           <span style=color:#66d9ef>return</span> [signal catchTo:[RACSignal empty]];
+                       }]
+                      deliverOn:RACScheduler.mainThreadScheduler]
+                     setNameWithFormat:<span style=color:#e6db74>@&#34;%@ -executionSignals&#34;</span>, self];
+
+
+</code></pre></div><p>executionSignals把newActiveExecutionSignals中错误信号都换成空信号。经过map变换之后，executionSignals是newActiveExecutionSignals的无错误信号的版本。由于map只是变换并没有降阶，所以executionSignals还是一个二阶的高阶冷信号。</p><p>注意最后加上了deliverOn，<strong>executionSignals信号每个值都是在主线程中发送的。</strong></p><h4 id=2-errors信号的初始化>2. errors信号的初始化</h4><p>在RACCommand中会搜集其所有的error信号，都装进自己的errors的信号中。这也是RACCommand的特点之一，能把错误统一处理。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACMulticastConnection <span style=color:#f92672>*</span>errorsConnection <span style=color:#f92672>=</span> [[[newActiveExecutionSignals
+                                              flattenMap:<span style=color:#f92672>^</span>(RACSignal <span style=color:#f92672>*</span>signal) {
+                                                  <span style=color:#66d9ef>return</span> [[signal ignoreValues]
+                                                          catch:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+                                                              <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>error];
+                                                          }];
+                                              }]
+                                             deliverOn:RACScheduler.mainThreadScheduler]
+                                             publish];
+
+</code></pre></div><p>从上面分析中，我们知道，newActiveExecutionSignals最终是一个二阶热信号。这里在errorsConnection的变换中，我们对这个二阶的热信号进行flattenMap:降阶操作，只留下所有的错误信号，最后把所有的错误信号都装在一个低阶的信号中，这个信号中每个值都是一个error。同样，变换中也追加了deliverOn:操作，回到主线程中去操作。最后把这个冷信号转换成热信号，但是注意，还没有connect。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+_errors <span style=color:#f92672>=</span> [errorsConnection.signal setNameWithFormat:<span style=color:#e6db74>@&#34;%@ -errors&#34;</span>, self];
+[errorsConnection connect];
+
+</code></pre></div><p>假设某个订阅者在RACCommand中的信号已经开始执行之后才订阅的，如果错误信号是一个冷信号，那么订阅之前的错误就接收不到了。所以错误应该是一个热信号，不管什么时候订阅都可以接收到所有的错误。</p><p>error信号就是热信号errorsConnection传出来的一个热信号。<strong>error信号每个值都是在主线程上发送的。</strong></p><h4 id=3-executing信号的初始化>3. executing信号的初始化</h4><p>executing这个信号表示了当前RACCommand是否在执行，信号里面的值都是BOOL类型的。那么如何拿到这样一个BOOL信号呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACSignal <span style=color:#f92672>*</span>immediateExecuting <span style=color:#f92672>=</span> [RACObserve(self, activeExecutionSignals) map:<span style=color:#f92672>^</span>(NSArray <span style=color:#f92672>*</span>activeSignals) {
+    <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>activeSignals.count <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span><span style=color:#ae81ff>)</span>;
+}];
+
+
+</code></pre></div><p>由于self.activeExecutionSignals是可以被KVO的，所以每当activeExecutionSignals变化的时候，判断当前数组里面是否还有信号，如果数组里面有值，就代表了当前有在执行中的信号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+_executing <span style=color:#f92672>=</span> [[[[[immediateExecuting
+                  deliverOn:RACScheduler.mainThreadScheduler]
+                  startWith:<span style=color:#ae81ff>@NO</span>]
+                  distinctUntilChanged]
+                  replayLast]
+                  setNameWithFormat:<span style=color:#e6db74>@&#34;%@ -executing&#34;</span>, self];
+
+
+
+</code></pre></div><p>immediateExecuting信号表示当前是否有信号在执行。初始值为NO，一旦immediateExecuting不为NO的时候就会发出信号。最后通过replayLast转换成永远只保存最新的一个值的热信号。</p><p><strong>executing信号除去第一个默认值NO，其他的每个值也是在主线程中发送的。</strong></p><h4 id=4-enabled信号的初始化>4. enabled信号的初始化</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACSignal <span style=color:#f92672>*</span>moreExecutionsAllowed <span style=color:#f92672>=</span> [RACSignal
+                                    <span style=color:#66d9ef>if</span><span style=color:#f92672>:</span>RACObserve(self, allowsConcurrentExecution)
+                                    then:[RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@YES</span>]
+                                    <span style=color:#66d9ef>else</span><span style=color:#f92672>:</span>[immediateExecuting not]];
+
+
+</code></pre></div><p>先监听self.allowsConcurrentExecution变量是否有变化，allowsConcurrentExecution默认值为NO。如果有变化，allowsConcurrentExecution为YES，就说明允许并发执行，那么就返回YES的RACSignal，allowsConcurrentExecution为NO，就说明不允许并发执行，那么就要看当前是否有正在执行的信号。immediateExecuting就是代表当前是否有在执行的信号，对这个信号取非，就是是否允许执行下一个信号的BOOL值。这就是moreExecutionsAllowed的信号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>if</span> (enabledSignal <span style=color:#f92672>==</span> nil) {
+    enabledSignal <span style=color:#f92672>=</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@YES</span>];
+} <span style=color:#66d9ef>else</span> {
+    enabledSignal <span style=color:#f92672>=</span> [[[enabledSignal
+                       startWith:<span style=color:#ae81ff>@YES</span>]
+                       takeUntil:self.rac_willDeallocSignal]
+                       replayLast];
+}
+
+
+</code></pre></div><p>这里的代码就说明了，如果第一个参数传的是nil，那么就相当于传进来了一个[RACSignal return:@YES]信号。</p><p>如果enabledSignal不为nil，就在enabledSignal信号前面插入一个YES的信号，目的是为了防止传入的enabledSignal虽然不为nil，但是里面是没有信号的，比如[RACSignal never]，[RACSignal empty]，这些信号传进来也相当于是没用的，所以在开头加一个YES的初始值信号。</p><p>最后同样通过replayLast操作转换成只保存最新的一个值的热信号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+_immediateEnabled <span style=color:#f92672>=</span> [[RACSignal
+                      combineLatest:<span style=color:#ae81ff>@[</span> enabledSignal, moreExecutionsAllowed <span style=color:#ae81ff>]</span>]
+                      and];
+
+</code></pre></div><p>这里涉及到了combineLatest:的变换操作，这个操作在<a href=https://halfrost.com/reactivecocoa_racsignal_operations2/>之前的文章</a>里面分析过了，这里不再详细分析源码实现。combineLatest:的作用就是把后面数组里面传入的每个信号，不管是谁发送出来一个信号，都会把数组里面所有信号的最新的值组合到一个RACTuple里面。immediateEnabled会把每个RACTuple里面的元素都进行逻辑and运算，这样immediateEnabled信号里面装的也都是BOOL值了。</p><p>immediateEnabled信号的意义就是每时每刻监听RACCommand是否可以enabled。它是由2个信号进行and操作得来的。每当allowsConcurrentExecution变化的时候就会产生一个信号，此时再加上enabledSignal信号，就能判断这一刻RACCommand是否能够enabled。每当enabledSignal变化的时候也会产生一个信号，再加上allowsConcurrentExecution是否允许并发，也能判断这一刻RACCommand是否能够enabled。所以immediateEnabled是由这两个信号combineLatest:之后再进行and操作得来的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+_enabled <span style=color:#f92672>=</span> [[[[[self.immediateEnabled
+                take:<span style=color:#ae81ff>1</span>]
+                concat:[[self.immediateEnabled skip:<span style=color:#ae81ff>1</span>] deliverOn:RACScheduler.mainThreadScheduler]]
+                distinctUntilChanged]
+                replayLast]
+                setNameWithFormat:<span style=color:#e6db74>@&#34;%@ -enabled&#34;</span>, self];
+
+
+</code></pre></div><p>由上面源码可以知道，self.immediateEnabled是由enabledSignal, moreExecutionsAllowed组合而成的。根据源码，enabledSignal的第一个信号值一定是[RACSignal return:@YES]，moreExecutionsAllowed是RACObserve(self, allowsConcurrentExecution)产生的，由于allowsConcurrentExecution默认值是NO，所以moreExecutionsAllowed的第一个值是[immediateExecuting not]。</p><p>这里比较奇怪的地方是为何要用一次concat操作，把第一个信号值和后面的连接起来。如果直接写[self.immediateEnabled deliverOn:RACScheduler.mainThreadScheduler]，那么整个self.immediateEnabled就都在主线程上了。作者既然没有这么写，肯定是有原因的。</p><blockquote><p>This signal will send its current value upon subscription, and then all future values on the main thread.</p></blockquote><p>通过查看文档，明白了作者的意图，作者的目的是为了让第一个值以后的每个值都发送在主线程上，所以这里skip:1之后接着deliverOn:RACScheduler.mainThreadScheduler。那第一个值呢？第一个值在一订阅的时候就发送出去了，同订阅者所在线程一致。</p><p>distinctUntilChanged保证enabled信号每次状态变化的时候只取到一个状态值。最后调用replayLast转换成只保存最新值的热信号。</p><p>从源码上看，<strong>enabled信号除去第一个值以外的每个值也都是在主线程上发送的。</strong></p><h3 id=三-execute底层实现分析>三. execute:底层实现分析</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_6.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>execute:</span>(<span style=color:#66d9ef>id</span>)input {
+    <span style=color:#75715e>// 1
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>BOOL</span> enabled <span style=color:#f92672>=</span> [[self.immediateEnabled first] boolValue];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>enabled) {
+        NSError <span style=color:#f92672>*</span>error <span style=color:#f92672>=</span> [NSError errorWithDomain:RACCommandErrorDomain code:RACCommandErrorNotEnabled userInfo:<span style=color:#ae81ff>@{</span>
+                          NSLocalizedDescriptionKey: NSLocalizedString(<span style=color:#e6db74>@&#34;The command is disabled and cannot be executed&#34;</span>, nil),RACUnderlyingCommandErrorKey: self <span style=color:#ae81ff>}</span>];
+        
+        <span style=color:#66d9ef>return</span> [RACSignal error:error];
+    }
+    <span style=color:#75715e>// 2
+</span><span style=color:#75715e></span>    RACSignal <span style=color:#f92672>*</span>signal <span style=color:#f92672>=</span> self.signalBlock(input);
+    NSCAssert(signal <span style=color:#f92672>!=</span> nil, <span style=color:#e6db74>@&#34;nil signal returned from signal block for value: %@&#34;</span>, input);
+    <span style=color:#75715e>// 3
+</span><span style=color:#75715e></span>    RACMulticastConnection <span style=color:#f92672>*</span>connection <span style=color:#f92672>=</span> [[signal subscribeOn:RACScheduler.mainThreadScheduler] multicast:[RACReplaySubject subject]];
+    
+    @weakify(self);
+    <span style=color:#75715e>// 4
+</span><span style=color:#75715e></span>    [self addActiveExecutionSignal:connection.signal];
+    [connection.signal subscribeError:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+        @strongify(self);
+        <span style=color:#75715e>// 5
+</span><span style=color:#75715e></span>        [self removeActiveExecutionSignal:connection.signal];
+    } completed:<span style=color:#f92672>^</span>{
+        @strongify(self);
+        <span style=color:#75715e>// 5
+</span><span style=color:#75715e></span>        [self removeActiveExecutionSignal:connection.signal];
+    }];
+    
+    [connection connect];
+     <span style=color:#75715e>// 6
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>return</span> [connection.signal setNameWithFormat:<span style=color:#e6db74>@&#34;%@ -execute: %@&#34;</span>, self, [input rac_description]];
+}
+
+
+
+</code></pre></div><p>把上述代码分成6步来分析：</p><ol><li><p>self.immediateEnabled为了保证第一个值能正常的发送给订阅者，所以这里用了同步的first的方法，也是可以接受的。调用了first方法之后，根据这第一个值来判断RACCommand是否可以开始执行。如果不能执行就返回一个错误信号。</p></li><li><p>这里就是RACCommand开始执行的地方。self.signalBlock是RACCommand在初始化的时候传入的一个参数，RACSignal * (^signalBlock)(id input)这个闭包的入参是一个id input，返回值是一个信号。这里正好把execute的入参input传进来。</p></li><li><p>把RACCommand执行之后的信号先调用subscribeOn:保证didSubscribe block( )闭包在主线程中执行，再转换成RACMulticastConnection，准备转换成热信号。</p></li><li><p>在最终的信号被订阅者订阅之前，我们需要优先更新RACCommand里面的executing和enabled信号，所以这里要先把connection.signal加入到self.activeExecutionSignals数组里面。</p></li><li><p>订阅最终结果信号，出现错误或者完成，都要更新self.activeExecutionSignals数组。</p></li><li><p>这里想说明的是，最终的execute:返回的信号，和executionSignals是一样的。</p></li></ol><p><strong>这里有一个需要注意的点：</strong></p><p><strong>executionSignals虽然是一个冷信号，但是它是由内部的addedExecutionSignalsSubject的产生的，这是一个热信号，订阅者订阅它的时候需要在execute:执行之前去订阅，否则这个addedExecutionSignalsSubject热信号对已保存的所有的订阅者发送完信号以后，再订阅就收不到任何信号了。所以需要在热信号发送信号之前订阅，把自己保存到热信号的订阅者数组里。所以executionSignals的订阅要在execute:执行之前。</strong></p><p><strong>而execute:返回的信号是RACReplaySubject热信号，它会把订阅者保存起来，即使先发送信号，再订阅，订阅者也可以收到之前发送的值。</strong></p><p><strong>两个信号虽然信号内容都相同，但是订阅的先后次序不同，executionSignals必须在execute:执行之前去订阅，而execute:返回的信号是在execute:执行之后去订阅的。</strong></p><h3 id=四-raccommand的一些category>四. RACCommand的一些Category</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/38_7.png alt></p><p>RACCommand在日常iOS开发过程中，很适合上下拉刷新，按钮点击等操作，所以ReactiveCocoa就帮我们在这些UI控件上封装了一个RACCommand属性——rac_command。</p><h4 id=1-uibarbuttonitemraccommandsupport>1. UIBarButtonItem+RACCommandSupport</h4><p>一旦UIBarButtonItem被点击，RACCommand就会执行。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACCommand <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_command</span> {
+    <span style=color:#66d9ef>return</span> objc_getAssociatedObject(self, UIControlRACCommandKey);
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setRac_command:</span>(RACCommand <span style=color:#f92672>*</span>)command {
+    objc_setAssociatedObject(self, UIControlRACCommandKey, command, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    <span style=color:#75715e>// 检查已经存储过的信号，移除老的，添加一个新的
+</span><span style=color:#75715e></span>    RACDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> objc_getAssociatedObject(self, UIControlEnabledDisposableKey);
+    [disposable dispose];
+    
+    <span style=color:#66d9ef>if</span> (command <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span>;
+    
+    disposable <span style=color:#f92672>=</span> [command.enabled setKeyPath:@keypath(self.enabled) onObject:self];
+    objc_setAssociatedObject(self, UIControlEnabledDisposableKey, disposable, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    [self rac_hijackActionAndTargetIfNeeded];
+}
+
+
+</code></pre></div><p>给UIBarButtonItem添加rac_command属性用到了runtime里面的AssociatedObject关联对象。这里给UIBarButtonItem类新增了2个关联对象，key分别是UIControlRACCommandKey，UIControlEnabledDisposableKey。UIControlRACCommandKey对应的是绑定的command，UIControlEnabledDisposableKey对应的是command.enabled的disposable信号。</p><p>set方法里面最后会调用rac_hijackActionAndTargetIfNeeded，这个方法需要特别注意：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>rac_hijackActionAndTargetIfNeeded</span> {
+    <span style=color:#66d9ef>SEL</span> hijackSelector <span style=color:#f92672>=</span> <span style=color:#66d9ef>@selector</span>(rac_commandPerformAction:);
+    <span style=color:#66d9ef>if</span> (self.target <span style=color:#f92672>==</span> self <span style=color:#f92672>&amp;&amp;</span> self.action <span style=color:#f92672>==</span> hijackSelector) <span style=color:#66d9ef>return</span>;
+    
+    <span style=color:#66d9ef>if</span> (self.target <span style=color:#f92672>!=</span> nil) NSLog(<span style=color:#e6db74>@&#34;WARNING: UIBarButtonItem.rac_command hijacks the control&#39;s existing target and action.&#34;</span>);
+        
+        self.target <span style=color:#f92672>=</span> self;
+        self.action <span style=color:#f92672>=</span> hijackSelector;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>rac_commandPerformAction:</span>(<span style=color:#66d9ef>id</span>)sender {
+    [self.rac_command execute:sender];
+}
+
+
+
+</code></pre></div><p>rac_hijackActionAndTargetIfNeeded方法是对当前UIBarButtonItem的target和action进行检查。</p><p>如果当前UIBarButtonItem的target = self，并且action = @selector(rac_commandPerformAction:)，那么就算检查通过符合执行RACCommand的前提条件了，直接return。</p><p>如果上述条件不符合，就<strong>强制改变</strong>UIBarButtonItem的target = self，并且action = @selector(rac_commandPerformAction:)，所以这里需要注意的就是，UIBarButtonItem调用rac_command，会被强制改变它的target和action。</p><h4 id=2-uibuttonraccommandsupport>2. UIButton+RACCommandSupport</h4><p>一旦UIButton被点击，RACCommand就会执行。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACCommand <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_command</span> {
+    <span style=color:#66d9ef>return</span> objc_getAssociatedObject(self, UIButtonRACCommandKey);
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setRac_command:</span>(RACCommand <span style=color:#f92672>*</span>)command {
+    objc_setAssociatedObject(self, UIButtonRACCommandKey, command, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    RACDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> objc_getAssociatedObject(self, UIButtonEnabledDisposableKey);
+    [disposable dispose];
+    
+    <span style=color:#66d9ef>if</span> (command <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span>;
+    
+    disposable <span style=color:#f92672>=</span> [command.enabled setKeyPath:@keypath(self.enabled) onObject:self];
+    objc_setAssociatedObject(self, UIButtonEnabledDisposableKey, disposable, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    [self rac_hijackActionAndTargetIfNeeded];
+}
+
+
+</code></pre></div><p>这里给UIButton添加绑定2个属性同样也用到了runtime里面的AssociatedObject关联对象。代码和UIBarButtonItem的实现基本一样。同样是给UIButton类新增了2个关联对象，key分别是UIButtonRACCommandKey，UIButtonEnabledDisposableKey。UIButtonRACCommandKey对应的是绑定的command，UIButtonEnabledDisposableKey对应的是command.enabled的disposable信号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>rac_hijackActionAndTargetIfNeeded</span> {
+    <span style=color:#66d9ef>SEL</span> hijackSelector <span style=color:#f92672>=</span> <span style=color:#66d9ef>@selector</span>(rac_commandPerformAction:);
+    
+    <span style=color:#66d9ef>for</span> (NSString <span style=color:#f92672>*</span>selector <span style=color:#66d9ef>in</span> [self actionsForTarget:self forControlEvent:UIControlEventTouchUpInside]) {
+        <span style=color:#66d9ef>if</span> (hijackSelector <span style=color:#f92672>==</span> NSSelectorFromString(selector)) {
+            <span style=color:#66d9ef>return</span>;
+        }
+    }
+    
+    [self addTarget:self action:hijackSelector forControlEvents:UIControlEventTouchUpInside];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>rac_commandPerformAction:</span>(<span style=color:#66d9ef>id</span>)sender {
+    [self.rac_command execute:sender];
+}
+
+
+
+</code></pre></div><p>rac_hijackActionAndTargetIfNeeded函数的意思和之前的一样，也是检查UIButton的target和action。最终结果的UIButton的target = self，action = @selector(rac_commandPerformAction:)</p><h4 id=3-uirefreshcontrolraccommandsupport>3. UIRefreshControl+RACCommandSupport</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACCommand <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_command</span> {
+    <span style=color:#66d9ef>return</span> objc_getAssociatedObject(self, UIRefreshControlRACCommandKey);
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setRac_command:</span>(RACCommand <span style=color:#f92672>*</span>)command {
+    objc_setAssociatedObject(self, UIRefreshControlRACCommandKey, command, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    [objc_getAssociatedObject(self, UIRefreshControlDisposableKey) dispose];
+    
+    <span style=color:#66d9ef>if</span> (command <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span>;
+    
+    RACDisposable <span style=color:#f92672>*</span>enabledDisposable <span style=color:#f92672>=</span> [command.enabled setKeyPath:@keypath(self.enabled) onObject:self];
+    
+    RACDisposable <span style=color:#f92672>*</span>executionDisposable <span style=color:#f92672>=</span> [[[[self
+                                             rac_signalForControlEvents:UIControlEventValueChanged]
+                                             map:<span style=color:#f92672>^</span>(UIRefreshControl <span style=color:#f92672>*</span>x) {
+                                                <span style=color:#66d9ef>return</span> [[[command
+                                                          execute:x]
+                                                          catchTo:[RACSignal empty]]
+                                                          then:<span style=color:#f92672>^</span>{
+                                                            <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>x];
+                                                        }];
+                                            }]
+                                            concat]
+                                            subscribeNext:<span style=color:#f92672>^</span>(UIRefreshControl <span style=color:#f92672>*</span>x) {
+                                              [x endRefreshing];
+                                            }];
+    
+    RACDisposable <span style=color:#f92672>*</span>commandDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposableWithDisposables:<span style=color:#ae81ff>@[</span> enabledDisposable, executionDisposable <span style=color:#ae81ff>]</span>];
+    objc_setAssociatedObject(self, UIRefreshControlDisposableKey, commandDisposable, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+
+
+</code></pre></div><p>这里给UIRefreshControl添加绑定2个属性同样也用到了runtime里面的AssociatedObject关联对象。代码和UIBarButtonItem的实现基本一样。同样是给UIButton类新增了2个关联对象，key分别是UIRefreshControlRACCommandKey，UIRefreshControlDisposableKey。UIRefreshControlRACCommandKey对应的是绑定的command，UIRefreshControlDisposableKey对应的是command.enabled的disposable信号。</p><p>这里多了一个executionDisposable信号，这个信号是用来结束刷新操作的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[[[command execute:x] catchTo:[RACSignal empty]] then:<span style=color:#f92672>^</span>{ <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>x]; }];
+
+</code></pre></div><p>这个信号变换先把RACCommand执行，执行之后得到的结果信号剔除掉所有的错误。then操作就是忽略掉所有值，在最后添加一个返回UIRefreshControl对象的信号。</p><p>[self rac_signalForControlEvents:UIControlEventValueChanged]之后再map升阶为高阶信号，所以最后用concat降阶。最后订阅这个信号，订阅只会收到一个值，command执行完毕之后的信号发送完所有的值的时候，即收到这个值的时刻就是最终刷新结束的时刻。</p><p>所以最终的disposable信号还要加上executionDisposable。</p><h3 id=最后>最后</h3><p>关于RACCommand底层实现分析都已经分析完成。最后请大家多多指教。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-raccommand的定义>一. RACCommand的定义</a><ul><li><a href=#1-racsignal-executionsignals>1. RACSignal *executionSignals</a></li><li><a href=#2-racsignal-executing>2. RACSignal *executing</a></li><li><a href=#3-racsignal-enabled>3. RACSignal *enabled</a></li><li><a href=#4-racsignal-errors>4. RACSignal *errors</a></li><li><a href=#5-bool-allowsconcurrentexecution>5. BOOL allowsConcurrentExecution</a></li><li><a href=#6-nsarray-activeexecutionsignals>6. NSArray *activeExecutionSignals</a></li><li><a href=#7-racsignal-immediateenabled>7. RACSignal *immediateEnabled</a></li><li><a href=#8-racsignal--signalblockid-input>8. RACSignal * (^signalBlock)(id input)</a></li></ul></li><li><a href=#二-initwithenabled-signalblock-底层实现分析>二. initWithEnabled: signalBlock: 底层实现分析</a><ul><li><a href=#1-executionsignals信号的初始化>1. executionSignals信号的初始化</a></li><li><a href=#2-errors信号的初始化>2. errors信号的初始化</a></li><li><a href=#3-executing信号的初始化>3. executing信号的初始化</a></li><li><a href=#4-enabled信号的初始化>4. enabled信号的初始化</a></li></ul></li><li><a href=#三-execute底层实现分析>三. execute:底层实现分析</a></li><li><a href=#四-raccommand的一些category>四. RACCommand的一些Category</a><ul><li><a href=#1-uibarbuttonitemraccommandsupport>1. UIBarButtonItem+RACCommandSupport</a></li><li><a href=#2-uibuttonraccommandsupport>2. UIButton+RACCommandSupport</a></li><li><a href=#3-uirefreshcontrolraccommandsupport>3. UIRefreshControl+RACCommandSupport</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&text=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&name=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8ReactiveCocoa%20%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e9%99%a4%e5%8e%bbRACSignal%e5%92%8cRACSubject%e8%bf%99%e4%ba%9b%e4%bf%a1%e5%8f%b7%e7%b1%bb%e4%bb%a5%e5%a4%96%ef%bc%8c%e6%9c%89%e4%ba%9b%e6%97%b6%e5%80%99%e6%88%91%e4%bb%ac%e5%8f%af%e8%83%bd%e8%bf%98%e9%9c%80%e8%a6%81%e5%b0%81%e8%a3%85%e4%b8%80%e4%ba%9b%e5%9b%ba%e5%ae%9a%e7%9a%84%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e3%80%82%e8%bf%99%e4%ba%9b%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e9%83%bd%e6%98%af%e5%9b%ba%e5%ae%9a%e7%9a%84%ef%bc%8c%e6%af%8f%e6%ac%a1%e5%8f%aa%e8%a6%81%e4%b8%80%e8%a7%a6%e5%8f%91%e5%b0%b1%e4%bc%9a%e6%89%a7%e8%a1%8c%e4%ba%8b%e5%85%88%e5%ae%9a%e4%b9%89%e5%a5%bd%e7%9a%84%e4%b8%80%e4%b8%aa%e8%bf%87%e7%a8%8b%e3%80%82%e5%9c%a8iOS%e5%bc%80%e5%8f%91%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e6%8c%89%e9%92%ae%e7%9a%84%e7%82%b9%e5%87%bb%e4%ba%8b%e4%bb%b6%e5%b0%b1%e5%8f%af%e8%83%bd%e6%9c%89%e8%bf%99%e7%a7%8d%e9%9c%80%e6%b1%82%e3%80%82%e9%82%a3%e4%b9%88RACCommand%e5%b0%b1%e5%8f%af%e4%bb%a5%e5%ae%9e%e7%8e%b0%e8%bf%99%e7%a7%8d%e9%9c%80%e6%b1%82%e3%80%82%0a%e5%bd%93%e7%84%b6%e9%99%a4%e4%ba%86%e5%b0%81%e8%a3%85%e4%b8%80%e4%b8%aa%e6%93%8d%e4%bd%9c%e9%9b%86%e5%90%88%e4%bb%a5%e5%a4%96%ef%bc%8cRACCommand%e8%bf%98%e8%83%bd%e9%9b%86%e4%b8%ad%e5%a4%84%e7%90%86%e9%94%99%e8%af%af%e7%ad%89%e7%ad%89%e5%8a%9f%e8%83%bd%e3%80%82%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e4%bb%8e%e5%ba%95%e5%b1%82%e6%9d%a5%e7%9c%8b%e7%9c%8bRACCommand%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.RACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%202.initWithEnabled%3a%20signalBlock%3a%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%203.execute%3a%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%204.RACCommand%e7%9a%84%e4%b8%80%e4%ba%9bCategory%20%20%e4%b8%80.%20RACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%20%e9%a6%96%e5%85%88%e8%af%b4%e8%af%b4RACCommand%e7%9a%84%e4%bd%9c%e7%94%a8%e3%80%82%20RACCommand%20%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%e6%98%af%e5%af%b9%e4%b8%80%e4%b8%aa%e5%8a%a8%e4%bd%9c%e7%9a%84%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e4%bb%a5%e5%8f%8a%e5%ae%83%e4%ba%a7%e7%94%9f%e7%9a%84%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e7%9a%84%e5%b0%81%e8%a3%85%e3%80%82%0a%20%20%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%ef%bc%9a%e5%88%9d%e5%a7%8b%e5%8c%96RACCommand%e7%9a%84%e5%85%a5%e5%8f%82enabledSignal%e5%b0%b1%e5%86%b3%e5%ae%9a%e4%ba%86RACCommand%e6%98%af%e5%90%a6%e8%83%bd%e5%bc%80%e5%a7%8b%e6%89%a7%e8%a1%8c%e3%80%82%e5%85%a5%e5%8f%82enabledSignal%e5%b0%b1%e6%98%af%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e3%80%82%e4%b8%be%e4%b8%aa%e4%be%8b%e5%ad%90%ef%bc%8c%e4%b8%80%e4%b8%aa%e6%8c%89%e9%92%ae%e6%98%af%e5%90%a6%e8%83%bd%e7%82%b9%e5%87%bb%ef%bc%8c%e6%98%af%e5%90%a6%e8%83%bd%e8%a7%a6%e5%8f%91%e7%82%b9%e5%87%bb%e4%ba%8b%e6%83%85%ef%bc%8c%e5%b0%b1%e7%94%b1%e5%85%a5%e5%8f%82enabledSignal%e5%86%b3%e5%ae%9a%e3%80%82%0a%20%20%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%ef%bc%9a%e5%88%9d%e5%a7%8b%e5%8c%96RACCommand%e7%9a%84%e5%8f%a6%e5%a4%96%e4%b8%80%e4%b8%aa%e5%85%a5%e5%8f%82%28RACSignal%20%2a%20%28%5e%29%28id%20input%29%29signalBlock%e5%b0%b1%e6%98%af%e5%af%b9%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e7%9a%84%e5%b0%81%e8%a3%85%e3%80%82RACCommand%e6%af%8f%e6%ac%a1%e6%89%a7%e8%a1%8c%e9%83%bd%e4%bc%9a%e8%b0%83%e7%94%a8%e4%b8%80%e6%ac%a1signalBlock%e9%97%ad%e5%8c%85%e3%80%82%0a%20%20RACCommand%e6%9c%80%e5%b8%b8%e8%a7%81%e7%9a%84%e4%be%8b%e5%ad%90%e5%b0%b1%e6%98%af%e5%9c%a8%e6%b3%a8%e5%86%8c%e7%99%bb%e5%bd%95%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8c%e7%82%b9%e5%87%bb%e8%8e%b7%e5%8f%96%e9%aa%8c%e8%af%81%e7%a0%81%e7%9a%84%e6%8c%89%e9%92%ae%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%8c%89%e9%92%ae%e7%9a%84%e7%82%b9%e5%87%bb%e4%ba%8b%e4%bb%b6%e5%92%8c%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e5%b0%b1%e5%8f%af%e4%bb%a5%e7%94%a8RACCommand%e6%9d%a5%e5%b0%81%e8%a3%85%ef%bc%8c%e8%a7%a6%e5%8f%91%e6%9d%a1%e4%bb%b6%e6%98%af%e4%b8%80%e4%b8%aa%e4%bf%a1%e5%8f%b7%ef%bc%8c%e5%ae%83%e5%8f%af%e4%bb%a5%e6%98%af%e9%aa%8c%e8%af%81%e6%89%8b%e6%9c%ba%e5%8f%b7%ef%bc%8c%e9%aa%8c%e8%af%81%e9%82%ae%e7%ae%b1%ef%bc%8c%e9%aa%8c%e8%af%81%e8%ba%ab%e4%bb%bd%e8%af%81%e7%ad%89%e4%b8%80%e4%ba%9b%e9%aa%8c%e8%af%81%e6%9d%a1%e4%bb%b6%e4%ba%a7%e7%94%9f%e7%9a%84enabledSignal%e3%80%82%e8%a7%a6%e5%8f%91%e4%ba%8b%e4%bb%b6%e5%b0%b1%e6%98%af%e6%8c%89%e9%92%ae%e7%82%b9%e5%87%bb%e4%b9%8b%e5%90%8e%e6%89%a7%e8%a1%8c%e7%9a%84%e4%ba%8b%e4%bb%b6%ef%bc%8c%e5%8f%af%e4%bb%a5%e6%98%af%e5%8f%91%e9%80%81%e9%aa%8c%e8%af%81%e7%a0%81%e7%9a%84%e7%bd%91%e7%bb%9c%e8%af%b7%e6%b1%82%e3%80%82%0aRACCommand%e5%9c%a8ReactiveCocoa%e4%b8%ad%e7%ae%97%e6%98%af%e5%be%88%e7%89%b9%e5%88%ab%e7%9a%84%e4%b8%80%e7%a7%8d%e5%ad%98%e5%9c%a8%ef%bc%8c%e5%9b%a0%e4%b8%ba%e5%ae%83%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%b9%b6%e4%b8%8d%e6%98%afFRP%e5%ae%9e%e7%8e%b0%e7%9a%84%ef%bc%8c%e6%98%afOOP%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82RACCommand%e7%9a%84%e6%9c%ac%e8%b4%a8%e5%b0%b1%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%9c%a8%e8%bf%99%e4%b8%aa%e5%af%b9%e8%b1%a1%e9%87%8c%e9%9d%a2%e5%b0%81%e8%a3%85%e4%ba%864%e4%b8%aa%e4%bf%a1%e5%8f%b7%e3%80%82%0a%e5%85%b3%e4%ba%8eRACCommand%e7%9a%84%e5%ae%9a%e4%b9%89%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%40interface%20RACCommand%20%3a%20NSObject%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aexecutionSignals%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aexecuting%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aenabled%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aerrors%3b%20%40property%20%28atomic%2c%20assign%29%20BOOL%20allowsConcurrentExecution%3b%20volatile%20uint32_t%20_allowsConcurrentExecution%3b%20%40property%20%28atomic%2c%20copy%2c%20readonly%29%20NSArray%20%2aactiveExecutionSignals%3b%20NSMutableArray%20%2a_activeExecutionSignals%3b%20%40property%20%28nonatomic%2c%20strong%2c%20readonly%29%20RACSignal%20%2aimmediateEnabled%3b%20%40property%20%28nonatomic%2c%20copy%2c%20readonly%29%20RACSignal%20%2a%20%28%5esignalBlock%29%28id%20input%29%3b%20%40end%20RACCommand%e4%b8%ad4%e4%b8%aa%e6%9c%80%e9%87%8d%e8%a6%81%e7%9a%84%e4%bf%a1%e5%8f%b7%e5%b0%b1%e6%98%af%e5%ae%9a%e4%b9%89%e5%bc%80%e5%a4%b4%e7%9a%84%e9%82%a34%e4%b8%aa%e4%bf%a1%e5%8f%b7%ef%bc%8cexecutionSignals%ef%bc%8cexecuting%ef%bc%8cenabled%ef%bc%8cerrors%e3%80%82%e9%9c%80%e8%a6%81%e6%b3%a8%e6%84%8f%e7%9a%84%e6%98%af%ef%bc%8c%e8%bf%994%e4%b8%aa%e4%bf%a1%e5%8f%b7%e5%9f%ba%e6%9c%ac%e9%83%bd%e6%98%af%ef%bc%88%e5%b9%b6%e4%b8%8d%e6%98%af%e5%ae%8c%e5%85%a8%e6%98%af%ef%bc%89%e5%9c%a8%e4%b8%bb%e7%ba%bf%e7%a8%8b%e4%b8%8a%e6%89%a7%e8%a1%8c%e7%9a%84%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_raccommand%2f&t=ReactiveCocoa%20%e4%b8%ad%20RACCommand%20%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

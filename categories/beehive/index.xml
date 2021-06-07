@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>BeeHive on prometheus</title><link>https://new.halfrost.com/categories/beehive/</link><description>Recent content in BeeHive on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 04 Mar 2017 10:44:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/beehive/index.xml" rel="self" type="application/rss+xml"/><item><title>BeeHive —— 一个优雅但还在完善中的解耦框架</title><link>https://new.halfrost.com/beehive/</link><pubDate>Sat, 04 Mar 2017 10:44:00 +0000</pubDate><guid>https://new.halfrost.com/beehive/</guid><description>前言 BeeHive是阿里巴巴公司开源的一个iOS框架，这个框架是App模块化编程的框架一种实现方案，吸收了Spring框架Service的理念来实现模块间的API解耦。
+BeeHive这个名字灵感来源于蜂窝。蜂窝是世界上高度模块化的工程结构，六边形的设计能带来无限扩张的可能。所以就用了这个名字作为开源项目的名字。
+在前一篇文章iOS 组件化 —— 路由设计思路分析中，我们分析了App组件之间可以通过路由来解除耦合。那么这篇文章就来看看利用模块化的思想如何解除耦合的。
+(看到这里一定会很多人有疑问，那就看看这篇文章组件和模块的区别)
+说明：本文是基于BeeHive v1.2.0版本进行解析的。
+目录 1.BeeHive概述 2.BeeHive模块注册 3.BeeHive模块事件 4.BeeHive模块调用 5.其他的一些辅助类 6.可能还在完善中的功能 一. BeeHive概述 由于BeeHive是基于Spring的Service理念，虽然可以使模块间的具体实现与接口解耦，但无法避免模块对接口类的依赖关系。
+暂时BeeHive没有采用invoke和performSelector:action withObject: params的方法。主要原因还是考虑学习成本难度以及动态调用实现无法在编译检查阶段检测接口参数变更等问题。
+目前BeeHive v1.2.0 全部是利用Protocol的方式，实现了模块间解耦的目的：
+1.各个模块以插件的形式存在。每个都可独立，相互解耦。 2.各个模块具体实现与接口调用分离 3.各个模块也有生命周期，也可以进行管理。
+官方也给出了一个架构图：
+接下来就依次分析模块注册，模块事件，模块调用是如何实现解耦的。
+二. BeeHive模块注册 先从模块的注册开始分析，来看看BeeHive是如何给各个模块进行注册的。
+在BeeHive中是通过BHModuleManager来管理各个模块的。BHModuleManager中只会管理已经被注册过的模块。
+注册Module的方式总共有三种：
+1. Annotation方式注册 通过BeeHiveMod宏进行Annotation标记。
+BeeHiveMod(ShopModule) BeeHiveMod宏定义如下：
+#define BeeHiveMod(name) \ char * k##name##_mod BeeHiveDATA(BeehiveMods) = &amp;#34;&amp;#34;#name&amp;#34;&amp;#34;; BeeHiveDATA又是一个宏：
+#define BeeHiveDATA(sectname) __attribute((used, section(&amp;#34;__DATA,&amp;#34;#sectname&amp;#34; &amp;#34;))) 最终BeeHiveMod宏会在预编译结束会完全展开成下面的样子：
+char * kShopModule_mod __attribute((used, section(&amp;#34;__DATA,&amp;#34;&amp;#34;BeehiveMods&amp;#34;&amp;#34; &amp;#34;))) = &amp;#34;&amp;#34;&amp;#34;ShopModule&amp;#34;&amp;#34;&amp;#34;; 注意双引号的总对数。</description></item></channel></rss>

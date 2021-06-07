@@ -1,0 +1,1060 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>Weex 事件传递的那些事儿 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="Weex 事件传递的那些事儿"><meta property="og:description" content="前言 在前两篇文章里面分别谈了Weex如何在Native端初始化的和Weex是如何高效的渲染Native的原生UI的。Native这边还缺一块，那就是Native产生的一些事件，是怎么传回给JS的。这篇文章就详细分析这一部分。
+目录  1.Weex的事件类型 2.Weex的事件传递  一.Weex的事件类型 在Weex中，目前最新版本中事件总共分为4种类型，通用事件，Appear 事件，Disappear 事件，Page 事件。
+在Weex的组件里面只包含前三种事件，即通用事件，Appear 事件，Disappear 事件。
+当WXComponent添加事件的时候，会调用以下函数：
+- (void)_addEventOnMainThread:(NSString *)addEventName { WX_ADD_EVENT(appear, addAppearEvent) WX_ADD_EVENT(disappear, addDisappearEvent) WX_ADD_EVENT(click, addClickEvent) WX_ADD_EVENT(swipe, addSwipeEvent) WX_ADD_EVENT(longpress, addLongPressEvent) WX_ADD_EVENT(panstart, addPanStartEvent) WX_ADD_EVENT(panmove, addPanMoveEvent) WX_ADD_EVENT(panend, addPanEndEvent) WX_ADD_EVENT(horizontalpan, addHorizontalPanEvent) WX_ADD_EVENT(verticalpan, addVerticalPanEvent) WX_ADD_EVENT(touchstart, addTouchStartEvent) WX_ADD_EVENT(touchmove, addTouchMoveEvent) WX_ADD_EVENT(touchend, addTouchEndEvent) WX_ADD_EVENT(touchcancel, addTouchCancelEvent) [self addEvent:addEventName]; } WX_ADD_EVENT是一个宏：
+#define WX_ADD_EVENT(eventName, addSelector) \ if ([addEventName isEqualToString:@#eventName]) {\ [self addSelector];\ }  即是判断待添加的事件addEventName的名字和默认支持的事件名字eventName是否一致，如果一致，就执行addSelector方法。
+最后会执行一个addEvent:方法，每个组件里面会可以重写这个方法。在这个方法里面做的就是对组件的状态的标识。
+比如WXWebComponent组件里面的addEvent:方法：
+- (void)addEvent:(NSString *)eventName { if ([eventName isEqualToString:@&#34;pagestart&#34;]) { _startLoadEvent = YES; } else if ([eventName isEqualToString:@&#34;pagefinish&#34;]) { _finishLoadEvent = YES; } else if ([eventName isEqualToString:@&#34;error&#34;]) { _failLoadEvent = YES; } } 在这个方法里面即对Web组件里面的状态进行了标识。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/weex_event/"><meta property="article:published_time" content="2017-04-14T18:18:00+00:00"><meta property="article:modified_time" content="2017-04-14T18:18:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Weex 事件传递的那些事儿"><meta name=twitter:description content="前言 在前两篇文章里面分别谈了Weex如何在Native端初始化的和Weex是如何高效的渲染Native的原生UI的。Native这边还缺一块，那就是Native产生的一些事件，是怎么传回给JS的。这篇文章就详细分析这一部分。
+目录  1.Weex的事件类型 2.Weex的事件传递  一.Weex的事件类型 在Weex中，目前最新版本中事件总共分为4种类型，通用事件，Appear 事件，Disappear 事件，Page 事件。
+在Weex的组件里面只包含前三种事件，即通用事件，Appear 事件，Disappear 事件。
+当WXComponent添加事件的时候，会调用以下函数：
+- (void)_addEventOnMainThread:(NSString *)addEventName { WX_ADD_EVENT(appear, addAppearEvent) WX_ADD_EVENT(disappear, addDisappearEvent) WX_ADD_EVENT(click, addClickEvent) WX_ADD_EVENT(swipe, addSwipeEvent) WX_ADD_EVENT(longpress, addLongPressEvent) WX_ADD_EVENT(panstart, addPanStartEvent) WX_ADD_EVENT(panmove, addPanMoveEvent) WX_ADD_EVENT(panend, addPanEndEvent) WX_ADD_EVENT(horizontalpan, addHorizontalPanEvent) WX_ADD_EVENT(verticalpan, addVerticalPanEvent) WX_ADD_EVENT(touchstart, addTouchStartEvent) WX_ADD_EVENT(touchmove, addTouchMoveEvent) WX_ADD_EVENT(touchend, addTouchEndEvent) WX_ADD_EVENT(touchcancel, addTouchCancelEvent) [self addEvent:addEventName]; } WX_ADD_EVENT是一个宏：
+#define WX_ADD_EVENT(eventName, addSelector) \ if ([addEventName isEqualToString:@#eventName]) {\ [self addSelector];\ }  即是判断待添加的事件addEventName的名字和默认支持的事件名字eventName是否一致，如果一致，就执行addSelector方法。
+最后会执行一个addEvent:方法，每个组件里面会可以重写这个方法。在这个方法里面做的就是对组件的状态的标识。
+比如WXWebComponent组件里面的addEvent:方法：
+- (void)addEvent:(NSString *)eventName { if ([eventName isEqualToString:@&#34;pagestart&#34;]) { _startLoadEvent = YES; } else if ([eventName isEqualToString:@&#34;pagefinish&#34;]) { _finishLoadEvent = YES; } else if ([eventName isEqualToString:@&#34;error&#34;]) { _failLoadEvent = YES; } } 在这个方法里面即对Web组件里面的状态进行了标识。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/weex_flexbox/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/weex_js_framework/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&text=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&is_video=false&description=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fweex_event%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&name=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e5%89%8d%e4%b8%a4%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e5%88%86%e5%88%ab%e8%b0%88%e4%ba%86Weex%e5%a6%82%e4%bd%95%e5%9c%a8Native%e7%ab%af%e5%88%9d%e5%a7%8b%e5%8c%96%e7%9a%84%e5%92%8cWeex%e6%98%af%e5%a6%82%e4%bd%95%e9%ab%98%e6%95%88%e7%9a%84%e6%b8%b2%e6%9f%93Native%e7%9a%84%e5%8e%9f%e7%94%9fUI%e7%9a%84%e3%80%82Native%e8%bf%99%e8%be%b9%e8%bf%98%e7%bc%ba%e4%b8%80%e5%9d%97%ef%bc%8c%e9%82%a3%e5%b0%b1%e6%98%afNative%e4%ba%a7%e7%94%9f%e7%9a%84%e4%b8%80%e4%ba%9b%e4%ba%8b%e4%bb%b6%ef%bc%8c%e6%98%af%e6%80%8e%e4%b9%88%e4%bc%a0%e5%9b%9e%e7%bb%99JS%e7%9a%84%e3%80%82%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e8%bf%99%e4%b8%80%e9%83%a8%e5%88%86%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e7%b1%bb%e5%9e%8b%202.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%20%20%e4%b8%80.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e7%b1%bb%e5%9e%8b%20%e5%9c%a8Weex%e4%b8%ad%ef%bc%8c%e7%9b%ae%e5%89%8d%e6%9c%80%e6%96%b0%e7%89%88%e6%9c%ac%e4%b8%ad%e4%ba%8b%e4%bb%b6%e6%80%bb%e5%85%b1%e5%88%86%e4%b8%ba4%e7%a7%8d%e7%b1%bb%e5%9e%8b%ef%bc%8c%e9%80%9a%e7%94%a8%e4%ba%8b%e4%bb%b6%ef%bc%8cAppear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cDisappear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cPage%20%e4%ba%8b%e4%bb%b6%e3%80%82%0a%e5%9c%a8Weex%e7%9a%84%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e5%8f%aa%e5%8c%85%e5%90%ab%e5%89%8d%e4%b8%89%e7%a7%8d%e4%ba%8b%e4%bb%b6%ef%bc%8c%e5%8d%b3%e9%80%9a%e7%94%a8%e4%ba%8b%e4%bb%b6%ef%bc%8cAppear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cDisappear%20%e4%ba%8b%e4%bb%b6%e3%80%82%0a%e5%bd%93WXComponent%e6%b7%bb%e5%8a%a0%e4%ba%8b%e4%bb%b6%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8c%e4%bc%9a%e8%b0%83%e7%94%a8%e4%bb%a5%e4%b8%8b%e5%87%bd%e6%95%b0%ef%bc%9a%0a-%20%28void%29_addEventOnMainThread%3a%28NSString%20%2a%29addEventName%20%7b%20WX_ADD_EVENT%28appear%2c%20addAppearEvent%29%20WX_ADD_EVENT%28disappear%2c%20addDisappearEvent%29%20WX_ADD_EVENT%28click%2c%20addClickEvent%29%20WX_ADD_EVENT%28swipe%2c%20addSwipeEvent%29%20WX_ADD_EVENT%28longpress%2c%20addLongPressEvent%29%20WX_ADD_EVENT%28panstart%2c%20addPanStartEvent%29%20WX_ADD_EVENT%28panmove%2c%20addPanMoveEvent%29%20WX_ADD_EVENT%28panend%2c%20addPanEndEvent%29%20WX_ADD_EVENT%28horizontalpan%2c%20addHorizontalPanEvent%29%20WX_ADD_EVENT%28verticalpan%2c%20addVerticalPanEvent%29%20WX_ADD_EVENT%28touchstart%2c%20addTouchStartEvent%29%20WX_ADD_EVENT%28touchmove%2c%20addTouchMoveEvent%29%20WX_ADD_EVENT%28touchend%2c%20addTouchEndEvent%29%20WX_ADD_EVENT%28touchcancel%2c%20addTouchCancelEvent%29%20%5bself%20addEvent%3aaddEventName%5d%3b%20%7d%20WX_ADD_EVENT%e6%98%af%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%9a%0a%23define%20WX_ADD_EVENT%28eventName%2c%20addSelector%29%20%5c%20if%20%28%5baddEventName%20isEqualToString%3a%40%23eventName%5d%29%20%7b%5c%20%5bself%20addSelector%5d%3b%5c%20%7d%20%20%e5%8d%b3%e6%98%af%e5%88%a4%e6%96%ad%e5%be%85%e6%b7%bb%e5%8a%a0%e7%9a%84%e4%ba%8b%e4%bb%b6addEventName%e7%9a%84%e5%90%8d%e5%ad%97%e5%92%8c%e9%bb%98%e8%ae%a4%e6%94%af%e6%8c%81%e7%9a%84%e4%ba%8b%e4%bb%b6%e5%90%8d%e5%ad%97eventName%e6%98%af%e5%90%a6%e4%b8%80%e8%87%b4%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%b8%80%e8%87%b4%ef%bc%8c%e5%b0%b1%e6%89%a7%e8%a1%8caddSelector%e6%96%b9%e6%b3%95%e3%80%82%0a%e6%9c%80%e5%90%8e%e4%bc%9a%e6%89%a7%e8%a1%8c%e4%b8%80%e4%b8%aaaddEvent%3a%e6%96%b9%e6%b3%95%ef%bc%8c%e6%af%8f%e4%b8%aa%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e4%bc%9a%e5%8f%af%e4%bb%a5%e9%87%8d%e5%86%99%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e3%80%82%e5%9c%a8%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e9%87%8c%e9%9d%a2%e5%81%9a%e7%9a%84%e5%b0%b1%e6%98%af%e5%af%b9%e7%bb%84%e4%bb%b6%e7%9a%84%e7%8a%b6%e6%80%81%e7%9a%84%e6%a0%87%e8%af%86%e3%80%82%0a%e6%af%94%e5%a6%82WXWebComponent%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e7%9a%84addEvent%3a%e6%96%b9%e6%b3%95%ef%bc%9a%0a-%20%28void%29addEvent%3a%28NSString%20%2a%29eventName%20%7b%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3bpagestart%26%2334%3b%5d%29%20%7b%20_startLoadEvent%20%3d%20YES%3b%20%7d%20else%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3bpagefinish%26%2334%3b%5d%29%20%7b%20_finishLoadEvent%20%3d%20YES%3b%20%7d%20else%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3berror%26%2334%3b%5d%29%20%7b%20_failLoadEvent%20%3d%20YES%3b%20%7d%20%7d%20%e5%9c%a8%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e9%87%8c%e9%9d%a2%e5%8d%b3%e5%af%b9Web%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e7%9a%84%e7%8a%b6%e6%80%81%e8%bf%9b%e8%a1%8c%e4%ba%86%e6%a0%87%e8%af%86%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&t=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一weex的事件类型>一.Weex的事件类型</a><ul><li><a href=#1-通用事件>1. 通用事件</a></li><li><a href=#一点击事件>（一）点击事件</a></li><li><a href=#1计算缩放比例因子>（1）计算缩放比例因子</a></li><li><a href=#2计算视图的缩放尺寸>（2）计算视图的缩放尺寸</a></li><li><a href=#二轻扫事件>（二）轻扫事件</a></li><li><a href=#三长按事件>（三）长按事件</a></li><li><a href=#四拖动事件>（四）拖动事件</a></li><li><a href=#五通用触摸事件>（五）通用触摸事件</a></li><li><a href=#2-appear-事件>2. Appear 事件</a></li><li><a href=#3-disappear-事件>3. Disappear 事件</a></li><li><a href=#4-page-事件>4. Page 事件</a></li></ul></li><li><a href=#二weex的事件传递>二.Weex的事件传递</a><ul><li><a href=#1callback>（1）callback</a></li><li><a href=#2fireeventparamsdomchanges>（2）fireEvent:params:domChanges:</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">Weex 事件传递的那些事儿</h1><div class=meta><div class=postdate><time datetime="2017-04-14 18:18:00 +0000 UTC" itemprop=datePublished>Apr 14</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/weex>Weex</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/weex rel=tag>Weex</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>在前两篇文章里面分别谈了Weex如何在Native端初始化的和Weex是如何高效的渲染Native的原生UI的。Native这边还缺一块，那就是Native产生的一些事件，是怎么传回给JS的。这篇文章就详细分析这一部分。</p><h3 id=目录>目录</h3><ul><li>1.Weex的事件类型</li><li>2.Weex的事件传递</li></ul><h3 id=一weex的事件类型>一.Weex的事件类型</h3><p>在Weex中，目前最新版本中事件总共分为4种类型，通用事件，Appear 事件，Disappear 事件，Page 事件。</p><p>在Weex的组件里面只包含前三种事件，即通用事件，Appear 事件，Disappear 事件。</p><p>当WXComponent添加事件的时候，会调用以下函数：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>_addEventOnMainThread:</span>(NSString <span style=color:#f92672>*</span>)addEventName
+{
+    WX_ADD_EVENT(appear, addAppearEvent)
+    WX_ADD_EVENT(disappear, addDisappearEvent)
+    
+    WX_ADD_EVENT(click, addClickEvent)
+    WX_ADD_EVENT(swipe, addSwipeEvent)
+    WX_ADD_EVENT(longpress, addLongPressEvent)
+    
+    WX_ADD_EVENT(panstart, addPanStartEvent)
+    WX_ADD_EVENT(panmove, addPanMoveEvent)
+    WX_ADD_EVENT(panend, addPanEndEvent)
+    
+    WX_ADD_EVENT(horizontalpan, addHorizontalPanEvent)
+    WX_ADD_EVENT(verticalpan, addVerticalPanEvent)
+    
+    WX_ADD_EVENT(touchstart, addTouchStartEvent)
+    WX_ADD_EVENT(touchmove, addTouchMoveEvent)
+    WX_ADD_EVENT(touchend, addTouchEndEvent)
+    WX_ADD_EVENT(touchcancel, addTouchCancelEvent)
+    
+    [self addEvent:addEventName];
+}
+
+
+
+</code></pre></div><p>WX_ADD_EVENT是一个宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define WX_ADD_EVENT(eventName, addSelector) \
+</span><span style=color:#75715e>if ([addEventName isEqualToString:@#eventName]) {\
+</span><span style=color:#75715e>    [self addSelector];\
+</span><span style=color:#75715e>}
+</span><span style=color:#75715e></span>
+</code></pre></div><p>即是判断待添加的事件addEventName的名字和默认支持的事件名字eventName是否一致，如果一致，就执行addSelector方法。</p><p>最后会执行一个addEvent:方法，每个组件里面会可以重写这个方法。在这个方法里面做的就是对组件的状态的标识。</p><p>比如WXWebComponent组件里面的addEvent:方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName
+{
+    <span style=color:#66d9ef>if</span> ([eventName isEqualToString:<span style=color:#e6db74>@&#34;pagestart&#34;</span>]) {
+        _startLoadEvent <span style=color:#f92672>=</span> YES;
+    }
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> ([eventName isEqualToString:<span style=color:#e6db74>@&#34;pagefinish&#34;</span>]) {
+        _finishLoadEvent <span style=color:#f92672>=</span> YES;
+    }
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> ([eventName isEqualToString:<span style=color:#e6db74>@&#34;error&#34;</span>]) {
+        _failLoadEvent <span style=color:#f92672>=</span> YES;
+    }
+}
+
+
+</code></pre></div><p>在这个方法里面即对Web组件里面的状态进行了标识。</p><p>接下来就看看这几个组件是怎么识别事件的触发的。</p><h4 id=1-通用事件>1. 通用事件</h4><p>在WXComponent的定义里，定义了如下和事件相关的变量：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>WXComponent</span> ()
+{
+@package
+
+    <span style=color:#66d9ef>BOOL</span> _appearEvent;
+    <span style=color:#66d9ef>BOOL</span> _disappearEvent;
+    UITapGestureRecognizer <span style=color:#f92672>*</span>_tapGesture;
+    NSMutableArray <span style=color:#f92672>*</span>_swipeGestures;
+    UILongPressGestureRecognizer <span style=color:#f92672>*</span>_longPressGesture;
+    UIPanGestureRecognizer <span style=color:#f92672>*</span>_panGesture;
+    
+    <span style=color:#66d9ef>BOOL</span> _listenPanStart;
+    <span style=color:#66d9ef>BOOL</span> _listenPanMove;
+    <span style=color:#66d9ef>BOOL</span> _listenPanEnd;
+    
+    <span style=color:#66d9ef>BOOL</span> _listenHorizontalPan;
+    <span style=color:#66d9ef>BOOL</span> _listenVerticalPan;
+    
+    WXTouchGestureRecognizer<span style=color:#f92672>*</span> _touchGesture;
+}
+
+
+</code></pre></div><p>上述变量里面就包含有4个手势识别器和1个自定义手势识别器。所以Weex的通用事件里面就包含这5种，点击事件，轻扫事件，长按事件，拖动事件，通用触摸事件。</p><h4 id=一点击事件>（一）点击事件</h4><p>首先看点击事件：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    WX_ADD_EVENT(click, addClickEvent)
+
+
+</code></pre></div><p>点击事件是通过上面这个宏加到指定视图上的。这个宏上面提到过了。这里直接把宏展开</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define WX_ADD_EVENT(click, addClickEvent) \
+</span><span style=color:#75715e>if ([addEventName isEqualToString:@“click”]) {\
+</span><span style=color:#75715e>    [self addClickEvent];\
+</span><span style=color:#75715e>}
+</span><span style=color:#75715e></span>
+</code></pre></div><p>如果addEventName传进来event的是@“click”，那么就是执行addClickEvent方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addClickEvent</span>
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>_tapGesture) {
+        _tapGesture <span style=color:#f92672>=</span> [[UITapGestureRecognizer alloc] initWithTarget:self action:<span style=color:#66d9ef>@selector</span>(onClick:)];
+        _tapGesture.delegate <span style=color:#f92672>=</span> self;
+        [self.view addGestureRecognizer:_tapGesture];
+    }
+}
+
+
+</code></pre></div><p>给当前的视图增加一个点击手势，触发的方法是onClick:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>onClick:</span>(__unused UITapGestureRecognizer <span style=color:#f92672>*</span>)recognizer
+{
+    NSMutableDictionary <span style=color:#f92672>*</span>position <span style=color:#f92672>=</span> [[NSMutableDictionary alloc] initWithCapacity:<span style=color:#ae81ff>4</span>];
+    CGFloat scaleFactor <span style=color:#f92672>=</span> self.weexInstance.pixelScaleFactor;
+    
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>CGRectEqualToRect(self.calculatedFrame, CGRectZero)) {
+        CGRect frame <span style=color:#f92672>=</span> [self.view.superview convertRect:self.calculatedFrame toView:self.view.window];
+        position[<span style=color:#e6db74>@&#34;x&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.origin.x<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;y&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.origin.y<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;width&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.size.width<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;height&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.size.height<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    }
+
+    [self fireEvent:<span style=color:#e6db74>@&#34;click&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;position&#34;</span><span style=color:#f92672>:</span>position<span style=color:#ae81ff>}</span>];
+}
+
+</code></pre></div><p>一旦用户点击屏幕，就会触发点击手势，点击手势就会执行上述的onClick:方法。在这个方法中，Weex会计算点击出点击到的视图的坐标以及宽高尺寸。</p><p>说到这里就需要提到Weex的坐标计算方法了。</p><h4 id=1计算缩放比例因子>（1）计算缩放比例因子</h4><p>在日常iOS开发中，开发者使用的计算单位是pt。</p><p>iPhone5分辨率320pt x 568pt<br>iPhone6分辨率375pt x 667pt<br>iPhone6 Plus分辨率414pt x 736pt</p><p>由于每个屏幕的ppi不同(ppi:Pixels Per Inch，即每英寸所拥有的像素数目，屏幕像素密度。)，最终会导致分辨率的不同。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_1.png alt></p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_2.png alt></p><p>这也就是我们日常说的@1x，@2x，@3x，目前iPhone手机也就3种ppi</p><p>@1x，163ppi（iPhone3gs）<br>@2x，326ppi（iPhone4、4s、5、5s、6，6s，7）<br>@3x，401ppi（iPhone6+、6s+、7+）</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_3.png alt></p><p>px即pixels像素，1px代表屏幕上一个物理的像素点。</p><p>iPhone5像素640px x 1136px
+iPhone6像素750px x 1334px
+iPhone6 Plus像素1242px x 2208px</p><p>而Weex的开发中，目前都是用的px，而且<strong>Weex 对于长度值目前只支持像素px值，还不支持相对单位（em、rem）</strong>。</p><p>那么就需要pt和px的换算了。</p><p>在Weex的世界里，定义了一个默认屏幕尺寸，用来适配iOS，Android各种不同大小的屏幕。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#75715e>// The default screen width which helps us to calculate the real size or scale in different devices.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>static</span> <span style=color:#66d9ef>const</span> CGFloat WXDefaultScreenWidth <span style=color:#f92672>=</span> <span style=color:#ae81ff>750.0</span>;
+
+
+</code></pre></div><p>在Weex中定义的默认的屏幕宽度是750，注意是宽度。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (CGFloat)<span style=color:#a6e22e>defaultPixelScaleFactor</span>
+{
+    <span style=color:#66d9ef>static</span> CGFloat defaultScaleFactor;
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        defaultScaleFactor <span style=color:#f92672>=</span> [self portraitScreenSize].width <span style=color:#f92672>/</span> WXDefaultScreenWidth;
+    });
+    
+    <span style=color:#66d9ef>return</span> defaultScaleFactor;
+}
+
+
+</code></pre></div><p>这里计算了一个默认的缩放比例因子，portraitScreenSize里面计算出了屏幕在portrait方向下的大小，即如果方向是landscape，那么缩放比例因子应该等于WXScreenSize().height / WXDefaultScreenWidth，反之应该等于WXScreenSize().width / WXDefaultScreenWidth。</p><p>这里计算的是pt。</p><p>iPhone 4、4s、5、5s、5c、SE的比例因子是0.42666667
+iPhone 6、6s、7比例因子是0.5
+iPhone 6+、6s+、7+比例因子是0.552</p><h4 id=2计算视图的缩放尺寸>（2）计算视图的缩放尺寸</h4><p>计算视图的缩放尺寸主要在这个方法里面被计算。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>_calculateFrameWithSuperAbsolutePosition:</span>(CGPoint)superAbsolutePosition
+                           <span style=color:#a6e22e>gatherDirtyComponents:</span>(NSMutableSet<span style=color:#f92672>&lt;</span>WXComponent <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)dirtyComponents
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>_cssNode<span style=color:#f92672>-&gt;</span>layout.should_update) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    _cssNode<span style=color:#f92672>-&gt;</span>layout.should_update <span style=color:#f92672>=</span> false;
+    _isLayoutDirty <span style=color:#f92672>=</span> NO;
+    
+    <span style=color:#75715e>// 计算视图的Frame
+</span><span style=color:#75715e></span>    CGRect newFrame <span style=color:#f92672>=</span> CGRectMake(WXRoundPixelValue(_cssNode<span style=color:#f92672>-&gt;</span>layout.position[CSS_LEFT]),
+                                 WXRoundPixelValue(_cssNode<span style=color:#f92672>-&gt;</span>layout.position[CSS_TOP]),
+                                 WXRoundPixelValue(_cssNode<span style=color:#f92672>-&gt;</span>layout.dimensions[CSS_WIDTH]),
+                                 WXRoundPixelValue(_cssNode<span style=color:#f92672>-&gt;</span>layout.dimensions[CSS_HEIGHT]));
+    
+    <span style=color:#66d9ef>BOOL</span> isFrameChanged <span style=color:#f92672>=</span> NO;
+    <span style=color:#75715e>// 比较newFrame和_calculatedFrame，第一次_calculatedFrame为CGRectZero
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>CGRectEqualToRect(newFrame, _calculatedFrame)) {
+        isFrameChanged <span style=color:#f92672>=</span> YES;
+        _calculatedFrame <span style=color:#f92672>=</span> newFrame;
+        [dirtyComponents addObject:self];
+    }
+    
+    CGPoint newAbsolutePosition <span style=color:#f92672>=</span> [self computeNewAbsolutePosition:superAbsolutePosition];
+    
+    _cssNode<span style=color:#f92672>-&gt;</span>layout.dimensions[CSS_WIDTH] <span style=color:#f92672>=</span> CSS_UNDEFINED;
+    _cssNode<span style=color:#f92672>-&gt;</span>layout.dimensions[CSS_HEIGHT] <span style=color:#f92672>=</span> CSS_UNDEFINED;
+    _cssNode<span style=color:#f92672>-&gt;</span>layout.position[CSS_LEFT] <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    _cssNode<span style=color:#f92672>-&gt;</span>layout.position[CSS_TOP] <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    
+    [self _frameDidCalculated:isFrameChanged];
+    
+    <span style=color:#66d9ef>for</span> (WXComponent <span style=color:#f92672>*</span>subcomponent <span style=color:#66d9ef>in</span> _subcomponents) {
+        [subcomponent _calculateFrameWithSuperAbsolutePosition:newAbsolutePosition gatherDirtyComponents:dirtyComponents];
+    }
+}
+
+
+</code></pre></div><p>newFrame就是计算出来的缩放过的Frame。</p><p>如果尝试自己手动计算Vue.js上设置的px与实际的视图坐标值相比，你会发现永远都差一点，虽然偏差不多，但是总有误差，原因在哪里呢？就在WXRoundPixelValue这个函数里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+CGFloat <span style=color:#a6e22e>WXRoundPixelValue</span>(CGFloat value)
+{
+    CGFloat scale <span style=color:#f92672>=</span> WXScreenScale();
+    <span style=color:#66d9ef>return</span> round(value <span style=color:#f92672>*</span> scale) <span style=color:#f92672>/</span> scale;
+}
+
+
+</code></pre></div><p>WXRoundPixelValue这个函数里面进行了一次四舍五入的计算，这里会对精度有所损失，所以就会导致最终Native的组件的坐标会偏差一点。</p><p>举个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>style</span><span style=color:#f92672>&gt;</span>
+
+    .<span style=color:#a6e22e>pic</span>{
+        <span style=color:#a6e22e>width</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>200</span><span style=color:#a6e22e>px</span>;
+        <span style=color:#a6e22e>height</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>200</span><span style=color:#a6e22e>px</span>;
+        <span style=color:#a6e22e>margin</span><span style=color:#f92672>-</span><span style=color:#a6e22e>top</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>100</span><span style=color:#a6e22e>px</span>;
+        <span style=color:#a6e22e>left</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>200</span><span style=color:#a6e22e>px</span>;
+        <span style=color:#a6e22e>background</span><span style=color:#f92672>-</span><span style=color:#a6e22e>color</span><span style=color:#f92672>:</span> <span style=color:#960050;background-color:#1e0010>#</span><span style=color:#a6e22e>a88859</span>;
+    }
+
+<span style=color:#f92672>&lt;</span><span style=color:#960050;background-color:#1e0010>/style&gt;</span>
+
+
+
+</code></pre></div><p>这里是一个imageComponent，坐标是距离上边距100px，距离左边距200px，宽200px，高200px。</p><p>假设我们是在iPhone 7+的屏幕上，ppi对应的应该是scale = 3（即@3x）。</p><p>按照Weex的上述的计算方法算，那么对应缩放的px为：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+x <span style=color:#f92672>=</span> <span style=color:#ae81ff>200</span> <span style=color:#f92672>*</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.400000</span>
+y <span style=color:#f92672>=</span> <span style=color:#ae81ff>100</span> <span style=color:#f92672>*</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>55.200000</span>
+width <span style=color:#f92672>=</span> <span style=color:#ae81ff>200</span> <span style=color:#f92672>*</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.400000</span>
+height <span style=color:#f92672>=</span> <span style=color:#ae81ff>200</span> <span style=color:#f92672>*</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.400000</span>
+
+</code></pre></div><p>再转换成pt：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+x <span style=color:#f92672>=</span> round ( <span style=color:#ae81ff>110.400000</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>3</span> ) <span style=color:#f92672>/</span> <span style=color:#ae81ff>3</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.333333</span>
+y <span style=color:#f92672>=</span> round ( <span style=color:#ae81ff>55.200000</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>3</span> ) <span style=color:#f92672>/</span> <span style=color:#ae81ff>3</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>55.333333</span>
+width <span style=color:#f92672>=</span> round ( <span style=color:#ae81ff>110.400000</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>3</span> ) <span style=color:#f92672>/</span> <span style=color:#ae81ff>3</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.333333</span>
+height <span style=color:#f92672>=</span> round ( <span style=color:#ae81ff>110.400000</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>3</span> ) <span style=color:#f92672>/</span> <span style=color:#ae81ff>3</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.333333</span>
+
+</code></pre></div><p>如果只是单纯的认为是针对750的成比缩放，那么这里110.333333 / ( 414.0 / 750.0 ) = 199.87922101，你会发现这个数字距离200还是差了零点几。精度就是损失在了round函数上了</p><p>那么当前的imageComponent在父视图里面的Frame = （110.333333，55.333333，110.333333，110.333333）。</p><p>回到onClick:方法里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>onClick:</span>(__unused UITapGestureRecognizer <span style=color:#f92672>*</span>)recognizer
+{
+    NSMutableDictionary <span style=color:#f92672>*</span>position <span style=color:#f92672>=</span> [[NSMutableDictionary alloc] initWithCapacity:<span style=color:#ae81ff>4</span>];
+    CGFloat scaleFactor <span style=color:#f92672>=</span> self.weexInstance.pixelScaleFactor;
+    
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>CGRectEqualToRect(self.calculatedFrame, CGRectZero)) {
+        CGRect frame <span style=color:#f92672>=</span> [self.view.superview convertRect:self.calculatedFrame toView:self.view.window];
+        position[<span style=color:#e6db74>@&#34;x&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.origin.x<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;y&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.origin.y<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;width&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.size.width<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+        position[<span style=color:#e6db74>@&#34;height&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>frame.size.height<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    }
+
+    [self fireEvent:<span style=color:#e6db74>@&#34;click&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;position&#34;</span><span style=color:#f92672>:</span>position<span style=color:#ae81ff>}</span>];
+}
+
+</code></pre></div><p>如果点击到视图，就会触发点击手势的处理方法，就会进入到上述方法里。</p><p>这里会计算出点击到的视图相对于window的绝对坐标。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+CGRect frame <span style=color:#f92672>=</span> [self.view.superview convertRect:self.calculatedFrame toView:self.view.window];
+
+</code></pre></div><p>上面这句话会进行一个坐标转换。坐标系转换到全局的window的左边。</p><p>还是按照上面举的例子，如果imageComponent经过转换以后，frame = （110.33333333333333, 119.33333333333334, 110.33333333333333, 110.33333333333331），这里就是y轴的距离发生了变化，因为就加上了navigation + statusBar 的64的高度。</p><p>计算出了这个window绝对坐标之后，还要还原成相对于750.0宽度的“尺寸”。这里之所以打引号，就是因为这里有精度损失，在round函数那里丢了一些精度。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+x <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.33333333333333</span> <span style=color:#f92672>/</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>199.8792270531401</span>
+y <span style=color:#f92672>=</span> <span style=color:#ae81ff>119.33333333333334</span> <span style=color:#f92672>/</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>216.1835748792271</span>
+width <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.33333333333333</span> <span style=color:#f92672>/</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>199.8792270531401</span>
+height <span style=color:#f92672>=</span> <span style=color:#ae81ff>110.33333333333333</span> <span style=color:#f92672>/</span> ( <span style=color:#ae81ff>414.0</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>750.0</span> ) <span style=color:#f92672>=</span> <span style=color:#ae81ff>199.8792270531401</span>
+
+
+</code></pre></div><p>上述就是点击以后经过转换最终得到的坐标，这个坐标会传递给JS。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_4.png alt></p><h4 id=二轻扫事件>（二）轻扫事件</h4><p>接着是轻扫事件。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    WX_ADD_EVENT(swipe, addSwipeEvent)
+
+
+</code></pre></div><p>这个宏和上面点击事件的展开原理一样，这里不再赘述。</p><p>如果addEventName传进来event的是@“swipe”，那么就是执行addSwipeEvent方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addSwipeEvent</span>
+{
+    <span style=color:#66d9ef>if</span> (_swipeGestures) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    _swipeGestures <span style=color:#f92672>=</span> [NSMutableArray arrayWithCapacity:<span style=color:#ae81ff>4</span>];
+    
+
+    <span style=color:#75715e>// 下面的代码写的比较“奇怪”，原因在于UISwipeGestureRecognizer的direction属性，是一个可选的位掩码，但是每个手势识别器又只能处理一个方向的手势，所以就导致了下面需要生成四个UISwipeGestureRecognizer的手势识别器。
+</span><span style=color:#75715e></span>
+    <span style=color:#66d9ef>SEL</span> selector <span style=color:#f92672>=</span> <span style=color:#66d9ef>@selector</span>(onSwipe:);
+
+    <span style=color:#75715e>// 新建一个upSwipeRecognizer
+</span><span style=color:#75715e></span>    UISwipeGestureRecognizer <span style=color:#f92672>*</span>upSwipeRecognizer <span style=color:#f92672>=</span> [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                            action:selector];
+    upSwipeRecognizer.direction <span style=color:#f92672>=</span> UISwipeGestureRecognizerDirectionUp;
+    upSwipeRecognizer.delegate <span style=color:#f92672>=</span> self;
+    [_swipeGestures addObject:upSwipeRecognizer];
+    [self.view addGestureRecognizer:upSwipeRecognizer];
+    
+
+    <span style=color:#75715e>// 新建一个downSwipeRecognizer
+</span><span style=color:#75715e></span>    UISwipeGestureRecognizer <span style=color:#f92672>*</span>downSwipeRecognizer <span style=color:#f92672>=</span> [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                              action:selector];
+    downSwipeRecognizer.direction <span style=color:#f92672>=</span> UISwipeGestureRecognizerDirectionDown;
+    downSwipeRecognizer.delegate <span style=color:#f92672>=</span> self;
+    [_swipeGestures addObject:downSwipeRecognizer];
+    [self.view addGestureRecognizer:downSwipeRecognizer];
+    
+    <span style=color:#75715e>// 新建一个rightSwipeRecognizer
+</span><span style=color:#75715e></span>    UISwipeGestureRecognizer <span style=color:#f92672>*</span>rightSwipeRecognizer <span style=color:#f92672>=</span> [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                               action:selector];
+    rightSwipeRecognizer.direction <span style=color:#f92672>=</span> UISwipeGestureRecognizerDirectionRight;
+    rightSwipeRecognizer.delegate <span style=color:#f92672>=</span> self;
+    [_swipeGestures addObject:rightSwipeRecognizer];
+    [self.view addGestureRecognizer:rightSwipeRecognizer];
+    
+    <span style=color:#75715e>// 新建一个leftSwipeRecognizer
+</span><span style=color:#75715e></span>    UISwipeGestureRecognizer <span style=color:#f92672>*</span>leftSwipeRecognizer <span style=color:#f92672>=</span> [[UISwipeGestureRecognizer alloc] initWithTarget:self
+                                                                                              action:selector];
+    leftSwipeRecognizer.direction <span style=color:#f92672>=</span> UISwipeGestureRecognizerDirectionLeft;
+    leftSwipeRecognizer.delegate <span style=color:#f92672>=</span> self;
+    [_swipeGestures addObject:leftSwipeRecognizer];
+    [self.view addGestureRecognizer:leftSwipeRecognizer];
+}
+
+</code></pre></div><p>上面会新建4个方向上的手势识别器。因为每个手势识别器又只能处理一个方向的手势，所以就导致了需要生成四个UISwipeGestureRecognizer的手势识别器。</p><p>给当前的视图增加一个轻扫手势，触发的方法是onSwipe:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>onSwipe:</span>(UISwipeGestureRecognizer <span style=color:#f92672>*</span>)gesture
+{
+    UISwipeGestureRecognizerDirection direction <span style=color:#f92672>=</span> gesture.direction;
+    
+    NSString <span style=color:#f92672>*</span>directionString;
+    <span style=color:#66d9ef>switch</span>(direction) {
+        <span style=color:#66d9ef>case</span> UISwipeGestureRecognizerDirectionLeft:
+            directionString <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;left&#34;</span>;
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> UISwipeGestureRecognizerDirectionRight:
+            directionString <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;right&#34;</span>;
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> UISwipeGestureRecognizerDirectionUp:
+            directionString <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;up&#34;</span>;
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> UISwipeGestureRecognizerDirectionDown:
+            directionString <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;down&#34;</span>;
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span>
+            directionString <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;unknown&#34;</span>;
+    }
+    
+    CGPoint screenLocation <span style=color:#f92672>=</span> [gesture locationInView:self.view.window];
+    CGPoint pageLoacation <span style=color:#f92672>=</span> [gesture locationInView:self.weexInstance.rootView];
+    NSDictionary <span style=color:#f92672>*</span>resultTouch <span style=color:#f92672>=</span> [self touchResultWithScreenLocation:screenLocation pageLocation:pageLoacation identifier:gesture.wx_identifier];
+    [self fireEvent:<span style=color:#e6db74>@&#34;swipe&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;direction&#34;</span><span style=color:#f92672>:</span>directionString, <span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouch <span style=color:#f92672>?</span> <span style=color:#ae81ff>@[</span>resultTouch<span style=color:#ae81ff>]</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>@[]}</span>];
+}
+
+
+</code></pre></div><p>当用户轻扫以后，会触发轻扫手势，于是会在window上和rootView上会获取到2个坐标。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSDictionary <span style=color:#f92672>*</span>)<span style=color:#a6e22e>touchResultWithScreenLocation:</span>(CGPoint)screenLocation <span style=color:#a6e22e>pageLocation:</span>(CGPoint)pageLocation <span style=color:#a6e22e>identifier:</span>(NSNumber <span style=color:#f92672>*</span>)identifier
+{
+    NSMutableDictionary <span style=color:#f92672>*</span>resultTouch <span style=color:#f92672>=</span> [[NSMutableDictionary alloc] initWithCapacity:<span style=color:#ae81ff>5</span>];
+    CGFloat scaleFactor <span style=color:#f92672>=</span> self.weexInstance.pixelScaleFactor;
+    resultTouch[<span style=color:#e6db74>@&#34;screenX&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>screenLocation.x<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    resultTouch[<span style=color:#e6db74>@&#34;screenY&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>screenLocation.y<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    resultTouch[<span style=color:#e6db74>@&#34;pageX&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>pageLocation.x<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    resultTouch[<span style=color:#e6db74>@&#34;pageY&#34;</span>] <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>pageLocation.y<span style=color:#f92672>/</span>scaleFactor<span style=color:#ae81ff>)</span>;
+    resultTouch[<span style=color:#e6db74>@&#34;identifier&#34;</span>] <span style=color:#f92672>=</span> identifier;
+    
+    <span style=color:#66d9ef>return</span> resultTouch;
+}
+
+
+
+</code></pre></div><p>screenLocation和pageLocation两个坐标点，还是会根据缩放比例还原成相对于750宽度的页面的坐标。screenLocation的X值和Y值、pageLocation的X值和Y值分别封装到resultTouch字典里。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>UIGestureRecognizer</span> (WXGesture)
+
+- (NSNumber <span style=color:#f92672>*</span>)<span style=color:#a6e22e>wx_identifier</span>
+{
+    NSNumber <span style=color:#f92672>*</span>identifier <span style=color:#f92672>=</span> objc_getAssociatedObject(self, _cmd);
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>identifier) {
+        <span style=color:#66d9ef>static</span> NSUInteger _gestureIdentifier;
+        identifier <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>_gestureIdentifier<span style=color:#f92672>++</span><span style=color:#ae81ff>)</span>;
+        self.wx_identifier <span style=color:#f92672>=</span> identifier;
+    }
+    
+    <span style=color:#66d9ef>return</span> identifier;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setWx_identifier:</span>(NSNumber <span style=color:#f92672>*</span>)wx_identifier
+{
+    objc_setAssociatedObject(self, <span style=color:#66d9ef>@selector</span>(wx_identifier), wx_identifier, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>最后resultTouch里面还包含一个identifier的参数，这个identifier是一个全局唯一的NSUInteger。wx_identifier被关联到了各个手势识别器上了。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_5.png alt></p><h4 id=三长按事件>（三）长按事件</h4><p>接着是轻扫事件。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    WX_ADD_EVENT(longpress, addLongPressEvent)
+
+
+</code></pre></div><p>这个宏和上面点击事件的展开原理一样，这里不再赘述。</p><p>如果addEventName传进来event的是@“longpress”，那么就是执行addLongPressEvent方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addLongPressEvent</span>
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>_longPressGesture) {
+        _longPressGesture <span style=color:#f92672>=</span> [[UILongPressGestureRecognizer alloc] initWithTarget:self action:<span style=color:#66d9ef>@selector</span>(onLongPress:)];
+        _longPressGesture.delegate <span style=color:#f92672>=</span> self;
+        [self.view addGestureRecognizer:_longPressGesture];
+    }
+}
+
+
+</code></pre></div><p>给当前的视图增加一个长按手势，触发的方法是onLongPress:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>onLongPress:</span>(UILongPressGestureRecognizer <span style=color:#f92672>*</span>)gesture
+{
+    <span style=color:#66d9ef>if</span> (gesture.state <span style=color:#f92672>==</span> UIGestureRecognizerStateBegan) {
+        CGPoint screenLocation <span style=color:#f92672>=</span> [gesture locationInView:self.view.window];
+        CGPoint pageLoacation <span style=color:#f92672>=</span> [gesture locationInView:self.weexInstance.rootView];
+        NSDictionary <span style=color:#f92672>*</span>resultTouch <span style=color:#f92672>=</span> [self touchResultWithScreenLocation:screenLocation pageLocation:pageLoacation identifier:gesture.wx_identifier];
+        [self fireEvent:<span style=color:#e6db74>@&#34;longpress&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouch <span style=color:#f92672>?</span> <span style=color:#ae81ff>@[</span>resultTouch<span style=color:#ae81ff>]</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>@[]}</span>];
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (gesture.state <span style=color:#f92672>==</span> UIGestureRecognizerStateEnded) {
+        gesture.wx_identifier <span style=color:#f92672>=</span> nil;
+    }
+}
+
+
+</code></pre></div><p>长按手势传给JS的参数和轻扫的参数changedTouches几乎一致。在长按手势开始的时候就传递给JS两个Point，screenLocation和pageLoacation，以及手势的wx_identifier。这部分和轻扫手势基本一样，不多赘述。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_6.png alt></p><h4 id=四拖动事件>（四）拖动事件</h4><p>拖动事件在Weex里面包含5个事件。分别对应着拖动的5种状态：拖动开始，拖动中，拖动结束，水平拖动，竖直拖动。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    WX_ADD_EVENT(panstart, addPanStartEvent)
+    WX_ADD_EVENT(panmove, addPanMoveEvent)
+    WX_ADD_EVENT(panend, addPanEndEvent)
+    WX_ADD_EVENT(horizontalpan, addHorizontalPanEvent)
+    WX_ADD_EVENT(verticalpan, addVerticalPanEvent)
+
+
+</code></pre></div><p>为了区分上面5种状态，Weex还对每个状态增加了一个BOOL变量来判断当前的状态。分别如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    <span style=color:#66d9ef>BOOL</span> _listenPanStart;
+    <span style=color:#66d9ef>BOOL</span> _listenPanMove;
+    <span style=color:#66d9ef>BOOL</span> _listenPanEnd;
+    <span style=color:#66d9ef>BOOL</span> _listenHorizontalPan;
+    <span style=color:#66d9ef>BOOL</span> _listenVerticalPan;
+
+</code></pre></div><p>通过宏增加的5个事件，实质都是执行了addPanGesture方法，只不过每个状态的事件都会跟对应的BOOL变量。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addPanStartEvent</span>
+{
+   <span style=color:#75715e>// 拖动开始
+</span><span style=color:#75715e></span>    _listenPanStart <span style=color:#f92672>=</span> YES;
+    [self addPanGesture];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addPanMoveEvent</span>
+{
+   <span style=color:#75715e>// 拖动中
+</span><span style=color:#75715e></span>    _listenPanMove <span style=color:#f92672>=</span> YES;
+    [self addPanGesture];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addPanEndEvent</span>
+{
+   <span style=color:#75715e>// 拖动结束
+</span><span style=color:#75715e></span>    _listenPanEnd <span style=color:#f92672>=</span> YES;
+    [self addPanGesture];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addHorizontalPanEvent</span>
+{
+   <span style=color:#75715e>// 水平拖动
+</span><span style=color:#75715e></span>    _listenHorizontalPan <span style=color:#f92672>=</span> YES;
+    [self addPanGesture];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addVerticalPanEvent</span>
+{
+   <span style=color:#75715e>// 竖直拖动
+</span><span style=color:#75715e></span>    _listenVerticalPan <span style=color:#f92672>=</span> YES;
+    [self addPanGesture];
+}
+
+
+</code></pre></div><p>最终都是调用addPanGesture方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addPanGesture</span>
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>_panGesture) {
+        _panGesture <span style=color:#f92672>=</span> [[UIPanGestureRecognizer alloc] initWithTarget:self action:<span style=color:#66d9ef>@selector</span>(onPan:)];
+        _panGesture.delegate <span style=color:#f92672>=</span> self;
+        [self.view addGestureRecognizer:_panGesture];
+    }
+}
+
+
+</code></pre></div><p>给当前的视图增加一个拖动手势，触发的方法是onPan:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>onPan:</span>(UIPanGestureRecognizer <span style=color:#f92672>*</span>)gesture
+{
+    CGPoint screenLocation <span style=color:#f92672>=</span> [gesture locationInView:self.view.window];
+    CGPoint pageLoacation <span style=color:#f92672>=</span> [gesture locationInView:self.weexInstance.rootView];
+    NSString <span style=color:#f92672>*</span>eventName;
+    NSString <span style=color:#f92672>*</span>state <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;&#34;</span>;
+    NSDictionary <span style=color:#f92672>*</span>resultTouch <span style=color:#f92672>=</span> [self touchResultWithScreenLocation:screenLocation pageLocation:pageLoacation identifier:gesture.wx_identifier];
+    
+    <span style=color:#66d9ef>if</span> (gesture.state <span style=color:#f92672>==</span> UIGestureRecognizerStateBegan) {
+        <span style=color:#66d9ef>if</span> (_listenPanStart) {
+            eventName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;panstart&#34;</span>;
+        }
+        state <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;start&#34;</span>;
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (gesture.state <span style=color:#f92672>==</span> UIGestureRecognizerStateEnded) {
+        <span style=color:#66d9ef>if</span> (_listenPanEnd) {
+            eventName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;panend&#34;</span>;
+        }
+        state <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;end&#34;</span>;
+        gesture.wx_identifier <span style=color:#f92672>=</span> nil;
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (gesture.state <span style=color:#f92672>==</span> UIGestureRecognizerStateChanged) {
+        <span style=color:#66d9ef>if</span> (_listenPanMove) {
+             eventName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;panmove&#34;</span>;
+        }
+        state <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;move&#34;</span>;
+    }
+    
+    
+    CGPoint translation <span style=color:#f92672>=</span> [_panGesture translationInView:self.view];
+    
+    <span style=color:#66d9ef>if</span> (_listenHorizontalPan <span style=color:#f92672>&amp;&amp;</span> fabs(translation.y) <span style=color:#f92672>&lt;=</span> fabs(translation.x)) {
+        [self fireEvent:<span style=color:#e6db74>@&#34;horizontalpan&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;state&#34;</span><span style=color:#f92672>:</span>state, <span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouch <span style=color:#f92672>?</span> <span style=color:#ae81ff>@[</span>resultTouch<span style=color:#ae81ff>]</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>@[]}</span>];
+    }
+        
+    <span style=color:#66d9ef>if</span> (_listenVerticalPan <span style=color:#f92672>&amp;&amp;</span> fabs(translation.y) <span style=color:#f92672>&gt;</span> fabs(translation.x)) {
+        [self fireEvent:<span style=color:#e6db74>@&#34;verticalpan&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;state&#34;</span><span style=color:#f92672>:</span>state, <span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouch <span style=color:#f92672>?</span> <span style=color:#ae81ff>@[</span>resultTouch<span style=color:#ae81ff>]</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>@[]}</span>];
+    }
+        
+    <span style=color:#66d9ef>if</span> (eventName) {
+        [self fireEvent:eventName params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouch <span style=color:#f92672>?</span> <span style=color:#ae81ff>@[</span>resultTouch<span style=color:#ae81ff>]</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>@[]}</span>];
+    }
+}
+
+
+</code></pre></div><p>拖动事件最终传给JS的resultTouch字典和前两个手势的原理一样，也是需要传入两个Point，screenLocation和pageLoacation，这里不再赘述。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_7.png alt></p><p>根据_listenPanStart，_listenPanEnd，_listenPanMove判断当前的状态，并生成与之对应的eventName和state字符串。</p><p>根据_panGesture在当前视图上拖动形成的有方向的向量，进行判断当前拖动的方向。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_8.png alt></p><h4 id=五通用触摸事件>（五）通用触摸事件</h4><p>最后就是通用的触摸事件。</p><p>Weex里面对每个Component都新建了一个手势识别器。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>WXTouchGestureRecognizer</span> : <span style=color:#a6e22e>UIGestureRecognizer</span>
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> listenTouchStart;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> listenTouchMove;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> listenTouchEnd;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> listenTouchCancel;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> listenPseudoTouch;
+{
+    <span style=color:#66d9ef>__weak</span> WXComponent <span style=color:#f92672>*</span>_component;
+    NSUInteger _touchIdentifier;
+}
+
+<span style=color:#f92672>-</span> (<span style=color:#66d9ef>instancetype</span>)initWithComponent:(WXComponent <span style=color:#f92672>*</span>)component NS_DESIGNATED_INITIALIZER;
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>WXTouchGestureRecognizer是继承自UIGestureRecognizer。里面就5个BOOL。分别表示5种状态。</p><p>WXTouchGestureRecognizer会弱引用当前的WXComponent，并且也依旧有touchIdentifier。</p><p>Weex通过以下4个宏注册触摸事件方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    WX_ADD_EVENT(touchstart, addTouchStartEvent)
+    WX_ADD_EVENT(touchmove, addTouchMoveEvent)
+    WX_ADD_EVENT(touchend, addTouchEndEvent)
+    WX_ADD_EVENT(touchcancel, addTouchCancelEvent)
+
+</code></pre></div><p>通过上述宏增加的4个事件，实质都是改变每个状态的事件都会跟对应的BOOL变量。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addTouchStartEvent</span>
+{
+    self.touchGesture.listenTouchStart <span style=color:#f92672>=</span> YES;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addTouchMoveEvent</span>
+{
+    self.touchGesture.listenTouchMove <span style=color:#f92672>=</span> YES;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addTouchEndEvent</span>
+{
+    self.touchGesture.listenTouchEnd <span style=color:#f92672>=</span> YES;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addTouchCancelEvent</span>
+{
+    self.touchGesture.listenTouchCancel <span style=color:#f92672>=</span> YES;
+}
+
+
+</code></pre></div><p>当用户开始触摸屏幕，在屏幕上移动，手指从屏幕上结束触摸，取消触摸，分别都会触发touchesBegan:，touchesMoved:，touchesEnded:，touchesCancelled:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>touchesBegan:</span>(NSSet<span style=color:#f92672>&lt;</span>UITouch <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)touches <span style=color:#a6e22e>withEvent:</span>(UIEvent <span style=color:#f92672>*</span>)event
+{
+    [super touchesBegan:touches withEvent:event];
+    
+    <span style=color:#66d9ef>if</span> (_listenTouchStart) {
+        [self fireTouchEvent:<span style=color:#e6db74>@&#34;touchstart&#34;</span> withTouches:touches];
+    }
+    <span style=color:#66d9ef>if</span>(_listenPseudoTouch) {
+        NSMutableDictionary <span style=color:#f92672>*</span>styles <span style=color:#f92672>=</span> [_component getPseudoClassStyles:<span style=color:#e6db74>@&#34;active&#34;</span>];
+        [_component updatePseudoClassStyles:styles];
+    }
+
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>touchesMoved:</span>(NSSet<span style=color:#f92672>&lt;</span>UITouch <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)touches <span style=color:#a6e22e>withEvent:</span>(UIEvent <span style=color:#f92672>*</span>)event
+{
+    [super touchesMoved:touches withEvent:event];
+    
+    <span style=color:#66d9ef>if</span> (_listenTouchMove) {
+        [self fireTouchEvent:<span style=color:#e6db74>@&#34;touchmove&#34;</span> withTouches:touches];
+    }
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>touchesEnded:</span>(NSSet<span style=color:#f92672>&lt;</span>UITouch <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)touches <span style=color:#a6e22e>withEvent:</span>(UIEvent <span style=color:#f92672>*</span>)event
+{
+    
+    [super touchesEnded:touches withEvent:event];
+    
+    <span style=color:#66d9ef>if</span> (_listenTouchEnd) {
+        [self fireTouchEvent:<span style=color:#e6db74>@&#34;touchend&#34;</span> withTouches:touches];
+    }
+    <span style=color:#66d9ef>if</span>(_listenPseudoTouch) {
+        [self recoveryPseudoStyles:_component.styles];
+    }
+
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>touchesCancelled:</span>(NSSet<span style=color:#f92672>&lt;</span>UITouch <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)touches <span style=color:#a6e22e>withEvent:</span>(UIEvent <span style=color:#f92672>*</span>)event
+{
+    [super touchesCancelled:touches withEvent:event];
+    
+    <span style=color:#66d9ef>if</span> (_listenTouchCancel) {
+        [self fireTouchEvent:<span style=color:#e6db74>@&#34;touchcancel&#34;</span> withTouches:touches];
+    }
+    <span style=color:#66d9ef>if</span>(_listenPseudoTouch) {
+        [self recoveryPseudoStyles:_component.styles];
+    }
+}
+
+
+
+
+</code></pre></div><p>上述的4个事件里面实质都是在调用fireTouchEvent:withTouches:方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireTouchEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName <span style=color:#a6e22e>withTouches:</span>(NSSet<span style=color:#f92672>&lt;</span>UITouch <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)touches
+{
+    NSMutableArray <span style=color:#f92672>*</span>resultTouches <span style=color:#f92672>=</span> [NSMutableArray new];
+    
+    <span style=color:#66d9ef>for</span> (UITouch <span style=color:#f92672>*</span>touch <span style=color:#66d9ef>in</span> touches) {
+        CGPoint screenLocation <span style=color:#f92672>=</span> [touch locationInView:touch.window];
+        CGPoint pageLocation <span style=color:#f92672>=</span> [touch locationInView:_component.weexInstance.rootView];
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>touch.wx_identifier) {
+            touch.wx_identifier <span style=color:#f92672>=</span> <span style=color:#ae81ff>@(</span>_touchIdentifier<span style=color:#f92672>++</span><span style=color:#ae81ff>)</span>;
+        }
+        NSDictionary <span style=color:#f92672>*</span>resultTouch <span style=color:#f92672>=</span> [_component touchResultWithScreenLocation:screenLocation pageLocation:pageLocation identifier:touch.wx_identifier];
+        [resultTouches addObject:resultTouch];
+    }
+    
+    [_component fireEvent:eventName params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;changedTouches&#34;</span><span style=color:#f92672>:</span>resultTouches <span style=color:#f92672>?:</span> <span style=color:#ae81ff>@[]}</span>];
+}
+
+</code></pre></div><p>最终这个方法和前3个手势一样，都需要给resultTouches传入2个Point和1个wx_identifier。原理一致。</p><p>至于坐标如何传递给JS见第二章。</p><h4 id=2-appear-事件>2. Appear 事件</h4><p>如果一个位于某个可滚动区域内的组件被绑定了 appear 事件，那么当这个组件的状态变为在屏幕上可见时，该事件将被触发。</p><p>所以绑定了Appear 事件的都是可以滚动的视图。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_9.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    WX_ADD_EVENT(appear, addAppearEvent)
+
+</code></pre></div><p>通过上述的宏给可以滚动的视图增加Appear 事件。也就是当前视图执行addAppearEvent方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addAppearEvent</span>
+{
+    _appearEvent <span style=color:#f92672>=</span> YES;
+    [self.ancestorScroller addScrollToListener:self];
+}
+
+
+</code></pre></div><p>在Weex的每个组件里面都有2个BOOL记录着当前_appearEvent和_disappearEvent的状态。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#66d9ef>BOOL</span> _appearEvent;
+    <span style=color:#66d9ef>BOOL</span> _disappearEvent;
+
+</code></pre></div><p>当增加对应的事件的时候，就会把对应的BOOL变成YES。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>WXScrollerProtocol<span style=color:#f92672>&gt;</span>)<span style=color:#a6e22e>ancestorScroller</span>
+{
+    <span style=color:#66d9ef>if</span>(<span style=color:#f92672>!</span>_ancestorScroller) {
+        WXComponent <span style=color:#f92672>*</span>supercomponent <span style=color:#f92672>=</span> self.supercomponent;
+        <span style=color:#66d9ef>while</span> (supercomponent) {
+            <span style=color:#66d9ef>if</span>([supercomponent conformsToProtocol:@protocol(WXScrollerProtocol)]) {
+                _ancestorScroller <span style=color:#f92672>=</span> (<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>WXScrollerProtocol<span style=color:#f92672>&gt;</span>)supercomponent;
+                <span style=color:#66d9ef>break</span>;
+            }
+            supercomponent <span style=color:#f92672>=</span> supercomponent.supercomponent;
+        }
+    }
+    
+    <span style=color:#66d9ef>return</span> _ancestorScroller;
+}
+
+</code></pre></div><p>由于Appear 事件和 Disappear 事件都必须要求是滚动视图，所以这里会遍历当前视图的supercomponent，直到找到一个遵循WXScrollerProtocol的supercomponent。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addScrollToListener:</span>(WXComponent <span style=color:#f92672>*</span>)target
+{
+    <span style=color:#66d9ef>BOOL</span> has <span style=color:#f92672>=</span> NO;
+    <span style=color:#66d9ef>for</span> (WXScrollToTarget <span style=color:#f92672>*</span>targetData <span style=color:#66d9ef>in</span> self.listenerArray) {
+        <span style=color:#66d9ef>if</span> (targetData.target <span style=color:#f92672>==</span> target) {
+            has <span style=color:#f92672>=</span> YES;
+            <span style=color:#66d9ef>break</span>;
+        }
+    }
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>has) {
+        WXScrollToTarget <span style=color:#f92672>*</span>scrollTarget <span style=color:#f92672>=</span> [[WXScrollToTarget alloc] init];
+        scrollTarget.target <span style=color:#f92672>=</span> target;
+        scrollTarget.hasAppear <span style=color:#f92672>=</span> NO;
+        [self.listenerArray addObject:scrollTarget];
+    }
+}
+
+</code></pre></div><p>在滚动视图里面包含有一个listenerArray，数组里面装的都是被监听的对象。添加进这个数组会先判断当前是否有相同的WXScrollToTarget，避免重复添加，如果没有重复的就新建一个WXScrollToTarget，再添加进listenerArray中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>WXScrollToTarget</span> : <span style=color:#a6e22e>NSObject</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>weak</span>)   WXComponent <span style=color:#f92672>*</span>target;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) <span style=color:#66d9ef>BOOL</span> hasAppear;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>WXScrollToTarget是一个普通的对象，里面弱引用了当前需要监听的WXComponent，以及一个BOOL变量记录当前是否Appear了。</p><p>当滚动视图滚动的时候，就会触发scrollViewDidScroll:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>scrollViewDidScroll:</span>(UIScrollView <span style=color:#f92672>*</span>)scrollView
+{
+    <span style=color:#75715e>//apply block which are registered
+</span><span style=color:#75715e></span>    WXSDKInstance <span style=color:#f92672>*</span>instance <span style=color:#f92672>=</span> self.weexInstance;
+    <span style=color:#66d9ef>if</span> ([self.ref isEqualToString:WX_SDK_ROOT_REF] <span style=color:#f92672>&amp;&amp;</span>
+        [self isKindOfClass:[WXScrollerComponent <span style=color:#66d9ef>class</span>]]) {
+        <span style=color:#66d9ef>if</span> (instance.onScroll) {
+            instance.onScroll(scrollView.contentOffset);
+        }
+    }
+    
+    <span style=color:#66d9ef>if</span> (_lastContentOffset.x <span style=color:#f92672>&gt;</span> scrollView.contentOffset.x) {
+        _direction <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;right&#34;</span>;
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (_lastContentOffset.x <span style=color:#f92672>&lt;</span> scrollView.contentOffset.x) {
+        _direction <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;left&#34;</span>;
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span>(_lastContentOffset.y <span style=color:#f92672>&gt;</span> scrollView.contentOffset.y) {
+        _direction <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;down&#34;</span>;
+    } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span>(_lastContentOffset.y <span style=color:#f92672>&lt;</span> scrollView.contentOffset.y) {
+        _direction <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;up&#34;</span>;
+    }
+    
+    _lastContentOffset <span style=color:#f92672>=</span> scrollView.contentOffset;
+    
+    <span style=color:#75715e>// check sticky
+</span><span style=color:#75715e></span>    [self adjustSticky];
+    [self handleLoadMore];
+    [self handleAppear];
+    
+    <span style=color:#66d9ef>if</span> (self.onScroll) {
+        self.onScroll(scrollView);
+    }
+}
+
+
+</code></pre></div><p>在上面的方法中[self handleAppear]就是触发了判断是否Appear了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>handleAppear</span>
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[self isViewLoaded]) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    UIScrollView <span style=color:#f92672>*</span>scrollView <span style=color:#f92672>=</span> (UIScrollView <span style=color:#f92672>*</span>)self.view;
+    CGFloat vx <span style=color:#f92672>=</span> scrollView.contentInset.left <span style=color:#f92672>+</span> scrollView.contentOffset.x;
+    CGFloat vy <span style=color:#f92672>=</span> scrollView.contentInset.top <span style=color:#f92672>+</span> scrollView.contentOffset.y;
+    CGFloat vw <span style=color:#f92672>=</span> scrollView.frame.size.width <span style=color:#f92672>-</span> scrollView.contentInset.left <span style=color:#f92672>-</span> scrollView.contentInset.right;
+    CGFloat vh <span style=color:#f92672>=</span> scrollView.frame.size.height <span style=color:#f92672>-</span> scrollView.contentInset.top <span style=color:#f92672>-</span> scrollView.contentInset.bottom;
+    CGRect scrollRect <span style=color:#f92672>=</span> CGRectMake(vx, vy, vw, vh);;
+    
+    <span style=color:#75715e>// notify action for appear
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>for</span>(WXScrollToTarget <span style=color:#f92672>*</span>target <span style=color:#66d9ef>in</span> self.listenerArray){
+        [self scrollToTarget:target scrollRect:scrollRect];
+    }
+}
+
+
+</code></pre></div><p>上面这个方法会把listenerArray数组里面的每个WXScrollToTarget对象都调用scrollToTarget:scrollRect:方法。根据当前滚动的情况传入一个CGRect，这个CGRect就是当前滚动到那个矩形区域的坐标信息以及宽和高。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>scrollToTarget:</span>(WXScrollToTarget <span style=color:#f92672>*</span>)target <span style=color:#a6e22e>scrollRect:</span>(CGRect)rect
+{
+    WXComponent <span style=color:#f92672>*</span>component <span style=color:#f92672>=</span> target.target;
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[component isViewLoaded]) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    <span style=color:#75715e>// 计算出当前的可见区域的顶部坐标
+</span><span style=color:#75715e></span>    CGFloat ctop;
+    <span style=color:#66d9ef>if</span> (component <span style=color:#f92672>&amp;&amp;</span> component<span style=color:#f92672>-&gt;</span>_view <span style=color:#f92672>&amp;&amp;</span> component<span style=color:#f92672>-&gt;</span>_view.superview) {
+        ctop <span style=color:#f92672>=</span> [component<span style=color:#f92672>-&gt;</span>_view.superview convertPoint:component<span style=color:#f92672>-&gt;</span>_view.frame.origin toView:_view].y;
+    } <span style=color:#66d9ef>else</span> {
+        ctop <span style=color:#f92672>=</span> <span style=color:#ae81ff>0.0</span>;
+    }
+    <span style=color:#75715e>// 计算出当前的可见区域的底部坐标
+</span><span style=color:#75715e></span>    CGFloat cbottom <span style=color:#f92672>=</span> ctop <span style=color:#f92672>+</span> CGRectGetHeight(component.calculatedFrame);
+    <span style=color:#75715e>// 计算出当前的可见区域的左边界坐标
+</span><span style=color:#75715e></span>    CGFloat cleft;
+    <span style=color:#66d9ef>if</span> (component <span style=color:#f92672>&amp;&amp;</span> component<span style=color:#f92672>-&gt;</span>_view <span style=color:#f92672>&amp;&amp;</span> component<span style=color:#f92672>-&gt;</span>_view.superview) {
+        cleft <span style=color:#f92672>=</span> [component<span style=color:#f92672>-&gt;</span>_view.superview convertPoint:component<span style=color:#f92672>-&gt;</span>_view.frame.origin toView:_view].x;
+    } <span style=color:#66d9ef>else</span> {
+        cleft <span style=color:#f92672>=</span> <span style=color:#ae81ff>0.0</span>;
+    }
+    <span style=color:#75715e>// 计算出当前的可见区域的右边界坐标
+</span><span style=color:#75715e></span>    CGFloat cright <span style=color:#f92672>=</span> cleft <span style=color:#f92672>+</span> CGRectGetWidth(component.calculatedFrame);
+    
+    <span style=color:#75715e>// 获取传入的滚动的区域
+</span><span style=color:#75715e></span>    CGFloat vtop <span style=color:#f92672>=</span> CGRectGetMinY(rect), vbottom <span style=color:#f92672>=</span> CGRectGetMaxY(rect), vleft <span style=color:#f92672>=</span> CGRectGetMinX(rect), vright <span style=color:#f92672>=</span> CGRectGetMaxX(rect);
+    
+    <span style=color:#75715e>// 判断当前可见区域是否包含在传入的滚动区域内，如果在，并且监听了appear事件，就触发appear事件，否则如果监听了disappear事件就触发disappear事件
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span>(cbottom <span style=color:#f92672>&gt;</span> vtop <span style=color:#f92672>&amp;&amp;</span> ctop <span style=color:#f92672>&lt;=</span> vbottom <span style=color:#f92672>&amp;&amp;</span> cleft <span style=color:#f92672>&lt;=</span> vright <span style=color:#f92672>&amp;&amp;</span> cright <span style=color:#f92672>&gt;</span> vleft){
+        <span style=color:#66d9ef>if</span>(<span style=color:#f92672>!</span>target.hasAppear <span style=color:#f92672>&amp;&amp;</span> component){
+            target.hasAppear <span style=color:#f92672>=</span> YES;
+            <span style=color:#75715e>// 如果当前监听了appear，就触发appear事件
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>if</span> (component<span style=color:#f92672>-&gt;</span>_appearEvent) {
+                [component fireEvent:<span style=color:#e6db74>@&#34;appear&#34;</span> params:_direction <span style=color:#f92672>?</span> <span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;direction&#34;</span><span style=color:#f92672>:</span>_direction<span style=color:#ae81ff>}</span> <span style=color:#f92672>:</span> nil];
+            }
+        }
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#66d9ef>if</span>(target.hasAppear <span style=color:#f92672>&amp;&amp;</span> component){
+            target.hasAppear <span style=color:#f92672>=</span> NO;
+            <span style=color:#75715e>// 如果当前监听了disappear，就触发disappear事件
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>if</span>(component<span style=color:#f92672>-&gt;</span>_disappearEvent){
+                [component fireEvent:<span style=color:#e6db74>@&#34;disappear&#34;</span> params:_direction <span style=color:#f92672>?</span> <span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;direction&#34;</span><span style=color:#f92672>:</span>_direction<span style=color:#ae81ff>}</span> <span style=color:#f92672>:</span> nil];
+            }
+        }
+    }
+}
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_10.png alt></p><p>scrollToTarget:scrollRect:方法的核心就是拿当前可视区域和传入的滚动区域进行对比，如果在该区域内，且监听了appear事件，就会触发appear事件，如果不在该区域内，且监听了disappear事件，就会触发disappear事件。</p><h4 id=3-disappear-事件>3. Disappear 事件</h4><p>如果一个位于某个可滚动区域内的组件被绑定了 disappear 事件，那么当这个组件被滑出屏幕变为不可见状态时，该事件将被触发。</p><p>同理，绑定了Disappear 事件的都是可以滚动的视图。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_11.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    WX_ADD_EVENT(disappear, addDisappearEvent)
+
+</code></pre></div><p>通过上述的宏给可以滚动的视图增加Disappear 事件。也就是当前视图执行addDisappearEvent方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addDisappearEvent</span>
+{
+    _disappearEvent <span style=color:#f92672>=</span> YES;
+    [self.ancestorScroller addScrollToListener:self];
+}
+
+
+</code></pre></div><p>接下去的和Appear 事件的原理就一模一样了。</p><h4 id=4-page-事件>4. Page 事件</h4><p><strong>暂时Weex只支持 iOS 和 Android，H5 暂不支持。</strong></p><p>Weex 通过 viewappear 和 viewdisappear 事件提供了简单的页面状态管理能力。</p><p>viewappear 事件会在页面就要显示或配置的任何页面动画被执行前触发，例如，当调用 navigator 模块的 push 方法时，该事件将会在打开新页面时被触发。viewdisappear 事件会在页面就要关闭时被触发。</p><p>与组件Component的 appear 和 disappear 事件不同的是，viewappear 和 viewdisappear 事件关注的是整个页面的状态，所以它们必须绑定到页面的根元素上。</p><p>特殊情况下，这两个事件也能被绑定到非根元素的body组件上，例如wxc-navpage组件。</p><p>举个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>_updateInstanceState:</span>(WXState)state
+{
+    <span style=color:#66d9ef>if</span> (_instance <span style=color:#f92672>&amp;&amp;</span> _instance.state <span style=color:#f92672>!=</span> state) {
+        _instance.state <span style=color:#f92672>=</span> state;
+        
+        <span style=color:#66d9ef>if</span> (state <span style=color:#f92672>==</span> WeexInstanceAppear) {
+            [[WXSDKManager bridgeMgr] fireEvent:_instance.instanceId ref:WX_SDK_ROOT_REF type:<span style=color:#e6db74>@&#34;viewappear&#34;</span> params:nil domChanges:nil];
+        } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (state <span style=color:#f92672>==</span> WeexInstanceDisappear) {
+            [[WXSDKManager bridgeMgr] fireEvent:_instance.instanceId ref:WX_SDK_ROOT_REF type:<span style=color:#e6db74>@&#34;viewdisappear&#34;</span> params:nil domChanges:nil];
+        }
+    }
+}
+
+
+</code></pre></div><p>比如在WXBaseViewController里面，有这样一个更新当前Instance状态的方法，这个方法里面就会触发 viewappear 和 viewdisappear 事件。</p><p>其中WX_SDK_ROOT_REF就是_root</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define WX_SDK_ROOT_REF     @&#34;_root&#34;
+</span><span style=color:#75715e></span>
+</code></pre></div><p>上述更新状态的方法同样出现在WXEmbedComponent组件中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>_updateState:</span>(WXState)state
+{
+    <span style=color:#66d9ef>if</span> (_renderFinished <span style=color:#f92672>&amp;&amp;</span> _embedInstance <span style=color:#f92672>&amp;&amp;</span> _embedInstance.state <span style=color:#f92672>!=</span> state) {
+        _embedInstance.state <span style=color:#f92672>=</span> state;
+        
+        <span style=color:#66d9ef>if</span> (state <span style=color:#f92672>==</span> WeexInstanceAppear) {
+            [self setNavigationWithStyles:self.embedInstance.naviBarStyles];
+            [[WXSDKManager bridgeMgr] fireEvent:self.embedInstance.instanceId ref:WX_SDK_ROOT_REF type:<span style=color:#e6db74>@&#34;viewappear&#34;</span> params:nil domChanges:nil];
+        }
+        <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (state <span style=color:#f92672>==</span> WeexInstanceDisappear) {
+            [[WXSDKManager bridgeMgr] fireEvent:self.embedInstance.instanceId ref:WX_SDK_ROOT_REF type:<span style=color:#e6db74>@&#34;viewdisappear&#34;</span> params:nil domChanges:nil];
+        }
+    }
+}
+
+</code></pre></div><h3 id=二weex的事件传递>二.Weex的事件传递</h3><p>在Weex中，iOS Native把事件传递给JS目前只有2种方式，一是Module模块的callback，二是通过Component组件自定义的通知事件。</p><h4 id=1callback>（1）callback</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_12.png alt></p><p>在WXModuleProtocol中定义了2种可以callback给JS的闭包。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * @abstract the module callback , result can be string or dictionary.
+</span><span style=color:#75715e> * @discussion callback data to js, the id of callback function will be removed to save memory.
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>void</span> (<span style=color:#f92672>^</span>WXModuleCallback)(<span style=color:#66d9ef>id</span> result);
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * @abstract the module callback , result can be string or dictionary.
+</span><span style=color:#75715e> * @discussion callback data to js, you can specify the keepAlive parameter to keep callback function id keepalive or not. If the keepAlive is true, it won&#39;t be removed until instance destroyed, so you can call it repetitious.
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>void</span> (<span style=color:#f92672>^</span>WXModuleKeepAliveCallback)(<span style=color:#66d9ef>id</span> result, <span style=color:#66d9ef>BOOL</span> keepAlive);
+
+</code></pre></div><p>两个闭包都可以callback把data传递回给JS，data可以是字符串或者字典。</p><p>这两个闭包的区别在于：</p><ol><li>WXModuleCallback用于Module组件，为了节约内存，该回调只能回调通知JS一次，之后会被释放，多用于一次结果。</li><li>WXModuleKeepAliveCallback同样是用于Module组件，但是该回调可以设置是否为多次回调类型，如果设置了keepAlive，那么可以进行持续监听变化，多次回调，并返回给 JS。</li></ol><p>在Weex中使用WXModuleCallback回调，很多情况是把状态回调给JS，比如成功或者失败的状态，还有一些出错的信息回调给JS。</p><p>比如在WXStorageModule中</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setItem:</span>(NSString <span style=color:#f92672>*</span>)key <span style=color:#a6e22e>value:</span>(NSString <span style=color:#f92672>*</span>)value <span style=color:#a6e22e>callback:</span>(WXModuleCallback)callback
+{
+    <span style=color:#66d9ef>if</span> ([self checkInput:key]) {
+        callback(<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;result&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;failed&#34;</span>,<span style=color:#e6db74>@&#34;data&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;key must a string or number!&#34;</span><span style=color:#ae81ff>}</span>);
+        <span style=color:#66d9ef>return</span>;
+    }
+    <span style=color:#66d9ef>if</span> ([self checkInput:value]) {
+        callback(<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;result&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;failed&#34;</span>,<span style=color:#e6db74>@&#34;data&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;value must a string or number!&#34;</span><span style=color:#ae81ff>}</span>);
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    <span style=color:#66d9ef>if</span> ([key isKindOfClass:[NSNumber <span style=color:#66d9ef>class</span>]]) {
+        key <span style=color:#f92672>=</span> [((NSNumber <span style=color:#f92672>*</span>)key) stringValue];
+    }
+    
+    <span style=color:#66d9ef>if</span> ([value isKindOfClass:[NSNumber <span style=color:#66d9ef>class</span>]]) {
+        value <span style=color:#f92672>=</span> [((NSNumber <span style=color:#f92672>*</span>)value) stringValue];
+    }
+    
+    <span style=color:#66d9ef>if</span> ([WXUtility isBlankString:key]) {
+        callback(<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;result&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;failed&#34;</span>,<span style=color:#e6db74>@&#34;data&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;invalid_param&#34;</span><span style=color:#ae81ff>}</span>);
+        <span style=color:#66d9ef>return</span> ;
+    }
+    [self setObject:value forKey:key persistent:NO callback:callback];
+}
+
+</code></pre></div><p>在调用setItem:value:callback:方法里面，如果setKey-value的时候失败了，会把错误信息通过WXModuleCallback回调给JS。</p><p>当然，如果调用存储模块WXStorageModule的某些查询信息的方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>length:</span>(WXModuleCallback)callback
+{
+    callback(<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;result&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;success&#34;</span>,<span style=color:#e6db74>@&#34;data&#34;</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@(</span>[[WXStorageModule memory] count]<span style=color:#ae81ff>)}</span>);
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>getAllKeys:</span>(WXModuleCallback)callback
+{
+    callback(<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;result&#34;</span><span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;success&#34;</span>,<span style=color:#e6db74>@&#34;data&#34;</span><span style=color:#f92672>:</span>[WXStorageModule memory].allKeys<span style=color:#ae81ff>}</span>);
+}
+
+</code></pre></div><p>length:和getAllKeys:方法调用成功，会把成功的状态和数据通过WXModuleCallback回调给JS。</p><p>在Weex中使用了WXModuleKeepAliveCallback的模块总共只有以下4个：</p><p>WXDomModule，WXStreamModule，WXWebSocketModule，WXGlobalEventModule</p><p>在WXDomModule模块中，JS调用获取Component组件的位置信息和宽高信息的时候，需要把这些坐标和尺寸信息回调给JS，不过这里虽然用到了WXModuleKeepAliveCallback，但是keepAlive是false，并没有用到多次回调的功能。</p><p>在WXStreamModule模块中，由于这是一个传输流的模块，所以肯定需要用到WXModuleKeepAliveCallback，需要持续不断的监听数据的变化，并把进度回调给JS，这里用到了keepAlive。WXStreamModule模块中也会用到WXModuleCallback，WXModuleCallback会即时把各个状态回调给JS。</p><p>在WXWebSocketModule模块中</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>WXWebSocketModule</span>()
+
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>,<span style=color:#66d9ef>copy</span>)WXModuleKeepAliveCallback errorCallBack;
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>,<span style=color:#66d9ef>copy</span>)WXModuleKeepAliveCallback messageCallBack;
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>,<span style=color:#66d9ef>copy</span>)WXModuleKeepAliveCallback openCallBack;
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>,<span style=color:#66d9ef>copy</span>)WXModuleKeepAliveCallback closeCallBack;
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>用到了4个WXModuleKeepAliveCallback回调，这4个callback分别是把error错误信息，message收到的数据，open打开链接的状态，close关闭链接的状态，持续的回调给JS。</p><p>在WXGlobalEventModule模块中，有一个fireGlobalEvent:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireGlobalEvent:</span>(NSNotification <span style=color:#f92672>*</span>)notification
+{
+    NSDictionary <span style=color:#f92672>*</span> userInfo <span style=color:#f92672>=</span> notification.userInfo;
+    NSString <span style=color:#f92672>*</span> userWeexInstanceId <span style=color:#f92672>=</span> userInfo[<span style=color:#e6db74>@&#34;weexInstance&#34;</span>];
+
+    WXSDKInstance <span style=color:#f92672>*</span> userWeexInstance <span style=color:#f92672>=</span> [WXSDKManager instanceForID:userWeexInstanceId];
+   <span style=color:#75715e>// 防止userInstanceId存在，但是instance实际已经被销毁了
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>userWeexInstanceId <span style=color:#f92672>||</span> userWeexInstance <span style=color:#f92672>==</span> weexInstance) {
+        
+        <span style=color:#66d9ef>for</span> (WXModuleKeepAliveCallback callback <span style=color:#66d9ef>in</span> _eventCallback[notification.name]) {
+            callback(userInfo[<span style=color:#e6db74>@&#34;param&#34;</span>], true);
+        }
+    }
+}
+
+</code></pre></div><p>开发者可以通过WXGlobalEventModule进行全局的通知，在userInfo里面可以夹带weexInstance的参数。native是不需要关心userWeexInstanceId，这个参数是给JS用的。</p><p>Native开发者只需要在用到了WXGlobalEventModule的模块里加上事件的监听者，然后发送全局通知即可。userInfo[@&ldquo;param&rdquo;]会被回调给JS。</p><h4 id=2fireeventparamsdomchanges>（2）fireEvent:params:domChanges:</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_13.jpg alt></p><p>在开头我们介绍的Weex事件的4种类型，通用事件，Appear 事件，Disappear 事件，Page 事件，全部都是通过fireEvent:params:domChanges:这种方式，Native触发事件之后，Native把参数传递给JS的。</p><p>在WXComponent里面定义了2个可以给JS发送消息的方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * @abstract Fire an event to the component in Javascript.
+</span><span style=color:#75715e> *
+</span><span style=color:#75715e> * @param eventName The name of the event to fire
+</span><span style=color:#75715e> * @param params The parameters to fire with
+</span><span style=color:#75715e> **/</span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName <span style=color:#a6e22e>params:</span>(nullable NSDictionary <span style=color:#f92672>*</span>)params;
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * @abstract Fire an event to the component and tell Javascript which value has been changed. 
+</span><span style=color:#75715e> * Used for two-way data binding.
+</span><span style=color:#75715e> *
+</span><span style=color:#75715e> * @param eventName The name of the event to fire
+</span><span style=color:#75715e> * @param params The parameters to fire with
+</span><span style=color:#75715e> * @param domChanges The values has been changed, used for two-way data binding.
+</span><span style=color:#75715e> **/</span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName <span style=color:#a6e22e>params:</span>(nullable NSDictionary <span style=color:#f92672>*</span>)params <span style=color:#a6e22e>domChanges:</span>(nullable NSDictionary <span style=color:#f92672>*</span>)domChanges;
+
+
+</code></pre></div><p>这两个方法的区别就在于最后一个domChanges的参数，有这个参数的方法主要多用于Weex的Native和JS的双向数据绑定。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName <span style=color:#a6e22e>params:</span>(NSDictionary <span style=color:#f92672>*</span>)params
+{
+    [self fireEvent:eventName params:params domChanges:nil];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)eventName <span style=color:#a6e22e>params:</span>(NSDictionary <span style=color:#f92672>*</span>)params <span style=color:#a6e22e>domChanges:</span>(NSDictionary <span style=color:#f92672>*</span>)domChanges
+{
+    NSMutableDictionary <span style=color:#f92672>*</span>dict <span style=color:#f92672>=</span> [NSMutableDictionary dictionary];
+    NSTimeInterval timeSp <span style=color:#f92672>=</span> [[NSDate date] timeIntervalSince1970] <span style=color:#f92672>*</span> <span style=color:#ae81ff>1000</span>;
+    [dict setObject:<span style=color:#ae81ff>@(</span>timeSp<span style=color:#ae81ff>)</span> forKey:<span style=color:#e6db74>@&#34;timestamp&#34;</span>];
+    <span style=color:#66d9ef>if</span> (params) {
+        [dict addEntriesFromDictionary:params];
+    }
+    
+    [[WXSDKManager bridgeMgr] fireEvent:self.weexInstance.instanceId ref:self.ref type:eventName params:dict domChanges:domChanges];
+}
+
+</code></pre></div><p>上述就是两个方法的具体实现。可以看到fireEvent:params:方法就是调用了fireEvent:params:domChanges:方法，只不过最后的domChanges参数传了nil。</p><p>在fireEvent:params:domChanges:方法中会对params字典做了一次加工，加上了timestamp的键值。最终还是会调用WXBridgeManager 里面的fireEvent:ref: type:params:domChanges:方法。</p><p>在WXBridgeManager中具体实现了上述的两个方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)instanceId <span style=color:#a6e22e>ref:</span>(NSString <span style=color:#f92672>*</span>)ref <span style=color:#a6e22e>type:</span>(NSString <span style=color:#f92672>*</span>)type <span style=color:#a6e22e>params:</span>(NSDictionary <span style=color:#f92672>*</span>)params
+{
+    [self fireEvent:instanceId ref:ref type:type params:params domChanges:nil];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>fireEvent:</span>(NSString <span style=color:#f92672>*</span>)instanceId <span style=color:#a6e22e>ref:</span>(NSString <span style=color:#f92672>*</span>)ref <span style=color:#a6e22e>type:</span>(NSString <span style=color:#f92672>*</span>)type <span style=color:#a6e22e>params:</span>(NSDictionary <span style=color:#f92672>*</span>)params <span style=color:#a6e22e>domChanges:</span>(NSDictionary <span style=color:#f92672>*</span>)domChanges
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>type <span style=color:#f92672>||</span> <span style=color:#f92672>!</span>ref) {
+        WXLogError(<span style=color:#e6db74>@&#34;Event type and component ref should not be nil&#34;</span>);
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    NSArray <span style=color:#f92672>*</span>args <span style=color:#f92672>=</span> <span style=color:#ae81ff>@[</span>ref, type, params<span style=color:#f92672>?:</span><span style=color:#ae81ff>@{}</span>, domChanges<span style=color:#f92672>?:</span><span style=color:#ae81ff>@{}]</span>;
+    WXSDKInstance <span style=color:#f92672>*</span>instance <span style=color:#f92672>=</span> [WXSDKManager instanceForID:instanceId];
+    
+    WXCallJSMethod <span style=color:#f92672>*</span>method <span style=color:#f92672>=</span> [[WXCallJSMethod alloc] initWithModuleName:nil methodName:<span style=color:#e6db74>@&#34;fireEvent&#34;</span> arguments:args instance:instance];
+    [self callJsMethod:method];
+}
+
+
+</code></pre></div><p>入参ref, type, params, domChanges封装到最终的args参数数组里面，最后会封装出WXCallJSMethod方法，通过WXBridgeManager的callJsMethod调用到JS的fireEvent方法。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_14.png alt></p><p>这里可以举个例子：</p><p>假设一个场景，用户点击了一张图片，于是就会改变label上的一段文字。</p><p>首先图片是imageComponent，用户点击会触发该Component的onclick:方法</p><p>组件里面会调用fireEvent:params:方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[self fireEvent:<span style=color:#e6db74>@&#34;click&#34;</span> params:<span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;position&#34;</span><span style=color:#f92672>:</span>position<span style=color:#ae81ff>}</span>];
+
+</code></pre></div><p>最终通过fireEvent:params:domChanges:方法，发送给JS的参数字典大概如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+args:(
+    <span style=color:#ae81ff>0</span>,
+        (
+                {
+            args <span style=color:#f92672>=</span>             (
+                <span style=color:#ae81ff>3</span>,
+                click,
+                                {
+                    position <span style=color:#f92672>=</span>                     {
+                        height <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;199.8792270531401&#34;</span>;
+                        width <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;199.8792270531401&#34;</span>;
+                        x <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;274.7584541062802&#34;</span>;
+                        y <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;115.9420289855072&#34;</span>;
+                    };
+                    timestamp <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;1489932655404.133&#34;</span>;
+                },
+                                {
+                }
+            );
+            method <span style=color:#f92672>=</span> fireEvent;
+            module <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;</span>;
+        }
+    )
+)
+
+</code></pre></div><p>JSFramework收到了fireEvent方法调用以后，处理完，知道label需要更新，于是又会开始call Native，调用Native的方法。调用Native的callNative方法，发过来的参数如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+
+(
+        {
+        args <span style=color:#f92672>=</span>         (
+            <span style=color:#ae81ff>4</span>,
+                        {
+                value <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;\U56fe\U7247\U88ab\U70b9\U51fb&#34;</span>;
+            }
+        );
+        method <span style=color:#f92672>=</span> updateAttrs;
+        module <span style=color:#f92672>=</span> dom;
+    }
+)
+
+</code></pre></div><p>最终会调用Dom的updateAttrs方法，会去更新id为4的value，id为4对应的就是label，更新它的值就是刷新label。</p><p>接着JSFramework还会继续调用Native的callNative方法，发过来的参数如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+
+(
+        {
+        args <span style=color:#f92672>=</span>         (
+        );
+        method <span style=color:#f92672>=</span> updateFinish;
+        module <span style=color:#f92672>=</span> dom;
+    }
+)
+
+
+</code></pre></div><p>调用Dom的updateFinish方法，即页面刷新完毕。</p><h3 id=最后>最后</h3><p>至此，Weex从View的创建，到渲染，产生事件回调JSFramework，这一系列的流程源码都解析完成了。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/44_15.jpeg alt></p><p>中间涉及到了3个子线程，mainThread，com.taobao.weex.component，com.taobao.weex.bridge，分别是UI主线程，DOM线程，JSbridge线程。</p><p>Native端目前还差神秘的JSFramework的源码解析。请大家多多指点。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一weex的事件类型>一.Weex的事件类型</a><ul><li><a href=#1-通用事件>1. 通用事件</a></li><li><a href=#一点击事件>（一）点击事件</a></li><li><a href=#1计算缩放比例因子>（1）计算缩放比例因子</a></li><li><a href=#2计算视图的缩放尺寸>（2）计算视图的缩放尺寸</a></li><li><a href=#二轻扫事件>（二）轻扫事件</a></li><li><a href=#三长按事件>（三）长按事件</a></li><li><a href=#四拖动事件>（四）拖动事件</a></li><li><a href=#五通用触摸事件>（五）通用触摸事件</a></li><li><a href=#2-appear-事件>2. Appear 事件</a></li><li><a href=#3-disappear-事件>3. Disappear 事件</a></li><li><a href=#4-page-事件>4. Page 事件</a></li></ul></li><li><a href=#二weex的事件传递>二.Weex的事件传递</a><ul><li><a href=#1callback>（1）callback</a></li><li><a href=#2fireeventparamsdomchanges>（2）fireEvent:params:domChanges:</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&text=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&is_video=false&description=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fweex_event%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&title=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&name=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e5%89%8d%e4%b8%a4%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e5%88%86%e5%88%ab%e8%b0%88%e4%ba%86Weex%e5%a6%82%e4%bd%95%e5%9c%a8Native%e7%ab%af%e5%88%9d%e5%a7%8b%e5%8c%96%e7%9a%84%e5%92%8cWeex%e6%98%af%e5%a6%82%e4%bd%95%e9%ab%98%e6%95%88%e7%9a%84%e6%b8%b2%e6%9f%93Native%e7%9a%84%e5%8e%9f%e7%94%9fUI%e7%9a%84%e3%80%82Native%e8%bf%99%e8%be%b9%e8%bf%98%e7%bc%ba%e4%b8%80%e5%9d%97%ef%bc%8c%e9%82%a3%e5%b0%b1%e6%98%afNative%e4%ba%a7%e7%94%9f%e7%9a%84%e4%b8%80%e4%ba%9b%e4%ba%8b%e4%bb%b6%ef%bc%8c%e6%98%af%e6%80%8e%e4%b9%88%e4%bc%a0%e5%9b%9e%e7%bb%99JS%e7%9a%84%e3%80%82%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e8%bf%99%e4%b8%80%e9%83%a8%e5%88%86%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e7%b1%bb%e5%9e%8b%202.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%20%20%e4%b8%80.Weex%e7%9a%84%e4%ba%8b%e4%bb%b6%e7%b1%bb%e5%9e%8b%20%e5%9c%a8Weex%e4%b8%ad%ef%bc%8c%e7%9b%ae%e5%89%8d%e6%9c%80%e6%96%b0%e7%89%88%e6%9c%ac%e4%b8%ad%e4%ba%8b%e4%bb%b6%e6%80%bb%e5%85%b1%e5%88%86%e4%b8%ba4%e7%a7%8d%e7%b1%bb%e5%9e%8b%ef%bc%8c%e9%80%9a%e7%94%a8%e4%ba%8b%e4%bb%b6%ef%bc%8cAppear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cDisappear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cPage%20%e4%ba%8b%e4%bb%b6%e3%80%82%0a%e5%9c%a8Weex%e7%9a%84%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e5%8f%aa%e5%8c%85%e5%90%ab%e5%89%8d%e4%b8%89%e7%a7%8d%e4%ba%8b%e4%bb%b6%ef%bc%8c%e5%8d%b3%e9%80%9a%e7%94%a8%e4%ba%8b%e4%bb%b6%ef%bc%8cAppear%20%e4%ba%8b%e4%bb%b6%ef%bc%8cDisappear%20%e4%ba%8b%e4%bb%b6%e3%80%82%0a%e5%bd%93WXComponent%e6%b7%bb%e5%8a%a0%e4%ba%8b%e4%bb%b6%e7%9a%84%e6%97%b6%e5%80%99%ef%bc%8c%e4%bc%9a%e8%b0%83%e7%94%a8%e4%bb%a5%e4%b8%8b%e5%87%bd%e6%95%b0%ef%bc%9a%0a-%20%28void%29_addEventOnMainThread%3a%28NSString%20%2a%29addEventName%20%7b%20WX_ADD_EVENT%28appear%2c%20addAppearEvent%29%20WX_ADD_EVENT%28disappear%2c%20addDisappearEvent%29%20WX_ADD_EVENT%28click%2c%20addClickEvent%29%20WX_ADD_EVENT%28swipe%2c%20addSwipeEvent%29%20WX_ADD_EVENT%28longpress%2c%20addLongPressEvent%29%20WX_ADD_EVENT%28panstart%2c%20addPanStartEvent%29%20WX_ADD_EVENT%28panmove%2c%20addPanMoveEvent%29%20WX_ADD_EVENT%28panend%2c%20addPanEndEvent%29%20WX_ADD_EVENT%28horizontalpan%2c%20addHorizontalPanEvent%29%20WX_ADD_EVENT%28verticalpan%2c%20addVerticalPanEvent%29%20WX_ADD_EVENT%28touchstart%2c%20addTouchStartEvent%29%20WX_ADD_EVENT%28touchmove%2c%20addTouchMoveEvent%29%20WX_ADD_EVENT%28touchend%2c%20addTouchEndEvent%29%20WX_ADD_EVENT%28touchcancel%2c%20addTouchCancelEvent%29%20%5bself%20addEvent%3aaddEventName%5d%3b%20%7d%20WX_ADD_EVENT%e6%98%af%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%9a%0a%23define%20WX_ADD_EVENT%28eventName%2c%20addSelector%29%20%5c%20if%20%28%5baddEventName%20isEqualToString%3a%40%23eventName%5d%29%20%7b%5c%20%5bself%20addSelector%5d%3b%5c%20%7d%20%20%e5%8d%b3%e6%98%af%e5%88%a4%e6%96%ad%e5%be%85%e6%b7%bb%e5%8a%a0%e7%9a%84%e4%ba%8b%e4%bb%b6addEventName%e7%9a%84%e5%90%8d%e5%ad%97%e5%92%8c%e9%bb%98%e8%ae%a4%e6%94%af%e6%8c%81%e7%9a%84%e4%ba%8b%e4%bb%b6%e5%90%8d%e5%ad%97eventName%e6%98%af%e5%90%a6%e4%b8%80%e8%87%b4%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%b8%80%e8%87%b4%ef%bc%8c%e5%b0%b1%e6%89%a7%e8%a1%8caddSelector%e6%96%b9%e6%b3%95%e3%80%82%0a%e6%9c%80%e5%90%8e%e4%bc%9a%e6%89%a7%e8%a1%8c%e4%b8%80%e4%b8%aaaddEvent%3a%e6%96%b9%e6%b3%95%ef%bc%8c%e6%af%8f%e4%b8%aa%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e4%bc%9a%e5%8f%af%e4%bb%a5%e9%87%8d%e5%86%99%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e3%80%82%e5%9c%a8%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e9%87%8c%e9%9d%a2%e5%81%9a%e7%9a%84%e5%b0%b1%e6%98%af%e5%af%b9%e7%bb%84%e4%bb%b6%e7%9a%84%e7%8a%b6%e6%80%81%e7%9a%84%e6%a0%87%e8%af%86%e3%80%82%0a%e6%af%94%e5%a6%82WXWebComponent%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e7%9a%84addEvent%3a%e6%96%b9%e6%b3%95%ef%bc%9a%0a-%20%28void%29addEvent%3a%28NSString%20%2a%29eventName%20%7b%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3bpagestart%26%2334%3b%5d%29%20%7b%20_startLoadEvent%20%3d%20YES%3b%20%7d%20else%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3bpagefinish%26%2334%3b%5d%29%20%7b%20_finishLoadEvent%20%3d%20YES%3b%20%7d%20else%20if%20%28%5beventName%20isEqualToString%3a%40%26%2334%3berror%26%2334%3b%5d%29%20%7b%20_failLoadEvent%20%3d%20YES%3b%20%7d%20%7d%20%e5%9c%a8%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%e9%87%8c%e9%9d%a2%e5%8d%b3%e5%af%b9Web%e7%bb%84%e4%bb%b6%e9%87%8c%e9%9d%a2%e7%9a%84%e7%8a%b6%e6%80%81%e8%bf%9b%e8%a1%8c%e4%ba%86%e6%a0%87%e8%af%86%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fweex_event%2f&t=Weex%20%e4%ba%8b%e4%bb%b6%e4%bc%a0%e9%80%92%e7%9a%84%e9%82%a3%e4%ba%9b%e4%ba%8b%e5%84%bf"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

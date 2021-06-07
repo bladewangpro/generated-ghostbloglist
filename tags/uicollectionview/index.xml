@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>UICollectionView on prometheus</title><link>https://new.halfrost.com/tags/uicollectionview/</link><description>Recent content in UICollectionView on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 03 Jul 2016 09:02:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/uicollectionview/index.xml" rel="self" type="application/rss+xml"/><item><title>WWDC 2016 Session 笔记 - iOS 10 UICollectionView 新特性</title><link>https://new.halfrost.com/wwdc2016_ios10_uicollectionview_new_features/</link><pubDate>Sun, 03 Jul 2016 09:02:00 +0000</pubDate><guid>https://new.halfrost.com/wwdc2016_ios10_uicollectionview_new_features/</guid><description>前言 关于 iOS 10 UICollectionView的新特性，主要还是体现在如下3个方面
+顺滑的滑动体验 现在基本上人人都离不开手机，手机的app也每天都有人在用。一个app的好坏由它的用户体验决定。在可以滑动的视图里面，必须要更加丝滑柔顺才能获得用户的青睐。这些UICollectionView的新特性可以让你们的app比原来更加顺滑，而且这些特性只需要你加入少量的代码即可达到目的。 针对self-sizing的改进 self-sizing的API在iOS8的时候被引进，iOS10中加入更多特性使cell更加容易去适配。 Interactive reordering重排 这个功能在iOS9的时候介绍过了，苹果在iOS 10的API里面大大增强了这一功能。 ####目录
+1.UICollectionViewCell顺滑的滑动体验 2.UICollectionViewCell的Pre-Fetching预加载 3.UITableViewCell的Pre-Fetching预加载 4.针对self-sizing的改进 5.Interactive Reordering 6.UIRefreshControl 一. UICollectionViewCell顺滑的滑动体验 众所周知，iOS设备已良好的用户体验赢得了广大的用户群。iOS系统在用户点击屏幕会立即做出响应。而且很大一部分的操作是来自于用户的滑动操作。所以滑动的顺滑是使用户沉浸在app中享受的必要条件。接下来我们就谈谈iOS 10 中增加了那些新特性。
+我们先来看一下之前 UICollectionView 的体验，假设我们每个cell都是简单的蓝色，实际开发app中，cell会比这复杂很多。 我们先生成100个cell。当用户滑动不是很快的时候，还感觉不出来卡顿，当用户大幅度滑动，整个UICollectionView的卡顿就很明显了。如果整个cell的DataSource又是从网络加载的，那就更加卡顿了。效果如下图。
+如果这种app上架，用户使用过后，很可能就直接给1星评价了。但是为什么会造成这种问题呢？我们来分析一下，我们模拟一下系统如何处理重用机制的，效果如下图
+在上图中，我们可以看出，当cell准备加载进屏幕的时候，整个cell都已经加载完成，等待在屏幕外面了。而且更重要的是，在屏幕外面等待加载的cell是整整一行！这一行的cell都已经加载完数据。这是UICollectionView在用户大幅度滑动时卡顿的根本原因。用专业的术语来说，掉帧。
+接下来我们就来详细的说说掉帧的问题。
+当今的用户是很挑剔的，用户需要一个很顺滑的体验，只要有一点卡顿，很可能一言不合就卸载app了。要想用户感觉不到卡顿，那么我们的app必须帧率达到60帧/秒。用数学换算一下就是每帧16毫秒就必须刷新一次。
+我们用图标来分析一下掉帧的问题。下面会出现2种不同的帧。
+第一种情况，下图是当用户轻微的上下小幅度滑动。这个时候每个cell的加载压力都不大，iOS针对这种情况，已经做了很好的优化了，所以用户感觉不到任何卡顿。这种情况是不会掉帧，用户也希望能使用如此顺滑的app。
+第二种情况，当用户大幅度滑动，每个cell加载的压力很大，也许需要网络请求，也许需要读取数据库，而且每次都加载一行cell出来，这样每个cell的加载时间都增加了，加载一行的总时间也就大大增加了，如下图所示。这样，不仅仅当前帧在加载cell，总的时间还会挤压到下一帧的时间里面去。这种情况下，用户就感觉到了卡顿了。
+我们换种方式在说明一下2种情况下掉帧的情况。我们用下图的标准来衡量一下上面2种情况。下图分为2部分，上面红色的区域，就是表示掉帧的区域，因为高于16ms。红色和绿色区域的分界线就在16ms处。y轴我们表示的是CPU在主线程中花费的时间。x轴表示的是在用户滑动中发生的刷新事件。
+针对上述掉帧的情况，绘制出实验数据，如下图。值得我们关注的是，曲线是很曲折的，非常的不平滑。当用户大幅度滑动的时候，峰值超过了16ms，当用户慢速滑动的时候，帧率又能保持在比较顺滑的区域。处于绿色区域内的cell加载压力都是很小的。这就是时而掉帧时而顺滑的场景。这种场景下，用户体验是很糟糕的。
+那怎么解决这么问题的呢？我们来看下图：
+上图中的曲线我们看着就很平缓了，而且这种情况也不会出现掉帧的情况了，每个滑动中的时间都能达到60帧了。这是怎样做到的呢？因为把每个cell的加载事件都平分了，每个cell不会再出现很忙和很闲的两个极端。这样我们就取消了之前的波峰和波谷。从而让该曲线达到近乎水平的直线。
+如何让每个cell都分摊加载任务的压力？这就要谈到新的cell的生命周期了。
+先来看看老的 UICollectionViewCell的声明周期。当用户滑动屏幕，屏幕外有一个cell准备加载显示进来。
+这个时候我们把这个cell从reuse队列里面拿出来，然后调用prepareForReuse方法。这个方法就给了cell时间，用来重置cell，重置状态，刷新cell，加载新的数据。
+再滑动，我们就会调用cellForItemAtIndexPath方法了。这个方法里面就是我们开发者自定义的填充cell的方式了。这里会填充data model，然后赋值给cell，再把cell返回给iOS系统。
+当cell马上要进入屏幕的时候，就会调用willDisplayCell的方法。这个方法给了我们app最后一次机会，为cell进入屏幕做最后的准备工作。执行完willDisplayCell之后，cell就进入屏幕了。
+当cell完全离开屏幕之后，就会调用didEndDisplayingCell方法。以上就是在iOS10之前的整个UICollectionViewCell的生命周期。
+接下来我们就来看看iOS 10的UICollectionViewCell生命周期是怎么样的。
+这里还是和iOS9一样的，当用户滑动UICollectionView的时候，需要一个cell，我们就从reuse队列里面拿出一个cell，并调用prepareForReuse方法。注意调用这个方法的时间，当cell还没有进入屏幕的时候，就已经提前调用这个方法了。注意对比和iOS 9的区别，iOS 9 是在cell上边缘马上进入屏幕的时候才调用方法，而这里，cell整个生命周期都被提前了，提前到cell还在设备外面的时候。
+这里还是和之前一样，在cellForItemAtIndexPath中创建cell，填充数据，刷新状态等等操作。注意，这里生命周期也比iOS 9提前了。
+用户继续滑动，这个时候就有不同了！
+这个时候我们并不去调用willDisplayCell方法了！这里遵循的原则是，何时去显示，何时再去调用willDisplayCell。
+当cell要马上就需要显示的时候，我们再调用willDisplayCell方法。
+当整个cell要从UICollectionView的可见区域消失的时候，这个时候会调用didEndDisplayingCell方法。接下来发生的事情和iOS9一样，cell会进入重用队列中。
+如果用户想要显示某个cell，在iOS 9 当中，cell只能从重用队列里面取出，再次走一遍生命周期。并调用cellForItemAtIndexPath去创建或者生成一个cell。
+在iOS 10 当中，系统会把cell保持一段时间。在iOS中，如果用户把cell滑出屏幕后，如果突然又想回来，这个时候cell并不需要再走一段的生命周期了。只需要直接调用willDisplayCell就可以了。cell就又会重新出现在屏幕中。这就是iOS 10 的整个UICollectionView的生命周期。</description></item></channel></rss>

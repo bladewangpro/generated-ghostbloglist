@@ -1,0 +1,937 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>神经病院 Objective-C Runtime 住院第二天——消息发送与转发 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="神经病院 Objective-C Runtime 住院第二天——消息发送与转发"><meta property="og:description" content="前言 现在越来越多的app都使用了JSPatch实现app热修复，而JSPatch 能做到通过 JS 调用和改写 OC 方法最根本的原因是 Objective-C 是动态语言，OC 上所有方法的调用/类的生成都通过 Objective-C Runtime 在运行时进行，我们可以通过类名/方法名反射得到相应的类和方法，也可以替换某个类的方法为新的实现，理论上你可以在运行时通过类名/方法名调用到任何 OC 方法，替换任何类的实现以及新增任意类。今天就来详细解析一下OC中runtime最为吸引人的地方。
+####目录
+ 1.objc_msgSend函数简介 2.消息发送Messaging阶段—objc_msgSend源码解析 3.消息转发Message Forwarding阶段 4.forwardInvocation的例子 5.入院考试 6.Runtime中的优化  一.objc_msgSend函数简介 最初接触到OC Runtime，一定是从[receiver message]这里开始的。[receiver message]会被编译器转化为：
+id objc_msgSend ( id self, SEL op, ... ); 这是一个可变参数函数。第二个参数类型是SEL。SEL在OC中是selector方法选择器。
+typedef struct objc_selector *SEL; objc_selector是一个映射到方法的C字符串。需要注意的是@selector()选择子只与函数名有关。不同类中相同名字的方法所对应的方法选择器是相同的，即使方法名字相同而变量类型不同也会导致它们具有相同的方法选择器。由于这点特性，也导致了OC不支持函数重载。
+在receiver拿到对应的selector之后，如果自己无法执行这个方法，那么该条消息要被转发。或者临时动态的添加方法实现。如果转发到最后依旧没法处理，程序就会崩溃。
+所以编译期仅仅是确定了要发送消息，而消息如何处理是要运行期需要解决的事情。
+objc_msgSend函数究竟会干什么事情呢？从这篇「objc_msgSend() Tour」文章里面可以得到一个比较详细的结论。
+1. Check for ignored selectors (GC) and short-circuit. 2. Check for nil target. If nil & nil receiver handler configured, jump to handler If nil & no handler (default), cleanup and return."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/objc_runtime_objc_msgsend/"><meta property="article:published_time" content="2016-09-17T01:47:58+00:00"><meta property="article:modified_time" content="2016-09-17T01:47:58+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="神经病院 Objective-C Runtime 住院第二天——消息发送与转发"><meta name=twitter:description content="前言 现在越来越多的app都使用了JSPatch实现app热修复，而JSPatch 能做到通过 JS 调用和改写 OC 方法最根本的原因是 Objective-C 是动态语言，OC 上所有方法的调用/类的生成都通过 Objective-C Runtime 在运行时进行，我们可以通过类名/方法名反射得到相应的类和方法，也可以替换某个类的方法为新的实现，理论上你可以在运行时通过类名/方法名调用到任何 OC 方法，替换任何类的实现以及新增任意类。今天就来详细解析一下OC中runtime最为吸引人的地方。
+####目录
+ 1.objc_msgSend函数简介 2.消息发送Messaging阶段—objc_msgSend源码解析 3.消息转发Message Forwarding阶段 4.forwardInvocation的例子 5.入院考试 6.Runtime中的优化  一.objc_msgSend函数简介 最初接触到OC Runtime，一定是从[receiver message]这里开始的。[receiver message]会被编译器转化为：
+id objc_msgSend ( id self, SEL op, ... ); 这是一个可变参数函数。第二个参数类型是SEL。SEL在OC中是selector方法选择器。
+typedef struct objc_selector *SEL; objc_selector是一个映射到方法的C字符串。需要注意的是@selector()选择子只与函数名有关。不同类中相同名字的方法所对应的方法选择器是相同的，即使方法名字相同而变量类型不同也会导致它们具有相同的方法选择器。由于这点特性，也导致了OC不支持函数重载。
+在receiver拿到对应的selector之后，如果自己无法执行这个方法，那么该条消息要被转发。或者临时动态的添加方法实现。如果转发到最后依旧没法处理，程序就会崩溃。
+所以编译期仅仅是确定了要发送消息，而消息如何处理是要运行期需要解决的事情。
+objc_msgSend函数究竟会干什么事情呢？从这篇「objc_msgSend() Tour」文章里面可以得到一个比较详细的结论。
+1. Check for ignored selectors (GC) and short-circuit. 2. Check for nil target. If nil & nil receiver handler configured, jump to handler If nil & no handler (default), cleanup and return."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/objc_runtime_isa_class/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/how_to_use_runtime/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&text=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&is_video=false&description=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&name=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91&description=%e5%89%8d%e8%a8%80%20%e7%8e%b0%e5%9c%a8%e8%b6%8a%e6%9d%a5%e8%b6%8a%e5%a4%9a%e7%9a%84app%e9%83%bd%e4%bd%bf%e7%94%a8%e4%ba%86JSPatch%e5%ae%9e%e7%8e%b0app%e7%83%ad%e4%bf%ae%e5%a4%8d%ef%bc%8c%e8%80%8cJSPatch%20%e8%83%bd%e5%81%9a%e5%88%b0%e9%80%9a%e8%bf%87%20JS%20%e8%b0%83%e7%94%a8%e5%92%8c%e6%94%b9%e5%86%99%20OC%20%e6%96%b9%e6%b3%95%e6%9c%80%e6%a0%b9%e6%9c%ac%e7%9a%84%e5%8e%9f%e5%9b%a0%e6%98%af%20Objective-C%20%e6%98%af%e5%8a%a8%e6%80%81%e8%af%ad%e8%a8%80%ef%bc%8cOC%20%e4%b8%8a%e6%89%80%e6%9c%89%e6%96%b9%e6%b3%95%e7%9a%84%e8%b0%83%e7%94%a8%2f%e7%b1%bb%e7%9a%84%e7%94%9f%e6%88%90%e9%83%bd%e9%80%9a%e8%bf%87%20Objective-C%20Runtime%20%e5%9c%a8%e8%bf%90%e8%a1%8c%e6%97%b6%e8%bf%9b%e8%a1%8c%ef%bc%8c%e6%88%91%e4%bb%ac%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87%e7%b1%bb%e5%90%8d%2f%e6%96%b9%e6%b3%95%e5%90%8d%e5%8f%8d%e5%b0%84%e5%be%97%e5%88%b0%e7%9b%b8%e5%ba%94%e7%9a%84%e7%b1%bb%e5%92%8c%e6%96%b9%e6%b3%95%ef%bc%8c%e4%b9%9f%e5%8f%af%e4%bb%a5%e6%9b%bf%e6%8d%a2%e6%9f%90%e4%b8%aa%e7%b1%bb%e7%9a%84%e6%96%b9%e6%b3%95%e4%b8%ba%e6%96%b0%e7%9a%84%e5%ae%9e%e7%8e%b0%ef%bc%8c%e7%90%86%e8%ae%ba%e4%b8%8a%e4%bd%a0%e5%8f%af%e4%bb%a5%e5%9c%a8%e8%bf%90%e8%a1%8c%e6%97%b6%e9%80%9a%e8%bf%87%e7%b1%bb%e5%90%8d%2f%e6%96%b9%e6%b3%95%e5%90%8d%e8%b0%83%e7%94%a8%e5%88%b0%e4%bb%bb%e4%bd%95%20OC%20%e6%96%b9%e6%b3%95%ef%bc%8c%e6%9b%bf%e6%8d%a2%e4%bb%bb%e4%bd%95%e7%b1%bb%e7%9a%84%e5%ae%9e%e7%8e%b0%e4%bb%a5%e5%8f%8a%e6%96%b0%e5%a2%9e%e4%bb%bb%e6%84%8f%e7%b1%bb%e3%80%82%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e8%af%a6%e7%bb%86%e8%a7%a3%e6%9e%90%e4%b8%80%e4%b8%8bOC%e4%b8%adruntime%e6%9c%80%e4%b8%ba%e5%90%b8%e5%bc%95%e4%ba%ba%e7%9a%84%e5%9c%b0%e6%96%b9%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.objc_msgSend%e5%87%bd%e6%95%b0%e7%ae%80%e4%bb%8b%202.%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81Messaging%e9%98%b6%e6%ae%b5%e2%80%94objc_msgSend%e6%ba%90%e7%a0%81%e8%a7%a3%e6%9e%90%203.%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91Message%20Forwarding%e9%98%b6%e6%ae%b5%204.forwardInvocation%e7%9a%84%e4%be%8b%e5%ad%90%205.%e5%85%a5%e9%99%a2%e8%80%83%e8%af%95%206.Runtime%e4%b8%ad%e7%9a%84%e4%bc%98%e5%8c%96%20%20%e4%b8%80.objc_msgSend%e5%87%bd%e6%95%b0%e7%ae%80%e4%bb%8b%20%e6%9c%80%e5%88%9d%e6%8e%a5%e8%a7%a6%e5%88%b0OC%20Runtime%ef%bc%8c%e4%b8%80%e5%ae%9a%e6%98%af%e4%bb%8e%5breceiver%20message%5d%e8%bf%99%e9%87%8c%e5%bc%80%e5%a7%8b%e7%9a%84%e3%80%82%5breceiver%20message%5d%e4%bc%9a%e8%a2%ab%e7%bc%96%e8%af%91%e5%99%a8%e8%bd%ac%e5%8c%96%e4%b8%ba%ef%bc%9a%0aid%20objc_msgSend%20%28%20id%20self%2c%20SEL%20op%2c%20...%20%29%3b%20%e8%bf%99%e6%98%af%e4%b8%80%e4%b8%aa%e5%8f%af%e5%8f%98%e5%8f%82%e6%95%b0%e5%87%bd%e6%95%b0%e3%80%82%e7%ac%ac%e4%ba%8c%e4%b8%aa%e5%8f%82%e6%95%b0%e7%b1%bb%e5%9e%8b%e6%98%afSEL%e3%80%82SEL%e5%9c%a8OC%e4%b8%ad%e6%98%afselector%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e3%80%82%0atypedef%20struct%20objc_selector%20%2aSEL%3b%20objc_selector%e6%98%af%e4%b8%80%e4%b8%aa%e6%98%a0%e5%b0%84%e5%88%b0%e6%96%b9%e6%b3%95%e7%9a%84C%e5%ad%97%e7%ac%a6%e4%b8%b2%e3%80%82%e9%9c%80%e8%a6%81%e6%b3%a8%e6%84%8f%e7%9a%84%e6%98%af%40selector%28%29%e9%80%89%e6%8b%a9%e5%ad%90%e5%8f%aa%e4%b8%8e%e5%87%bd%e6%95%b0%e5%90%8d%e6%9c%89%e5%85%b3%e3%80%82%e4%b8%8d%e5%90%8c%e7%b1%bb%e4%b8%ad%e7%9b%b8%e5%90%8c%e5%90%8d%e5%ad%97%e7%9a%84%e6%96%b9%e6%b3%95%e6%89%80%e5%af%b9%e5%ba%94%e7%9a%84%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e6%98%af%e7%9b%b8%e5%90%8c%e7%9a%84%ef%bc%8c%e5%8d%b3%e4%bd%bf%e6%96%b9%e6%b3%95%e5%90%8d%e5%ad%97%e7%9b%b8%e5%90%8c%e8%80%8c%e5%8f%98%e9%87%8f%e7%b1%bb%e5%9e%8b%e4%b8%8d%e5%90%8c%e4%b9%9f%e4%bc%9a%e5%af%bc%e8%87%b4%e5%ae%83%e4%bb%ac%e5%85%b7%e6%9c%89%e7%9b%b8%e5%90%8c%e7%9a%84%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e3%80%82%e7%94%b1%e4%ba%8e%e8%bf%99%e7%82%b9%e7%89%b9%e6%80%a7%ef%bc%8c%e4%b9%9f%e5%af%bc%e8%87%b4%e4%ba%86OC%e4%b8%8d%e6%94%af%e6%8c%81%e5%87%bd%e6%95%b0%e9%87%8d%e8%bd%bd%e3%80%82%0a%e5%9c%a8receiver%e6%8b%bf%e5%88%b0%e5%af%b9%e5%ba%94%e7%9a%84selector%e4%b9%8b%e5%90%8e%ef%bc%8c%e5%a6%82%e6%9e%9c%e8%87%aa%e5%b7%b1%e6%97%a0%e6%b3%95%e6%89%a7%e8%a1%8c%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%ef%bc%8c%e9%82%a3%e4%b9%88%e8%af%a5%e6%9d%a1%e6%b6%88%e6%81%af%e8%a6%81%e8%a2%ab%e8%bd%ac%e5%8f%91%e3%80%82%e6%88%96%e8%80%85%e4%b8%b4%e6%97%b6%e5%8a%a8%e6%80%81%e7%9a%84%e6%b7%bb%e5%8a%a0%e6%96%b9%e6%b3%95%e5%ae%9e%e7%8e%b0%e3%80%82%e5%a6%82%e6%9e%9c%e8%bd%ac%e5%8f%91%e5%88%b0%e6%9c%80%e5%90%8e%e4%be%9d%e6%97%a7%e6%b2%a1%e6%b3%95%e5%a4%84%e7%90%86%ef%bc%8c%e7%a8%8b%e5%ba%8f%e5%b0%b1%e4%bc%9a%e5%b4%a9%e6%ba%83%e3%80%82%0a%e6%89%80%e4%bb%a5%e7%bc%96%e8%af%91%e6%9c%9f%e4%bb%85%e4%bb%85%e6%98%af%e7%a1%ae%e5%ae%9a%e4%ba%86%e8%a6%81%e5%8f%91%e9%80%81%e6%b6%88%e6%81%af%ef%bc%8c%e8%80%8c%e6%b6%88%e6%81%af%e5%a6%82%e4%bd%95%e5%a4%84%e7%90%86%e6%98%af%e8%a6%81%e8%bf%90%e8%a1%8c%e6%9c%9f%e9%9c%80%e8%a6%81%e8%a7%a3%e5%86%b3%e7%9a%84%e4%ba%8b%e6%83%85%e3%80%82%0aobjc_msgSend%e5%87%bd%e6%95%b0%e7%a9%b6%e7%ab%9f%e4%bc%9a%e5%b9%b2%e4%bb%80%e4%b9%88%e4%ba%8b%e6%83%85%e5%91%a2%ef%bc%9f%e4%bb%8e%e8%bf%99%e7%af%87%e3%80%8cobjc_msgSend%28%29%20Tour%e3%80%8d%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e5%8f%af%e4%bb%a5%e5%be%97%e5%88%b0%e4%b8%80%e4%b8%aa%e6%af%94%e8%be%83%e8%af%a6%e7%bb%86%e7%9a%84%e7%bb%93%e8%ae%ba%e3%80%82%0a1.%20Check%20for%20ignored%20selectors%20%28GC%29%20and%20short-circuit.%202.%20Check%20for%20nil%20target.%20If%20nil%20%26amp%3b%20nil%20receiver%20handler%20configured%2c%20jump%20to%20handler%20If%20nil%20%26amp%3b%20no%20handler%20%28default%29%2c%20cleanup%20and%20return."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&t=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一objc_msgsend函数简介>一.objc_msgSend函数简介</a></li><li><a href=#二-消息发送messaging阶段objc_msgsend源码解析>二. 消息发送Messaging阶段—objc_msgSend源码解析</a></li><li><a href=#三-消息转发message-forwarding阶段>三. 消息转发Message Forwarding阶段</a></li><li><a href=#四-forwardinvocation的例子>四. forwardInvocation的例子</a></li><li><a href=#五-入院考试>五. 入院考试</a></li><li><a href=#六-runtime中的优化>六. Runtime中的优化</a></li></ul></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">神经病院 Objective-C Runtime 住院第二天——消息发送与转发</h1><div class=meta><div class=postdate><time datetime="2016-09-17 01:47:58 +0000 UTC" itemprop=datePublished>Sep 17</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/runtime>Runtime</a>
+,
+<a class=category-link href=/categories/msgsend>msgSend</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/runtime rel=tag>Runtime</a>
+,
+<a class=tag-link href=/tags/msgsend rel=tag>msgSend</a></div></div></header><div class=content itemprop=articleBody><h4 id=前言>前言</h4><p>现在越来越多的app都使用了JSPatch实现app热修复，而JSPatch 能做到通过 JS 调用和改写 OC 方法最根本的原因是 Objective-C 是动态语言，OC 上所有方法的调用/类的生成都通过 Objective-C Runtime 在运行时进行，我们可以通过类名/方法名反射得到相应的类和方法，也可以替换某个类的方法为新的实现，理论上你可以在运行时通过类名/方法名调用到任何 OC 方法，替换任何类的实现以及新增任意类。今天就来详细解析一下OC中runtime最为吸引人的地方。</p><p>####目录</p><ul><li>1.objc_msgSend函数简介</li><li>2.消息发送Messaging阶段—objc_msgSend源码解析</li><li>3.消息转发Message Forwarding阶段</li><li>4.forwardInvocation的例子</li><li>5.入院考试</li><li>6.Runtime中的优化</li></ul><h4 id=一objc_msgsend函数简介>一.objc_msgSend函数简介</h4><p>最初接触到OC Runtime，一定是从[receiver message]这里开始的。[receiver message]会被编译器转化为：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>objc_msgSend</span> ( <span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> op, ... );
+
+</code></pre></div><p>这是一个可变参数函数。第二个参数类型是SEL。SEL在OC中是selector方法选择器。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>struct</span> objc_selector <span style=color:#f92672>*</span><span style=color:#66d9ef>SEL</span>;
+
+</code></pre></div><p>objc_selector是一个映射到方法的C字符串。需要注意的是@selector()选择子<strong>只与函数名有关</strong>。不同类中相同名字的方法所对应的方法选择器是相同的，即使方法名字相同而变量类型不同也会导致它们具有相同的方法选择器。由于这点特性，也导致了OC不支持函数重载。</p><p>在receiver拿到对应的selector之后，如果自己无法执行这个方法，那么该条消息要被转发。或者临时动态的添加方法实现。如果转发到最后依旧没法处理，程序就会崩溃。</p><p>所以编译期仅仅是确定了要发送消息，而消息如何处理是要运行期需要解决的事情。</p><p>objc_msgSend函数究竟会干什么事情呢？从这篇<a href=http://www.friday.com/bbum/2009/12/18/objc_msgsend-part-1-the-road-map/>「objc_msgSend() Tour」</a>文章里面可以得到一个比较详细的结论。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c><span style=color:#ae81ff>1.</span> Check <span style=color:#66d9ef>for</span> ignored selectors (GC) and <span style=color:#66d9ef>short</span><span style=color:#f92672>-</span>circuit.
+ <span style=color:#ae81ff>2.</span> Check <span style=color:#66d9ef>for</span> nil target.
+    If nil <span style=color:#f92672>&amp;</span> nil receiver handler configured, jump to handler
+    If nil <span style=color:#f92672>&amp;</span> no handler (<span style=color:#66d9ef>default</span>), cleanup and <span style=color:#66d9ef>return</span>.
+ <span style=color:#ae81ff>3.</span> Search the class<span style=color:#960050;background-color:#1e0010>’</span>s method cache <span style=color:#66d9ef>for</span> the method IMP(use hash to find<span style=color:#f92672>&amp;</span>store method in cache)
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>1.</span> If found, jump to it.
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>2.</span> Not found: lookup the method IMP in the class itself corresponding its hierarchy chain.
+        If found, load it into cache and jump to it.
+        If not found, jump to forwarding mechanism.
+</code></pre></div><p>总结一下objc_msgSend会做一下几件事情：<br>1.检测这个 selector是不是要忽略的。
+2.检查target是不是为nil。</p><p>如果这里有相应的nil的处理函数，就跳转到相应的函数中。
+如果没有处理nil的函数，就自动清理现场并返回。这一点就是为何在OC中给nil发送消息不会崩溃的原因。</p><p>3.确定不是给nil发消息之后，在该class的缓存中查找方法对应的IMP实现。</p><p>如果找到，就跳转进去执行。
+如果没有找到，就在方法分发表里面继续查找，一直找到NSObject为止。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/24_1.png alt></p><p>4.如果还没有找到，那就需要开始消息转发阶段了。至此，发送消息Messaging阶段完成。这一阶段主要完成的是通过select()快速查找IMP的过程。</p><h4 id=二-消息发送messaging阶段objc_msgsend源码解析>二. 消息发送Messaging阶段—objc_msgSend源码解析</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/24_2.png alt></p><p>在这篇文章<a href=http://www.mulle-kybernetik.com/artikel/Optimization/opti-9.html>Obj-C Optimization: The faster objc_msgSend</a>中看到了这样一段C版本的objc_msgSend的源码。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#include</span> <span style=color:#75715e>&lt;objc/objc-runtime.h&gt;</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>id</span>  <span style=color:#a6e22e>c_objc_msgSend</span>( <span style=color:#66d9ef>struct</span> objc_class <span style=color:#75715e>/* ahem */</span> <span style=color:#f92672>*</span>self, <span style=color:#66d9ef>SEL</span> _cmd, ...)
+{
+   <span style=color:#66d9ef>struct</span> objc_class    <span style=color:#f92672>*</span>cls;
+   <span style=color:#66d9ef>struct</span> objc_cache    <span style=color:#f92672>*</span>cache;
+   <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span>         hash;
+   <span style=color:#66d9ef>struct</span> objc_method   <span style=color:#f92672>*</span>method;   
+   <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span>         index;
+   
+   <span style=color:#66d9ef>if</span>( self)
+   {
+      cls   <span style=color:#f92672>=</span> self<span style=color:#f92672>-&gt;</span>isa;
+      cache <span style=color:#f92672>=</span> cls<span style=color:#f92672>-&gt;</span>cache;
+      hash  <span style=color:#f92672>=</span> cache<span style=color:#f92672>-&gt;</span>mask;
+      index <span style=color:#f92672>=</span> (<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span>) _cmd <span style=color:#f92672>&amp;</span> hash;
+      
+      <span style=color:#66d9ef>do</span>
+      {
+         method <span style=color:#f92672>=</span> cache<span style=color:#f92672>-&gt;</span>buckets[ index];
+         <span style=color:#66d9ef>if</span>( <span style=color:#f92672>!</span> method)
+            <span style=color:#66d9ef>goto</span> recache;
+         index <span style=color:#f92672>=</span> (index <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>) <span style=color:#f92672>&amp;</span> cache<span style=color:#f92672>-&gt;</span>mask;
+      }
+      <span style=color:#66d9ef>while</span>( method<span style=color:#f92672>-&gt;</span>method_name <span style=color:#f92672>!=</span> _cmd);
+      <span style=color:#66d9ef>return</span>( (<span style=color:#f92672>*</span>method<span style=color:#f92672>-&gt;</span>method_imp)( (<span style=color:#66d9ef>id</span>) self, _cmd));
+   }
+   <span style=color:#66d9ef>return</span>( (<span style=color:#66d9ef>id</span>) self);
+
+recache:
+   <span style=color:#75715e>/* ... */</span>
+   <span style=color:#66d9ef>return</span>( <span style=color:#ae81ff>0</span>);
+}
+</code></pre></div><p>该源码中有一个do-while循环，这个循环就是上一章里面提到的在方法分发表里面查找method的过程。</p><p>不过在obj4-680里面的objc-msg-x86_64.s文件中实现是一段汇编代码。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+
+<span style=color:#960050;background-color:#1e0010>/********************************************************************</span>
+ <span style=color:#960050;background-color:#1e0010>*</span>
+ <span style=color:#960050;background-color:#1e0010>*</span> <span style=color:#a6e22e>id</span> <span style=color:#66d9ef>objc_msgSend</span>(<span style=color:#66d9ef>id</span> <span style=color:#66d9ef>self</span>, <span style=color:#66d9ef>SEL</span> <span style=color:#66d9ef>_cmd</span>,...)<span style=color:#75715e>;
+</span><span style=color:#75715e></span> *
+ <span style=color:#960050;background-color:#1e0010>********************************************************************/</span>
+ 
+ <span style=color:#a6e22e>.data</span>
+ <span style=color:#a6e22e>.align</span> <span style=color:#ae81ff>3</span>
+ <span style=color:#a6e22e>.globl</span> <span style=color:#66d9ef>_objc_debug_taggedpointer_classes</span>
+_objc_debug_taggedpointer_classes:
+ <span style=color:#a6e22e>.fill</span> <span style=color:#ae81ff>16</span>, <span style=color:#ae81ff>8</span>, <span style=color:#ae81ff>0</span>
+
+ <span style=color:#a6e22e>ENTRY</span> <span style=color:#66d9ef>_objc_msgSend</span>
+ <span style=color:#a6e22e>MESSENGER_START</span>
+
+ <span style=color:#a6e22e>NilTest</span> <span style=color:#66d9ef>NORMAL</span>
+
+ <span style=color:#a6e22e>GetIsaFast</span> <span style=color:#66d9ef>NORMAL</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>r11</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>self-</span><span style=color:#960050;background-color:#1e0010>&gt;</span><span style=color:#66d9ef>isa</span>
+ <span style=color:#a6e22e>CacheLookup</span> <span style=color:#66d9ef>NORMAL</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>calls</span> <span style=color:#66d9ef>IMP</span> <span style=color:#66d9ef>on</span> <span style=color:#66d9ef>success</span>
+
+ <span style=color:#a6e22e>NilTestSupport</span> <span style=color:#66d9ef>NORMAL</span>
+
+ <span style=color:#a6e22e>GetIsaSupport</span> <span style=color:#66d9ef>NORMAL</span>
+
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>cache</span> <span style=color:#66d9ef>miss</span>: <span style=color:#66d9ef>go</span> <span style=color:#66d9ef>search</span> <span style=color:#66d9ef>the</span> <span style=color:#66d9ef>method</span> <span style=color:#66d9ef>lists</span>
+LCacheMiss:
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>isa</span> <span style=color:#66d9ef>still</span> <span style=color:#66d9ef>in</span> <span style=color:#66d9ef>r11</span>
+ <span style=color:#a6e22e>MethodTableLookup</span> %a1, %a2 <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>r11</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>IMP</span>
+ <span style=color:#a6e22e>cmp</span> %r11, %r11  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>set</span> <span style=color:#66d9ef>eq</span> (<span style=color:#66d9ef>nonstret</span>) <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>forwarding</span>
+ <span style=color:#a6e22e>jmp</span> *%r11   <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>goto</span> *<span style=color:#66d9ef>imp</span>
+
+ <span style=color:#a6e22e>END_ENTRY</span> <span style=color:#66d9ef>_objc_msgSend</span>
+
+ 
+ <span style=color:#a6e22e>ENTRY</span> <span style=color:#66d9ef>_objc_msgSend_fixup</span>
+ <span style=color:#a6e22e>int3</span>
+ <span style=color:#a6e22e>END_ENTRY</span> <span style=color:#66d9ef>_objc_msgSend_fixup</span>
+
+ 
+ <span style=color:#a6e22e>STATIC_ENTRY</span> <span style=color:#66d9ef>_objc_msgSend_fixedup</span>
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>Load</span> <span style=color:#66d9ef>_cmd</span> <span style=color:#66d9ef>from</span> <span style=color:#66d9ef>the</span> <span style=color:#66d9ef>message_ref</span>
+ <span style=color:#a6e22e>movq</span> <span style=color:#ae81ff>8</span>(%a2), %a2
+ <span style=color:#a6e22e>jmp</span> <span style=color:#66d9ef>_objc_msgSend</span>
+ <span style=color:#a6e22e>END_ENTRY</span> <span style=color:#66d9ef>_objc_msgSend_fixedup</span>
+
+</code></pre></div><p>来分析一下这段汇编代码。</p><p>乍一看，如果从LCacheMiss:这里上下分开，可以很明显的看到objc_msgSend就干了两件事情—— CacheLookup 和 MethodTableLookup。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+
+<span style=color:#960050;background-color:#1e0010>/////////////////////////////////////////////////////////////////////</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>NilTest</span> <span style=color:#66d9ef>return-type</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> Takes: <span style=color:#a6e22e>$0</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>NORMAL</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>FPRET</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>FP2RET</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>STRET</span>
+<span style=color:#960050;background-color:#1e0010>//</span>  <span style=color:#960050;background-color:#1e0010>%</span><span style=color:#a6e22e>a1</span> <span style=color:#66d9ef>or</span> %a2 (<span style=color:#66d9ef>STRET</span>) <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>receiver</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>On</span> <span style=color:#66d9ef>exit</span>:  <span style=color:#66d9ef>Loads</span> <span style=color:#66d9ef>non-nil</span> <span style=color:#66d9ef>receiver</span> <span style=color:#66d9ef>in</span> %a1 <span style=color:#66d9ef>or</span> %a2 (<span style=color:#66d9ef>STRET</span>), <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>returns</span> <span style=color:#66d9ef>zero.</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>/////////////////////////////////////////////////////////////////////</span>
+
+<span style=color:#a6e22e>.macro</span> <span style=color:#66d9ef>NilTest</span>
+<span style=color:#a6e22e>.if</span> <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>SUPER</span>  <span style=color:#960050;background-color:#1e0010>||</span>  <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>SUPER_STRET</span>
+ <span style=color:#a6e22e>error</span> <span style=color:#66d9ef>super</span> <span style=color:#66d9ef>dispatch</span> <span style=color:#66d9ef>does</span> <span style=color:#66d9ef>not</span> <span style=color:#66d9ef>test</span> <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>nil</span>
+<span style=color:#a6e22e>.endif</span>
+
+<span style=color:#a6e22e>.if</span> <span style=color:#66d9ef>$0</span> !<span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>STRET</span>
+ <span style=color:#a6e22e>testq</span> %a1, %a1
+<span style=color:#a6e22e>.else</span>
+ <span style=color:#a6e22e>testq</span> %a2, %a2
+<span style=color:#a6e22e>.endif</span>
+ <span style=color:#a6e22e>PN</span>
+ <span style=color:#a6e22e>jz</span> <span style=color:#66d9ef>LNilTestSlow_f</span>
+<span style=color:#a6e22e>.endmacro</span>
+
+</code></pre></div><p>NilTest是用来检测是否为nil的。传入参数有4种，NORMAL / FPRET / FP2RET / STRET。</p><p>objc_msgSend 传入的参数是NilTest NORMAL
+objc_msgSend_fpret 传入的参数是NilTest FPRET
+objc_msgSend_fp2ret 传入的参数是NilTest FP2RET
+objc_msgSend_stret 传入的参数是NilTest STRET</p><p>如果检测方法的接受者是nil，那么系统会自动clean并且return。</p><p>GetIsaFast宏可以快速地获取到对象的 isa 指针地址（放到 r11 寄存器，r10会被重写；在 arm 架构上是直接赋值到 r9）</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+
+<span style=color:#a6e22e>.macro</span> <span style=color:#66d9ef>CacheLookup</span>
+ 
+ <span style=color:#a6e22e>ldrh</span> <span style=color:#66d9ef>r12</span>, [<span style=color:#66d9ef>r9</span>, <span style=color:#75715e>#CACHE_MASK] // r12 = mask
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>ldr</span> <span style=color:#66d9ef>r9</span>, [<span style=color:#66d9ef>r9</span>, <span style=color:#75715e>#CACHE] // r9 = buckets
+</span><span style=color:#75715e></span><span style=color:#66d9ef>.if</span> <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>STRET</span>  <span style=color:#960050;background-color:#1e0010>||</span>  <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>SUPER_STRET</span>
+ <span style=color:#a6e22e>and</span> <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r2</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>r12</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>index</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>SEL</span> <span style=color:#960050;background-color:#1e0010>&amp;</span> <span style=color:#66d9ef>mask</span>
+<span style=color:#a6e22e>.else</span>
+ <span style=color:#a6e22e>and</span> <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r1</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>r12</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>index</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>SEL</span> <span style=color:#960050;background-color:#1e0010>&amp;</span> <span style=color:#66d9ef>mask</span>
+<span style=color:#a6e22e>.endif</span>
+ <span style=color:#a6e22e>add</span> <span style=color:#66d9ef>r9</span>, <span style=color:#66d9ef>r9</span>, <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>LSL</span> <span style=color:#75715e>#3 // r9 = bucket = buckets+index*8
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>ldr</span> <span style=color:#66d9ef>r12</span>, [<span style=color:#66d9ef>r9</span>]  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>r12</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>bucket-</span><span style=color:#960050;background-color:#1e0010>&gt;</span><span style=color:#66d9ef>sel</span>
+<span style=color:#960050;background-color:#1e0010>2:</span>
+<span style=color:#a6e22e>.if</span> <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>STRET</span>  <span style=color:#960050;background-color:#1e0010>||</span>  <span style=color:#66d9ef>$0</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#66d9ef>SUPER_STRET</span>
+ <span style=color:#a6e22e>teq</span> <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r2</span>
+<span style=color:#a6e22e>.else</span>
+ <span style=color:#a6e22e>teq</span> <span style=color:#66d9ef>r12</span>, <span style=color:#66d9ef>r1</span>
+<span style=color:#a6e22e>.endif</span>
+ <span style=color:#a6e22e>bne</span> <span style=color:#ae81ff>1</span><span style=color:#66d9ef>f</span>
+ <span style=color:#a6e22e>CacheHit</span> <span style=color:#66d9ef>$0</span>
+<span style=color:#960050;background-color:#1e0010>1:</span> 
+ <span style=color:#a6e22e>cmp</span> <span style=color:#66d9ef>r12</span>, <span style=color:#75715e>#1
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>blo</span> <span style=color:#66d9ef>LCacheMiss_f</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>bucket-</span><span style=color:#960050;background-color:#1e0010>&gt;</span><span style=color:#66d9ef>sel</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#ae81ff>0</span>) <span style=color:#66d9ef>cache</span> <span style=color:#66d9ef>miss</span>
+ <span style=color:#a6e22e>it</span> <span style=color:#66d9ef>eq</span>   <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>bucket-</span><span style=color:#960050;background-color:#1e0010>&gt;</span><span style=color:#66d9ef>sel</span> <span style=color:#960050;background-color:#1e0010>==</span> <span style=color:#ae81ff>1</span>) <span style=color:#66d9ef>cache</span> <span style=color:#66d9ef>wrap</span>
+ <span style=color:#a6e22e>ldreq</span> <span style=color:#66d9ef>r9</span>, [<span style=color:#66d9ef>r9</span>, <span style=color:#75715e>#4]  // bucket-&gt;imp is before first bucket
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>ldr</span> <span style=color:#66d9ef>r12</span>, [<span style=color:#66d9ef>r9</span>, <span style=color:#75715e>#8]!  // r12 = (++bucket)-&gt;sel
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>b</span> <span style=color:#ae81ff>2</span><span style=color:#66d9ef>b</span>
+
+<span style=color:#a6e22e>.endmacro</span>
+
+</code></pre></div><p>r12里面存的是方法method，r9里面是cache。r1，r2是SEL。在这个CacheLookup函数中，不断的通过SEL与cache中的bucket->sel进行比较，如果r12 = = 0，则跳转到LCacheMiss_f标记去继续执行。如果r12找到了,r12 = =1，即在cache中找到了相应的SEL，则直接执行该IMP(放在r10中)。</p><p>程序跳到LCacheMiss，就说明cache中无缓存，未命中缓存。这个时候就要开始下一阶段MethodTableLookup的查找了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+<span style=color:#960050;background-color:#1e0010>/////////////////////////////////////////////////////////////////////</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>MethodTableLookup</span> <span style=color:#66d9ef>classRegister</span>, <span style=color:#66d9ef>selectorRegister</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> Takes: <span style=color:#a6e22e>$0</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>class</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>search</span> (<span style=color:#66d9ef>a1</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>a2</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>r10</span> <span style=color:#66d9ef>ONLY</span>)
+<span style=color:#960050;background-color:#1e0010>//</span>  <span style=color:#a6e22e>$1</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>selector</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>search</span> <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>a2</span> <span style=color:#66d9ef>or</span> <span style=color:#66d9ef>a3</span> <span style=color:#66d9ef>ONLY</span>)
+<span style=color:#960050;background-color:#1e0010>//</span>   <span style=color:#a6e22e>r11</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>class</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>search</span>
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>On</span> <span style=color:#66d9ef>exit</span>: <span style=color:#66d9ef>imp</span> <span style=color:#66d9ef>in</span> %r11
+<span style=color:#960050;background-color:#1e0010>//</span>
+<span style=color:#960050;background-color:#1e0010>/////////////////////////////////////////////////////////////////////</span>
+<span style=color:#a6e22e>.macro</span> <span style=color:#66d9ef>MethodTableLookup</span>
+
+ <span style=color:#a6e22e>MESSENGER_END_SLOW</span>
+ 
+ <span style=color:#a6e22e>SaveRegisters</span>
+
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>_class_lookupMethodAndLoadCache3</span>(<span style=color:#66d9ef>receiver</span>, <span style=color:#66d9ef>selector</span>, <span style=color:#66d9ef>class</span>)
+
+ <span style=color:#a6e22e>movq</span> <span style=color:#66d9ef>$0</span>, %a1
+ <span style=color:#a6e22e>movq</span> <span style=color:#66d9ef>$1</span>, %a2
+ <span style=color:#a6e22e>movq</span> %r11, %a3
+ <span style=color:#a6e22e>call</span> <span style=color:#66d9ef>__class_lookupMethodAndLoadCache3</span>
+
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>IMP</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>now</span> <span style=color:#66d9ef>in</span> %rax
+ <span style=color:#a6e22e>movq</span> %rax, %r11
+
+ <span style=color:#a6e22e>RestoreRegisters</span>
+
+<span style=color:#a6e22e>.endmacro</span>
+
+</code></pre></div><p>MethodTableLookup 可以算是个接口层宏，主要用于保存环境与准备参数，来调用 __class_lookupMethodAndLoadCache3函数（在objc-class.mm中）。具体是把receiver, selector, class三个参数传给$0，$1，r11，然后再去调用lookupMethodAndLoadCache3方法。最后会将 IMP 返回（从 r11 挪到 rax）。最后在 objc_msgSend中调用 IMP。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+
+<span style=color:#75715e>/***********************************************************************
+</span><span style=color:#75715e>* _class_lookupMethodAndLoadCache.
+</span><span style=color:#75715e>* Method lookup for dispatchers ONLY. OTHER CODE SHOULD USE lookUpImp().
+</span><span style=color:#75715e>* This lookup avoids optimistic cache scan because the dispatcher 
+</span><span style=color:#75715e>* already tried that.
+</span><span style=color:#75715e>**********************************************************************/</span>
+IMP <span style=color:#a6e22e>_class_lookupMethodAndLoadCache3</span>(id obj, SEL sel, Class cls)
+{        
+    <span style=color:#66d9ef>return</span> lookUpImpOrForward(cls, sel, obj, 
+                              YES<span style=color:#75715e>/*initialize*/</span>, NO<span style=color:#75715e>/*cache*/</span>, YES<span style=color:#75715e>/*resolver*/</span>);
+}
+</code></pre></div><p>__class_lookupMethodAndLoadCache3函数也是个接口层（C编写），此函数提供相应参数配置，实际功能在lookUpImpOrForward函数中。</p><p>再来看看lookUpImpOrForward函数实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>IMP</span> <span style=color:#a6e22e>lookUpImpOrForward</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel, <span style=color:#66d9ef>id</span> inst, 
+                       <span style=color:#66d9ef>bool</span> initialize, <span style=color:#66d9ef>bool</span> cache, <span style=color:#66d9ef>bool</span> resolver)
+{
+    <span style=color:#66d9ef>Class</span> curClass;
+    <span style=color:#66d9ef>IMP</span> imp <span style=color:#f92672>=</span> nil;
+    Method meth;
+    <span style=color:#66d9ef>bool</span> triedResolver <span style=color:#f92672>=</span> NO;
+
+    <span style=color:#75715e>/*
+</span><span style=color:#75715e>    中间是查找过程，详细解析见下。
+</span><span style=color:#75715e>    */</span>
+
+    <span style=color:#75715e>// paranoia: look for ignored selectors with non-ignored implementations
+</span><span style=color:#75715e></span>    assert(<span style=color:#f92672>!</span>(ignoreSelector(sel)  <span style=color:#f92672>&amp;&amp;</span>  imp <span style=color:#f92672>!=</span> (<span style=color:#66d9ef>IMP</span>)<span style=color:#f92672>&amp;</span>_objc_ignored_method));
+
+    <span style=color:#75715e>// paranoia: never let uncached leak out
+</span><span style=color:#75715e></span>    assert(imp <span style=color:#f92672>!=</span> _objc_msgSend_uncached_impcache);
+
+    <span style=color:#66d9ef>return</span> imp;
+}
+
+</code></pre></div><p>接下来一行行的解析。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    runtimeLock.assertUnlocked();
+
+</code></pre></div><p>runtimeLock.assertUnlocked(); 这个是加一个读写锁，保证线程安全。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#75715e>// Optimistic cache lookup
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (cache) {
+        imp <span style=color:#f92672>=</span> cache_getImp(cls, sel);
+        <span style=color:#66d9ef>if</span> (imp) <span style=color:#66d9ef>return</span> imp;
+    }
+</code></pre></div><p>lookUpImpOrForward第5个新参是是否找到cache的布尔量，如果传入的是YES，那么就会调用cache_getImp方法去找到缓存里面的IMP。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+<span style=color:#960050;background-color:#1e0010>/********************************************************************</span>
+ <span style=color:#960050;background-color:#1e0010>*</span> <span style=color:#a6e22e>IMP</span> <span style=color:#66d9ef>cache_getImp</span>(<span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>cls</span>, <span style=color:#66d9ef>SEL</span> <span style=color:#66d9ef>sel</span>)
+ <span style=color:#960050;background-color:#1e0010>*</span>
+ <span style=color:#960050;background-color:#1e0010>*</span> <span style=color:#a6e22e>On</span> <span style=color:#66d9ef>entry</span>: <span style=color:#66d9ef>a1</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>class</span> <span style=color:#66d9ef>whose</span> <span style=color:#66d9ef>cache</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>be</span> <span style=color:#66d9ef>searched</span>
+ <span style=color:#960050;background-color:#1e0010>*</span>  <span style=color:#a6e22e>a2</span> <span style=color:#960050;background-color:#1e0010>=</span> <span style=color:#66d9ef>selector</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>search</span> <span style=color:#66d9ef>for</span>
+ <span style=color:#960050;background-color:#1e0010>*</span>
+ <span style=color:#960050;background-color:#1e0010>*</span> <span style=color:#a6e22e>If</span> <span style=color:#66d9ef>found</span>, <span style=color:#66d9ef>returns</span> <span style=color:#66d9ef>method</span> <span style=color:#66d9ef>implementation.</span>
+ <span style=color:#960050;background-color:#1e0010>*</span> <span style=color:#a6e22e>If</span> <span style=color:#66d9ef>not</span> <span style=color:#66d9ef>found</span>, <span style=color:#66d9ef>returns</span> <span style=color:#66d9ef>NULL.</span>
+ <span style=color:#960050;background-color:#1e0010>********************************************************************/</span>
+
+ <span style=color:#a6e22e>STATIC_ENTRY</span> <span style=color:#66d9ef>_cache_getImp</span>
+
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>do</span> <span style=color:#66d9ef>lookup</span>
+ <span style=color:#a6e22e>movq</span> %a1, %r11  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>move</span> <span style=color:#66d9ef>class</span> <span style=color:#66d9ef>to</span> <span style=color:#66d9ef>r11</span> <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>CacheLookup</span>
+ <span style=color:#a6e22e>CacheLookup</span> <span style=color:#66d9ef>GETIMP</span>  <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#66d9ef>returns</span> <span style=color:#66d9ef>IMP</span> <span style=color:#66d9ef>on</span> <span style=color:#66d9ef>success</span>
+
+LCacheMiss:
+<span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>cache</span> <span style=color:#66d9ef>miss</span>, <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>nil</span>
+ <span style=color:#a6e22e>xorl</span> %eax, %eax
+ <span style=color:#a6e22e>ret</span>
+
+LGetImpExit:
+ <span style=color:#a6e22e>END_ENTRY</span>  <span style=color:#66d9ef>_cache_getImp</span>
+
+
+</code></pre></div><p>cache_getImp会把找到的IMP放在r11中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>cls<span style=color:#f92672>-&gt;</span>isRealized()) {
+        rwlock_writer_t lock(runtimeLock);
+        realizeClass(cls);
+    }
+
+</code></pre></div><p>调用realizeClass方法是申请class_rw_t的可读写空间。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#66d9ef>if</span> (initialize  <span style=color:#f92672>&amp;&amp;</span>  <span style=color:#f92672>!</span>cls<span style=color:#f92672>-&gt;</span>isInitialized()) {
+        _class_initialize (_class_getNonMetaClass(cls, inst));
+    }
+
+</code></pre></div><p>_class_initialize是类初始化的过程。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+retry:
+    runtimeLock.read();
+
+</code></pre></div><p>runtimeLock.read();这里加了一个读锁。因为在运行时中会动态的添加方法，为了保证线程安全，所以要加锁。从这里开始，下面会出现5处goto done的地方，和一处goto retry。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+ done:
+    runtimeLock.unlockRead();
+
+</code></pre></div><p>在done的地方，会完成IMP的查找，于是可以打开读锁。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#75715e>// Ignore GC selectors
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (ignoreSelector(sel)) {
+        imp <span style=color:#f92672>=</span> _objc_ignored_method;
+        cache_fill(cls, sel, imp, inst);
+        <span style=color:#66d9ef>goto</span> done;
+    }
+
+</code></pre></div><p>紧接着GC selectors是为了忽略macOS中GC垃圾回收机制用到的方法，iOS则没有这一步。如果忽略，则进行cache_fill，然后跳转到goto done那里去。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>cache_fill</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel, <span style=color:#66d9ef>IMP</span> imp, <span style=color:#66d9ef>id</span> receiver)
+{
+<span style=color:#75715e>#if !DEBUG_TASK_THREADS
+</span><span style=color:#75715e></span>    mutex_locker_t lock(cacheUpdateLock);
+    cache_fill_nolock(cls, sel, imp, receiver);
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span>    _collecting_in_critical();
+    <span style=color:#66d9ef>return</span>;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>}
+
+
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>cache_fill_nolock</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel, <span style=color:#66d9ef>IMP</span> imp, <span style=color:#66d9ef>id</span> receiver)
+{
+    cacheUpdateLock.assertLocked();
+
+    <span style=color:#75715e>// Never cache before +initialize is done
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>cls<span style=color:#f92672>-&gt;</span>isInitialized()) <span style=color:#66d9ef>return</span>;
+
+    <span style=color:#75715e>// Make sure the entry wasn&#39;t added to the cache by some other thread 
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// before we grabbed the cacheUpdateLock.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (cache_getImp(cls, sel)) <span style=color:#66d9ef>return</span>;
+
+    cache_t <span style=color:#f92672>*</span>cache <span style=color:#f92672>=</span> getCache(cls);
+    cache_key_t key <span style=color:#f92672>=</span> getKey(sel);
+
+    <span style=color:#75715e>// Use the cache as-is if it is less than 3/4 full
+</span><span style=color:#75715e></span>    mask_t newOccupied <span style=color:#f92672>=</span> cache<span style=color:#f92672>-&gt;</span>occupied() <span style=color:#f92672>+</span> <span style=color:#ae81ff>1</span>;
+    mask_t capacity <span style=color:#f92672>=</span> cache<span style=color:#f92672>-&gt;</span>capacity();
+    <span style=color:#66d9ef>if</span> (cache<span style=color:#f92672>-&gt;</span>isConstantEmptyCache()) {
+        <span style=color:#75715e>// Cache is read-only. Replace it.
+</span><span style=color:#75715e></span>        cache<span style=color:#f92672>-&gt;</span>reallocate(capacity, capacity <span style=color:#f92672>?:</span> INIT_CACHE_SIZE);
+    }
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (newOccupied <span style=color:#f92672>&lt;=</span> capacity <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span> <span style=color:#f92672>*</span> <span style=color:#ae81ff>3</span>) {
+        <span style=color:#75715e>// Cache is less than 3/4 full. Use it as-is.
+</span><span style=color:#75715e></span>    }
+    <span style=color:#66d9ef>else</span> {
+        <span style=color:#75715e>// Cache is too full. Expand it.
+</span><span style=color:#75715e></span>        cache<span style=color:#f92672>-&gt;</span>expand();
+    }
+    bucket_t <span style=color:#f92672>*</span>bucket <span style=color:#f92672>=</span> cache<span style=color:#f92672>-&gt;</span>find(key, receiver);
+    <span style=color:#66d9ef>if</span> (bucket<span style=color:#f92672>-&gt;</span>key() <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) cache<span style=color:#f92672>-&gt;</span>incrementOccupied();
+    bucket<span style=color:#f92672>-&gt;</span>set(key, imp);
+}
+
+</code></pre></div><p>在cache_fill中还会去调用cache_fill_nolock函数，如果缓存中的内容大于容量的 3/4就会扩充缓存，使缓存的大小翻倍。找到第一个空的 bucket_t，以 (SEL, IMP)的形式填充进去。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#75715e>// Try this class&#39;s cache.
+</span><span style=color:#75715e></span>
+    imp <span style=color:#f92672>=</span> cache_getImp(cls, sel);
+    <span style=color:#66d9ef>if</span> (imp) <span style=color:#66d9ef>goto</span> done;
+
+</code></pre></div><p>如果不忽略，则再次尝试从类的cache中获取IMP，如果获取到，然后也会跳转到goto done去。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    <span style=color:#75715e>// Try this class&#39;s method lists.
+</span><span style=color:#75715e></span>
+    meth <span style=color:#f92672>=</span> getMethodNoSuper_nolock(cls, sel);
+    <span style=color:#66d9ef>if</span> (meth) {
+        log_and_fill_cache(cls, meth<span style=color:#f92672>-&gt;</span>imp, sel, inst, cls);
+        imp <span style=color:#f92672>=</span> meth<span style=color:#f92672>-&gt;</span>imp;
+        <span style=color:#66d9ef>goto</span> done;
+    }
+
+</code></pre></div><p>如果在cache缓存中获取失败，则再去类方法列表里面进行查找。找到后跳转到goto done。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#75715e>// Try superclass caches and method lists.
+</span><span style=color:#75715e></span>
+    curClass <span style=color:#f92672>=</span> cls;
+    <span style=color:#66d9ef>while</span> ((curClass <span style=color:#f92672>=</span> curClass<span style=color:#f92672>-&gt;</span>superclass)) {
+        <span style=color:#75715e>// Superclass cache.
+</span><span style=color:#75715e></span>        imp <span style=color:#f92672>=</span> cache_getImp(curClass, sel);
+        <span style=color:#66d9ef>if</span> (imp) {
+            <span style=color:#66d9ef>if</span> (imp <span style=color:#f92672>!=</span> (<span style=color:#66d9ef>IMP</span>)_objc_msgForward_impcache) {
+                <span style=color:#75715e>// Found the method in a superclass. Cache it in this class.
+</span><span style=color:#75715e></span>                log_and_fill_cache(cls, imp, sel, inst, curClass);
+                <span style=color:#66d9ef>goto</span> done;
+            }
+            <span style=color:#66d9ef>else</span> {
+                <span style=color:#75715e>// Found a forward:: entry in a superclass.
+</span><span style=color:#75715e></span>                <span style=color:#75715e>// Stop searching, but don&#39;t cache yet; call method 
+</span><span style=color:#75715e></span>                <span style=color:#75715e>// resolver for this class first.
+</span><span style=color:#75715e></span>                <span style=color:#66d9ef>break</span>;
+            }
+        }
+
+</code></pre></div><p>如果以上尝试都失败了，接下来就会循环尝试父类的缓存和方法列表。一直找到NSObject为止。因为NSObject的superclass为nil，才跳出循环。</p><p>如果在父类中找到了该方法method的IMP，接下来就应该把这个方法cache回自己的缓存中。fill完之后跳转goto done语句。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+        <span style=color:#75715e>// Superclass method list.
+</span><span style=color:#75715e></span>        meth <span style=color:#f92672>=</span> getMethodNoSuper_nolock(curClass, sel);
+        <span style=color:#66d9ef>if</span> (meth) {
+            log_and_fill_cache(cls, meth<span style=color:#f92672>-&gt;</span>imp, sel, inst, curClass);
+            imp <span style=color:#f92672>=</span> meth<span style=color:#f92672>-&gt;</span>imp;
+            <span style=color:#66d9ef>goto</span> done;
+        }
+    }
+
+
+</code></pre></div><p>如果没有在父类的cache中找到IMP，继续在父类的方法列表里面查找。如果找到，跳转goto done语句。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> method_t <span style=color:#f92672>*</span> <span style=color:#a6e22e>getMethodNoSuper_nolock</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel)
+{
+    runtimeLock.assertLocked();
+
+    assert(cls<span style=color:#f92672>-&gt;</span>isRealized());
+    <span style=color:#75715e>// fixme nil cls? 
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// fixme nil sel?
+</span><span style=color:#75715e></span>
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>auto</span> mlists <span style=color:#f92672>=</span> cls<span style=color:#f92672>-&gt;</span>data()<span style=color:#f92672>-&gt;</span>methods.beginLists(), 
+              end <span style=color:#f92672>=</span> cls<span style=color:#f92672>-&gt;</span>data()<span style=color:#f92672>-&gt;</span>methods.endLists(); 
+         mlists <span style=color:#f92672>!=</span> end;
+         <span style=color:#f92672>++</span>mlists)
+    {
+        method_t <span style=color:#f92672>*</span>m <span style=color:#f92672>=</span> search_method_list(<span style=color:#f92672>*</span>mlists, sel);
+        <span style=color:#66d9ef>if</span> (m) <span style=color:#66d9ef>return</span> m;
+    }
+
+    <span style=color:#66d9ef>return</span> nil;
+}
+
+</code></pre></div><p>这里可以解析一下method的查找过程。在getMethodNoSuper_nolock方法中，会遍历一次methodList链表，从begin一直遍历到end。遍历过程中会调用search_method_list函数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> method_t <span style=color:#f92672>*</span><span style=color:#a6e22e>search_method_list</span>(<span style=color:#66d9ef>const</span> method_list_t <span style=color:#f92672>*</span>mlist, <span style=color:#66d9ef>SEL</span> sel)
+{
+    <span style=color:#66d9ef>int</span> methodListIsFixedUp <span style=color:#f92672>=</span> mlist<span style=color:#f92672>-&gt;</span>isFixedUp();
+    <span style=color:#66d9ef>int</span> methodListHasExpectedSize <span style=color:#f92672>=</span> mlist<span style=color:#f92672>-&gt;</span>entsize() <span style=color:#f92672>==</span> <span style=color:#66d9ef>sizeof</span>(method_t);
+    
+    <span style=color:#66d9ef>if</span> (__builtin_expect(methodListIsFixedUp <span style=color:#f92672>&amp;&amp;</span> methodListHasExpectedSize, <span style=color:#ae81ff>1</span>)) {
+        <span style=color:#66d9ef>return</span> findMethodInSortedMethodList(sel, mlist);
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#75715e>// Linear search of unsorted method list
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>auto</span><span style=color:#f92672>&amp;</span> meth : <span style=color:#f92672>*</span>mlist) {
+            <span style=color:#66d9ef>if</span> (meth.name <span style=color:#f92672>==</span> sel) <span style=color:#66d9ef>return</span> <span style=color:#f92672>&amp;</span>meth;
+        }
+    }
+
+<span style=color:#75715e>#if DEBUG
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// sanity-check negative results
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (mlist<span style=color:#f92672>-&gt;</span>isFixedUp()) {
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>auto</span><span style=color:#f92672>&amp;</span> meth : <span style=color:#f92672>*</span>mlist) {
+            <span style=color:#66d9ef>if</span> (meth.name <span style=color:#f92672>==</span> sel) {
+                _objc_fatal(<span style=color:#e6db74>&#34;linear search worked when binary search did not&#34;</span>);
+            }
+        }
+    }
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+    <span style=color:#66d9ef>return</span> nil;
+}
+
+
+</code></pre></div><p>在search_method_list函数中，会去判断当前methodList是否有序，如果有序，会调用findMethodInSortedMethodList方法，这个方法里面的实现是一个二分搜索，具体代码就不贴了。如果非有序，就调用线性的傻瓜式遍历搜索。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    <span style=color:#75715e>// No implementation found. Try method resolver once.
+</span><span style=color:#75715e></span>
+    <span style=color:#66d9ef>if</span> (resolver  <span style=color:#f92672>&amp;&amp;</span>  <span style=color:#f92672>!</span>triedResolver) {
+        runtimeLock.unlockRead();
+        _class_resolveMethod(cls, sel, inst);
+        <span style=color:#75715e>// Don&#39;t cache the result; we don&#39;t hold the lock so it may have 
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// changed already. Re-do the search from scratch instead.
+</span><span style=color:#75715e></span>        triedResolver <span style=color:#f92672>=</span> YES;
+        <span style=color:#66d9ef>goto</span> retry;
+    }
+
+</code></pre></div><p>如果父类找到NSObject还没有找到，那么就会开始尝试_class_resolveMethod方法。注意，这些需要打开读锁，因为开发者可能会在这里动态增加方法实现，所以不需要缓存结果。此处虽然锁被打开，可能会出现线程问题，所以在执行完_class_resolveMethod方法之后，会goto retry，重新执行一遍之前查找的过程。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>/***********************************************************************
+</span><span style=color:#75715e>* _class_resolveMethod
+</span><span style=color:#75715e>* Call +resolveClassMethod or +resolveInstanceMethod.
+</span><span style=color:#75715e>* Returns nothing; any result would be potentially out-of-date already.
+</span><span style=color:#75715e>* Does not check if the method already exists.
+</span><span style=color:#75715e>**********************************************************************/</span>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>_class_resolveMethod</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel, <span style=color:#66d9ef>id</span> inst)
+{
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span> cls<span style=color:#f92672>-&gt;</span>isMetaClass()) {
+        <span style=color:#75715e>// try [cls resolveInstanceMethod:sel]
+</span><span style=color:#75715e></span>        _class_resolveInstanceMethod(cls, sel, inst);
+    } 
+    <span style=color:#66d9ef>else</span> {
+        <span style=color:#75715e>// try [nonMetaClass resolveClassMethod:sel]
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// and [cls resolveInstanceMethod:sel]
+</span><span style=color:#75715e></span>        _class_resolveClassMethod(cls, sel, inst);
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>lookUpImpOrNil(cls, sel, inst, 
+                            NO<span style=color:#75715e>/*initialize*/</span>, YES<span style=color:#75715e>/*cache*/</span>, NO<span style=color:#75715e>/*resolver*/</span>)) 
+        {
+            _class_resolveInstanceMethod(cls, sel, inst);
+        }
+    }
+}
+
+
+</code></pre></div><p>这个函数首先判断是否是meta-class类，如果不是元类，就执行_class_resolveInstanceMethod，如果是元类，执行_class_resolveClassMethod。这里有一个lookUpImpOrNil的函数调用。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>IMP</span> <span style=color:#a6e22e>lookUpImpOrNil</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel, <span style=color:#66d9ef>id</span> inst, 
+                   <span style=color:#66d9ef>bool</span> initialize, <span style=color:#66d9ef>bool</span> cache, <span style=color:#66d9ef>bool</span> resolver)
+{
+    <span style=color:#66d9ef>IMP</span> imp <span style=color:#f92672>=</span> lookUpImpOrForward(cls, sel, inst, initialize, cache, resolver);
+    <span style=color:#66d9ef>if</span> (imp <span style=color:#f92672>==</span> _objc_msgForward_impcache) <span style=color:#66d9ef>return</span> nil;
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>return</span> imp;
+}
+
+</code></pre></div><p>在这个函数实现中，还会去调用lookUpImpOrForward去查找有没有传入的sel的实现，但是返回值还会返回nil。在imp == _objc_msgForward_impcache会返回nil。_objc_msgForward_impcache是一个标记，这个标记用来表示在父类的缓存中停止继续查找。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>IMP</span> <span style=color:#a6e22e>class_getMethodImplementation</span>(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel)
+{
+    <span style=color:#66d9ef>IMP</span> imp;
+
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>cls  <span style=color:#f92672>||</span>  <span style=color:#f92672>!</span>sel) <span style=color:#66d9ef>return</span> nil;
+
+    imp <span style=color:#f92672>=</span> lookUpImpOrNil(cls, sel, nil, 
+                         YES<span style=color:#75715e>/*initialize*/</span>, YES<span style=color:#75715e>/*cache*/</span>, YES<span style=color:#75715e>/*resolver*/</span>);
+
+    <span style=color:#75715e>// Translate forwarding function to C-callable external version
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>imp) {
+        <span style=color:#66d9ef>return</span> _objc_msgForward;
+    }
+
+    <span style=color:#66d9ef>return</span> imp;
+}
+</code></pre></div><p>再回到_class_resolveMethod的实现中，如果lookUpImpOrNil返回nil，就代表在父类中的缓存中找到，于是需要再调用一次_class_resolveInstanceMethod方法。保证给sel添加上了对应的IMP。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#75715e>// No implementation found, and method resolver didn&#39;t help. 
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// Use forwarding.
+</span><span style=color:#75715e></span>
+    imp <span style=color:#f92672>=</span> (<span style=color:#66d9ef>IMP</span>)_objc_msgForward_impcache;
+    cache_fill(cls, sel, imp, inst);
+
+</code></pre></div><p>回到lookUpImpOrForward方法中，如果也没有找到IMP的实现，那么method resolver也没用了，只能进入消息转发阶段。进入这个阶段之前，imp变成_objc_msgForward_impcache。最后再加入缓存中。</p><h4 id=三-消息转发message-forwarding阶段>三. 消息转发Message Forwarding阶段</h4><p>到了转发阶段，会调用id _objc_msgForward(id self, SEL _cmd,&mldr;)方法。在objc-msg-x86_64.s中有其汇编的实现。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-asm data-lang=asm>
+ <span style=color:#a6e22e>STATIC_ENTRY</span> <span style=color:#66d9ef>__objc_msgForward_impcache</span>
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>Method</span> <span style=color:#66d9ef>cache</span> <span style=color:#66d9ef>version</span>
+
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>THIS</span> <span style=color:#66d9ef>IS</span> <span style=color:#66d9ef>NOT</span> <span style=color:#66d9ef>A</span> <span style=color:#66d9ef>CALLABLE</span> <span style=color:#66d9ef>C</span> <span style=color:#66d9ef>FUNCTION</span>
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>Out-of-band</span> <span style=color:#66d9ef>condition</span> <span style=color:#66d9ef>register</span> <span style=color:#66d9ef>is</span> <span style=color:#66d9ef>NE</span> <span style=color:#66d9ef>for</span> <span style=color:#66d9ef>stret</span>, <span style=color:#66d9ef>EQ</span> <span style=color:#66d9ef>otherwise.</span>
+
+ <span style=color:#a6e22e>MESSENGER_START</span>
+ <span style=color:#a6e22e>nop</span>
+ <span style=color:#a6e22e>MESSENGER_END_SLOW</span>
+ 
+ <span style=color:#a6e22e>jne</span> <span style=color:#66d9ef>__objc_msgForward_stret</span>
+ <span style=color:#a6e22e>jmp</span> <span style=color:#66d9ef>__objc_msgForward</span>
+
+ <span style=color:#a6e22e>END_ENTRY</span> <span style=color:#66d9ef>__objc_msgForward_impcache</span>
+ 
+ 
+ <span style=color:#a6e22e>ENTRY</span> <span style=color:#66d9ef>__objc_msgForward</span>
+ <span style=color:#960050;background-color:#1e0010>//</span> <span style=color:#a6e22e>Non-stret</span> <span style=color:#66d9ef>version</span>
+
+ <span style=color:#a6e22e>movq</span> <span style=color:#66d9ef>__objc_forward_handler</span>(%rip), %r11
+ <span style=color:#a6e22e>jmp</span> *%r11
+
+ <span style=color:#a6e22e>END_ENTRY</span> <span style=color:#66d9ef>__objc_msgForward</span>
+
+</code></pre></div><p>在执行_objc_msgForward之后会调用__objc_forward_handler函数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>// Default forward handler halts the process.
+</span><span style=color:#75715e></span>__attribute__((noreturn)) <span style=color:#66d9ef>void</span> objc_defaultForwardHandler(<span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> sel)
+{
+    _objc_fatal(<span style=color:#e6db74>&#34;%c[%s %s]: unrecognized selector sent to instance %p &#34;</span>
+                <span style=color:#e6db74>&#34;(no message forward handler is installed)&#34;</span>, 
+                class_isMetaClass(object_getClass(self)) <span style=color:#f92672>?</span> <span style=color:#e6db74>&#39;+&#39;</span> <span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;-&#39;</span>, 
+                object_getClassName(self), sel_getName(sel), self);
+}
+
+</code></pre></div><p>在最新的Objc2.0中会有一个objc_defaultForwardHandler，看源码实现我们可以看到熟悉的语句。当我们给一个对象发送一个没有实现的方法的时候，如果其父类也没有这个方法，则会崩溃，报错信息类似于这样：unrecognized selector sent to instance，然后接着会跳出一些堆栈信息。这些信息就是从这里而来。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>_objc_forward_handler <span style=color:#f92672>=</span> (<span style=color:#66d9ef>void</span><span style=color:#f92672>*</span>)objc_defaultForwardHandler;
+
+<span style=color:#75715e>#if SUPPORT_STRET
+</span><span style=color:#75715e></span><span style=color:#66d9ef>struct</span> stret { <span style=color:#66d9ef>int</span> i[<span style=color:#ae81ff>100</span>]; };
+__attribute__((noreturn)) <span style=color:#66d9ef>struct</span> stret objc_defaultForwardStretHandler(<span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> sel)
+{
+    objc_defaultForwardHandler(self, sel);
+}
+<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>_objc_forward_stret_handler <span style=color:#f92672>=</span> (<span style=color:#66d9ef>void</span><span style=color:#f92672>*</span>)objc_defaultForwardStretHandler;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>objc_setForwardHandler</span>(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>fwd, <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>fwd_stret)
+{
+    _objc_forward_handler <span style=color:#f92672>=</span> fwd;
+<span style=color:#75715e>#if SUPPORT_STRET
+</span><span style=color:#75715e></span>    _objc_forward_stret_handler <span style=color:#f92672>=</span> fwd_stret;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>}
+
+</code></pre></div><p>要设置转发只要重写_objc_forward_handler方法即可。在objc_setForwardHandler方法中，可以设置ForwardHandler。</p><p>但是当你想要弄清objc_setForwardHandler调用栈的情况的时候，你会发现打印不出来入口。因为苹果在这里做了点手脚。关于objc_setForwardHandler的调用，以及之后的消息转发调用栈的问题，需要用到逆向的知识。推荐大家看这两篇文章就会明白其中的原理。</p><p><a href=http://yulingtianxia.com/blog/2016/06/15/Objective-C-Message-Sending-and-Forwarding/>Objective-C 消息发送与转发机制原理</a><br><a href=http://arigrant.com/blog/2013/12/13/a-selector-left-unhandled>Hmmm, What’s that Selector?</a></p><p>还是回到消息转发上面来。当前的SEL无法找到相应的IMP的时候，开发者可以通过重写- (id)forwardingTargetForSelector:(SEL)aSelector方法来“偷梁换柱”，把消息的接受者换成一个可以处理该消息的对象。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>forwardingTargetForSelector:</span>(<span style=color:#66d9ef>SEL</span>)aSelector
+{
+    <span style=color:#66d9ef>if</span>(aSelector <span style=color:#f92672>==</span> <span style=color:#66d9ef>@selector</span>(Method:)){
+        <span style=color:#66d9ef>return</span> otherObject;
+    }
+    <span style=color:#66d9ef>return</span> [super forwardingTargetForSelector:aSelector];
+}
+
+</code></pre></div><p>当然也可以替换类方法，那就要重写 + (id)forwardingTargetForSelector:(SEL)aSelector方法，返回值是一个类对象。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>forwardingTargetForSelector:</span>(<span style=color:#66d9ef>SEL</span>)aSelector {
+    <span style=color:#66d9ef>if</span>(aSelector <span style=color:#f92672>==</span> <span style=color:#66d9ef>@selector</span>(xxx)) {
+        <span style=color:#66d9ef>return</span> NSClassFromString(<span style=color:#e6db74>@&#34;Class name&#34;</span>);
+    }
+    <span style=color:#66d9ef>return</span> [super forwardingTargetForSelector:aSelector];
+}
+
+</code></pre></div><p>这一步是替消息找备援接收者，如果这一步返回的是nil，那么补救措施就完全的失效了，Runtime系统会向对象发送methodSignatureForSelector:消息，并取到返回的方法签名用于生成NSInvocation对象。为接下来的完整的消息转发生成一个 NSMethodSignature对象。NSMethodSignature 对象会被包装成 NSInvocation 对象，forwardInvocation: 方法里就可以对 NSInvocation 进行处理了。</p><p>接下来未识别的方法崩溃之前，系统会做一次完整的消息转发。</p><p>我们只需要重写下面这个方法，就可以自定义我们自己的转发逻辑了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>forwardInvocation:</span>(NSInvocation <span style=color:#f92672>*</span>)anInvocation
+{
+    <span style=color:#66d9ef>if</span> ([someOtherObject respondsToSelector:
+         [anInvocation selector]])
+        [anInvocation invokeWithTarget:someOtherObject];
+    <span style=color:#66d9ef>else</span>
+        [super forwardInvocation:anInvocation];
+}
+
+</code></pre></div><p>实现此方法之后，若发现某调用不应由本类处理，则会调用超类的同名方法。如此，继承体系中的每个类都有机会处理该方法调用的请求，一直到NSObject根类。如果到NSObject也不能处理该条消息，那么就是再无挽救措施了，只能抛出“doesNotRecognizeSelector”异常了。</p><p>至此，消息发送和转发的过程都清楚明白了。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/24_3.png alt></p><h4 id=四-forwardinvocation的例子>四. forwardInvocation的例子</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/24_4.png alt></p><p>这里我想举一个好玩的例子，来说明一下forwardInvocation的使用方法。</p><p>这个例子中我们会利用runtime消息转发机制创建一个动态代理。利用这个动态代理来转发消息。这里我们会用到两个基类的另外一个神秘的类，NSProxy。</p><p>NSProxy类和NSObject同为OC里面的基类，但是NSProxy类是一种抽象的基类，无法直接实例化，可用于实现代理模式。它通过实现一组经过简化的方法，代替目标对象捕捉和处理所有的消息。NSProxy类也同样实现了NSObject的协议声明的方法，而且它有两个必须实现的方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>forwardInvocation:</span>(NSInvocation <span style=color:#f92672>*</span>)invocation;
+- (nullable NSMethodSignature <span style=color:#f92672>*</span>)<span style=color:#a6e22e>methodSignatureForSelector:</span>(<span style=color:#66d9ef>SEL</span>)sel NS_SWIFT_UNAVAILABLE(<span style=color:#e6db74>&#34;NSInvocation and related APIs not available&#34;</span>);
+
+</code></pre></div><p>另外还需要说明的是，NSProxy类的子类必须声明并实现至少一个init方法，这样才能符合OC中创建和初始化对象的惯例。Foundation框架里面也含有多个NSProxy类的具体实现类。</p><ul><li>NSDistantObject类：定义其他应用程序或线程中对象的代理类。</li><li>NSProtocolChecker类：定义对象，使用这话对象可以限定哪些消息能够发送给另外一个对象。</li></ul><p>接下来就来看看下面这个好玩的例子。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>Student</span> : <span style=color:#a6e22e>NSObject</span>
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>study:</span>(NSString <span style=color:#f92672>*</span>)subject <span style=color:#a6e22e>andRead:</span>(NSString <span style=color:#f92672>*</span>)bookName;
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>study:</span>(NSString <span style=color:#f92672>*</span>)subject <span style=color:#f92672>:</span>(NSString <span style=color:#f92672>*</span>)bookName;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>定义一个student类，里面随便给两个方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e>#import &lt;objc/runtime.h&gt;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>Student</span>
+
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>study:</span>(NSString <span style=color:#f92672>*</span>)subject <span style=color:#f92672>:</span>(NSString <span style=color:#f92672>*</span>)bookName
+{
+    NSLog(<span style=color:#e6db74>@&#34;Invorking method on %@ object with selector %@&#34;</span>,[self <span style=color:#66d9ef>class</span>],NSStringFromSelector(_cmd));
+}
+
+<span style=color:#f92672>-</span>(<span style=color:#66d9ef>void</span>)study:(NSString <span style=color:#f92672>*</span>)subject andRead:(NSString <span style=color:#f92672>*</span>)bookName
+{
+    NSLog(<span style=color:#e6db74>@&#34;Invorking method on %@ object with selector %@&#34;</span>,[self <span style=color:#66d9ef>class</span>],NSStringFromSelector(_cmd));
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>在两个方法实现里面增加log信息，这是为了一会打印的时候方便知道调用了哪个方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e>#import &#34;Invoker.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>AspectProxy</span> : <span style=color:#a6e22e>NSProxy</span>
+
+<span style=color:#75715e>/** 通过NSProxy实例转发消息的真正对象 */</span>
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span> proxyTarget;
+<span style=color:#75715e>/** 能够实现横切功能的类（遵守Invoker协议）的实例 */</span>
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span> invoker;
+<span style=color:#75715e>/** 定义了哪些消息会调用横切功能 */</span>
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>readonly</span>) NSMutableArray <span style=color:#f92672>*</span>selectors;
+
+<span style=color:#75715e>// AspectProxy类实例的初始化方法
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithObject:</span>(<span style=color:#66d9ef>id</span>)object <span style=color:#a6e22e>andInvoker:</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span>)invoker;
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithObject:</span>(<span style=color:#66d9ef>id</span>)object <span style=color:#a6e22e>selectors:</span>(NSArray <span style=color:#f92672>*</span>)selectors <span style=color:#a6e22e>andInvoker:</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span>)invoker;
+<span style=color:#75715e>// 向当前的选择器列表中添加选择器
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerSelector:</span>(<span style=color:#66d9ef>SEL</span>)selector;
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>定义一个AspectProxy类，这个类专门用来转发消息的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;AspectProxy.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>AspectProxy</span>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithObject:</span>(<span style=color:#66d9ef>id</span>)object <span style=color:#a6e22e>selectors:</span>(NSArray <span style=color:#f92672>*</span>)selectors <span style=color:#a6e22e>andInvoker:</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span>)invoker{
+    _proxyTarget <span style=color:#f92672>=</span> object;
+    _invoker <span style=color:#f92672>=</span> invoker;
+    _selectors <span style=color:#f92672>=</span> [selectors mutableCopy];
+    
+    <span style=color:#66d9ef>return</span> self;
+}
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithObject:</span>(<span style=color:#66d9ef>id</span>)object <span style=color:#a6e22e>andInvoker:</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span>)invoker{
+    <span style=color:#66d9ef>return</span> [self initWithObject:object selectors:nil andInvoker:invoker];
+}
+
+<span style=color:#75715e>// 添加另外一个选择器
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerSelector:</span>(<span style=color:#66d9ef>SEL</span>)selector{
+    NSValue <span style=color:#f92672>*</span>selValue <span style=color:#f92672>=</span> [NSValue valueWithPointer:selector];
+    [self.selectors addObject:selValue];
+}
+
+<span style=color:#75715e>// 为目标对象中被调用的方法返回一个NSMethodSignature实例
+</span><span style=color:#75715e>// 运行时系统要求在执行标准转发时实现这个方法
+</span><span style=color:#75715e></span>- (NSMethodSignature <span style=color:#f92672>*</span>)<span style=color:#a6e22e>methodSignatureForSelector:</span>(<span style=color:#66d9ef>SEL</span>)sel{
+    <span style=color:#66d9ef>return</span> [self.proxyTarget methodSignatureForSelector:sel];
+}
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> *  当调用目标方法的选择器与在AspectProxy对象中注册的选择器匹配时，forwardInvocation:会
+</span><span style=color:#75715e> *  调用目标对象中的方法，并根据条件语句的判断结果调用AOP（面向切面编程）功能
+</span><span style=color:#75715e> */</span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>forwardInvocation:</span>(NSInvocation <span style=color:#f92672>*</span>)invocation{
+    <span style=color:#75715e>// 在调用目标方法前执行横切功能
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([self.invoker respondsToSelector:<span style=color:#66d9ef>@selector</span>(preInvoke:withTarget:)]) {
+        <span style=color:#66d9ef>if</span> (self.selectors <span style=color:#f92672>!=</span> nil) {
+            <span style=color:#66d9ef>SEL</span> methodSel <span style=color:#f92672>=</span> [invocation selector];
+            <span style=color:#66d9ef>for</span> (NSValue <span style=color:#f92672>*</span>selValue <span style=color:#66d9ef>in</span> self.selectors) {
+                <span style=color:#66d9ef>if</span> (methodSel <span style=color:#f92672>==</span> [selValue pointerValue]) {
+                    [[self invoker] preInvoke:invocation withTarget:self.proxyTarget];
+                    <span style=color:#66d9ef>break</span>;
+                }
+            }
+        }<span style=color:#66d9ef>else</span>{
+            [[self invoker] preInvoke:invocation withTarget:self.proxyTarget];
+        }
+    }
+    
+    <span style=color:#75715e>// 调用目标方法
+</span><span style=color:#75715e></span>    [invocation invokeWithTarget:self.proxyTarget];
+    
+    <span style=color:#75715e>// 在调用目标方法后执行横切功能
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([self.invoker respondsToSelector:<span style=color:#66d9ef>@selector</span>(postInvoke:withTarget:)]) {
+        <span style=color:#66d9ef>if</span> (self.selectors <span style=color:#f92672>!=</span> nil) {
+            <span style=color:#66d9ef>SEL</span> methodSel <span style=color:#f92672>=</span> [invocation selector];
+            <span style=color:#66d9ef>for</span> (NSValue <span style=color:#f92672>*</span>selValue <span style=color:#66d9ef>in</span> self.selectors) {
+                <span style=color:#66d9ef>if</span> (methodSel <span style=color:#f92672>==</span> [selValue pointerValue]) {
+                    [[self invoker] postInvoke:invocation withTarget:self.proxyTarget];
+                    <span style=color:#66d9ef>break</span>;
+                }
+            }
+        }<span style=color:#66d9ef>else</span>{
+            [[self invoker] postInvoke:invocation withTarget:self.proxyTarget];
+        }
+    }
+}
+</code></pre></div><p>接着我们定义一个代理协议</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@protocol</span> <span style=color:#a6e22e>Invoker</span> <span style=color:#f92672>&lt;</span>NSObject<span style=color:#f92672>&gt;</span>
+
+<span style=color:#66d9ef>@required</span>
+<span style=color:#75715e>// 在调用对象中的方法前执行对功能的横切
+</span><span style=color:#75715e></span><span style=color:#f92672>-</span> (<span style=color:#66d9ef>void</span>)preInvoke:(NSInvocation <span style=color:#f92672>*</span>)inv withTarget:(<span style=color:#66d9ef>id</span>)target;
+<span style=color:#66d9ef>@optional</span>
+<span style=color:#75715e>// 在调用对象中的方法后执行对功能的横切
+</span><span style=color:#75715e></span><span style=color:#f92672>-</span> (<span style=color:#66d9ef>void</span>)postInvoke:(NSInvocation <span style=color:#f92672>*</span>)inv withTarget:(<span style=color:#66d9ef>id</span>)target;
+
+<span style=color:#66d9ef>@end</span>
+</code></pre></div><p>最后还需要一个遵守协议的类</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e>#import &#34;Invoker.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>AuditingInvoker</span> : <span style=color:#a6e22e>NSObject</span><span style=color:#f92672>&lt;</span>Invoker<span style=color:#f92672>&gt;</span><span style=color:#75715e>//遵守Invoker协议
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@end</span>
+
+
+<span style=color:#75715e>#import &#34;AuditingInvoker.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>AuditingInvoker</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>preInvoke:</span>(NSInvocation <span style=color:#f92672>*</span>)inv <span style=color:#a6e22e>withTarget:</span>(<span style=color:#66d9ef>id</span>)target{
+    NSLog(<span style=color:#e6db74>@&#34;before sending message with selector %@ to %@ object&#34;</span>, NSStringFromSelector([inv selector]),[target className]);
+}
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>postInvoke:</span>(NSInvocation <span style=color:#f92672>*</span>)inv <span style=color:#a6e22e>withTarget:</span>(<span style=color:#66d9ef>id</span>)target{
+    NSLog(<span style=color:#e6db74>@&#34;after sending message with selector %@ to %@ object&#34;</span>, NSStringFromSelector([inv selector]),[target className]);
+
+}
+<span style=color:#66d9ef>@end</span>
+</code></pre></div><p>在这个遵循代理类里面我们只实现协议里面的两个方法。</p><p>写出测试代码</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e>#import &#34;AspectProxy.h&#34;
+</span><span style=color:#75715e>#import &#34;AuditingInvoker.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> argc, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> argv[]) {
+    <span style=color:#66d9ef>@autoreleasepool</span> {
+        
+        <span style=color:#66d9ef>id</span> student <span style=color:#f92672>=</span> [[Student alloc] init];
+
+        <span style=color:#75715e>// 设置代理中注册的选择器数组
+</span><span style=color:#75715e></span>        NSValue <span style=color:#f92672>*</span>selValue1 <span style=color:#f92672>=</span> [NSValue valueWithPointer:<span style=color:#66d9ef>@selector</span>(study:andRead:)];
+        NSArray <span style=color:#f92672>*</span>selValues <span style=color:#f92672>=</span> <span style=color:#ae81ff>@[</span>selValue1<span style=color:#ae81ff>]</span>;
+        <span style=color:#75715e>// 创建AuditingInvoker
+</span><span style=color:#75715e></span>        AuditingInvoker <span style=color:#f92672>*</span>invoker <span style=color:#f92672>=</span> [[AuditingInvoker alloc] init];
+        <span style=color:#75715e>// 创建Student对象的代理studentProxy
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>id</span> studentProxy <span style=color:#f92672>=</span> [[AspectProxy alloc] initWithObject:student selectors:selValues andInvoker:invoker];
+        
+        <span style=color:#75715e>// 使用指定的选择器向该代理发送消息---例子1
+</span><span style=color:#75715e></span>        [studentProxy study:<span style=color:#e6db74>@&#34;Computer&#34;</span> andRead:<span style=color:#e6db74>@&#34;Algorithm&#34;</span>];
+        
+        <span style=color:#75715e>// 使用还未注册到代理中的其他选择器，向这个代理发送消息！---例子2
+</span><span style=color:#75715e></span>        [studentProxy study:<span style=color:#e6db74>@&#34;mathematics&#34;</span> <span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;higher mathematics&#34;</span>];
+        
+        <span style=color:#75715e>// 为这个代理注册一个选择器并再次向其发送消息---例子3
+</span><span style=color:#75715e></span>        [studentProxy registerSelector:<span style=color:#66d9ef>@selector</span>(study<span style=color:#f92672>::</span>)];
+        [studentProxy study:<span style=color:#e6db74>@&#34;mathematics&#34;</span> <span style=color:#f92672>:</span><span style=color:#e6db74>@&#34;higher mathematics&#34;</span>];
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+}
+</code></pre></div><p>这里有3个例子。里面会分别输出什么呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>before</span> <span style=color:#a6e22e>sending</span> <span style=color:#a6e22e>message</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>:<span style=color:#a6e22e>andRead</span>: <span style=color:#a6e22e>to</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Invorking</span> <span style=color:#a6e22e>method</span> <span style=color:#a6e22e>on</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>:<span style=color:#a6e22e>andRead</span>:<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>after</span> <span style=color:#a6e22e>sending</span> <span style=color:#a6e22e>message</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>:<span style=color:#a6e22e>andRead</span>: <span style=color:#a6e22e>to</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Invorking</span> <span style=color:#a6e22e>method</span> <span style=color:#a6e22e>on</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>::<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>before</span> <span style=color:#a6e22e>sending</span> <span style=color:#a6e22e>message</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>:: <span style=color:#a6e22e>to</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Invorking</span> <span style=color:#a6e22e>method</span> <span style=color:#a6e22e>on</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>::<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>after</span> <span style=color:#a6e22e>sending</span> <span style=color:#a6e22e>message</span> <span style=color:#a6e22e>with</span> <span style=color:#a6e22e>selector</span> <span style=color:#a6e22e>study</span>:: <span style=color:#a6e22e>to</span> <span style=color:#a6e22e>Student</span> <span style=color:#a6e22e>object</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>例子1中会输出3句话。调用Student对象的代理中的study:andRead:方法，会使该代理调用AuditingInvoker对象中的preInvoker:方法、真正目标（Student对象）中的study:andRead:方法，以及AuditingInvoker对象中的postInvoker:方法。一个方法的调用，调用起了3个方法。原因是study:andRead:方法是通过Student对象的代理注册的；</p><p>例子2就只会输出1句话。调用Student对象代理中的study::方法，因为该方法还未通过这个代理注册，所以程序仅会将调用该方法的消息转发给Student对象，而不会调用AuditorInvoker方法。</p><p>例子3又会输出3句话了。因为study::通过这个代理进行了注册，然后程序再次调用它，在这次调用过程中，程序会调用AuditingInvoker对象中的AOP方法和真正目标（Student对象）中的study::方法。</p><p>这个例子就实现了一个简单的AOP(Aspect Oriented Programming)面向切面编程。我们把一切功能"切"出去，与其他部分分开，这样可以提高程序的模块化程度。AOP能解耦也能动态组装，可以通过预编译方式和运行期动态代理实现在不修改源代码的情况下给程序动态统一添加功能。比如上面的例子三，我们通过把方法注册到动态代理类中，于是就实现了该类也能处理方法的功能。</p><h4 id=五-入院考试>五. 入院考试</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/23_18.png alt></p><blockquote><p>下面的代码会？Compile Error / Runtime Crash / NSLog…?</p></blockquote><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+     <span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSObject</span> (Sark)
+     <span style=color:#f92672>+</span> (<span style=color:#66d9ef>void</span>)foo;
+     <span style=color:#f92672>-</span> (<span style=color:#66d9ef>void</span>)foo;
+     <span style=color:#66d9ef>@end</span>
+
+     <span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSObject</span> (Sark)
+     <span style=color:#f92672>-</span> (<span style=color:#66d9ef>void</span>)foo
+     {
+        NSLog(<span style=color:#e6db74>@&#34;IMP: -[NSObject(Sark) foo]&#34;</span>);
+     }
+
+     <span style=color:#66d9ef>@end</span>
+
+     <span style=color:#66d9ef>int</span> main(<span style=color:#66d9ef>int</span> argc, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> argv[]) {
+        <span style=color:#66d9ef>@autoreleasepool</span> {
+          [NSObject foo];
+          [[NSObject new] foo];
+      }
+       <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>0</span>;
+     }
+</code></pre></div><p>这道有两处难点，难点一是给NSObject增加了一个分类，分类声明的是一个加号的类方法，而实现中是一个减号的实例方法。在main中去NSObject去调用了这个foo方法，会编译错误，还是会Crash呢？</p><p>难点二是会输出什么内容呢？</p><p>先来看难点一，这里会牵扯到Category的知识。推荐文章还是美团的这篇经典的<a href=http://tech.meituan.com/DiveIntoCategory.html>深入理解Objective-C：Category</a></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>_objc_init</span>(<span style=color:#66d9ef>void</span>)
+{
+    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>bool</span> initialized <span style=color:#f92672>=</span> false;
+    <span style=color:#66d9ef>if</span> (initialized) <span style=color:#66d9ef>return</span>;
+    initialized <span style=color:#f92672>=</span> true;
+    
+    <span style=color:#75715e>// fixme defer initialization until an objc-using image is found?
+</span><span style=color:#75715e></span>    environ_init();
+    tls_init();
+    lock_init();
+    exception_init();
+    
+    <span style=color:#75715e>// Register for unmap first, in case some +load unmaps something
+</span><span style=color:#75715e></span>    _dyld_register_func_for_remove_image(<span style=color:#f92672>&amp;</span>unmap_image);
+    dyld_register_image_state_change_handler(dyld_image_state_bound,
+                                             <span style=color:#ae81ff>1</span><span style=color:#75715e>/*batch*/</span>, <span style=color:#f92672>&amp;</span>map_images);
+    dyld_register_image_state_change_handler(dyld_image_state_dependents_initialized, <span style=color:#ae81ff>0</span><span style=color:#75715e>/*not batch*/</span>, <span style=color:#f92672>&amp;</span>load_images);
+}
+</code></pre></div><p>OC在初始化的时候，会去加载map_images，map_images最终会调用objc-runtime-new.mm里面的_read_images方法。_read_images方法里面会去初始化内存中的map, 这个时候将会load所有的类，协议还有Category。NSOBject的+load方法就是这个时候调用的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// Discover categories.
+</span><span style=color:#75715e></span><span style=color:#66d9ef>for</span> (EACH_HEADER) {
+    category_t <span style=color:#f92672>**</span>catlist <span style=color:#f92672>=</span>
+    _getObjc2CategoryList(hi, <span style=color:#f92672>&amp;</span>count);
+    <span style=color:#66d9ef>for</span> (i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> count; i<span style=color:#f92672>++</span>) {
+        category_t <span style=color:#f92672>*</span>cat <span style=color:#f92672>=</span> catlist[i];
+        class_t <span style=color:#f92672>*</span>cls <span style=color:#f92672>=</span> remapClass(cat<span style=color:#f92672>-&gt;</span>cls);
+        
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>cls) {
+            <span style=color:#75715e>// Category&#39;s target class is missing (probably weak-linked).
+</span><span style=color:#75715e></span>            <span style=color:#75715e>// Disavow any knowledge of this category.
+</span><span style=color:#75715e></span>            catlist[i] <span style=color:#f92672>=</span> NULL;
+            <span style=color:#66d9ef>if</span> (PrintConnecting) {
+                _objc_inform(<span style=color:#e6db74>&#34;CLASS: IGNORING category \?\?\?(%s) %p with &#34;</span>
+                             <span style=color:#e6db74>&#34;missing weak-linked target class&#34;</span>,
+                             cat<span style=color:#f92672>-&gt;</span>name, cat);
+            }
+            <span style=color:#66d9ef>continue</span>;
+        }
+        
+        <span style=color:#75715e>// Process this category.
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// First, register the category with its target class.
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// Then, rebuild the class&#39;s method lists (etc) if
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// the class is realized.
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>BOOL</span> classExists <span style=color:#f92672>=</span> NO;
+        <span style=color:#66d9ef>if</span> (cat<span style=color:#f92672>-&gt;</span>instanceMethods <span style=color:#f92672>||</span>  cat<span style=color:#f92672>-&gt;</span>protocols
+            <span style=color:#f92672>||</span>  cat<span style=color:#f92672>-&gt;</span>instanceProperties)
+        {
+            addUnattachedCategoryForClass(cat, cls, hi);
+            <span style=color:#66d9ef>if</span> (isRealized(cls)) {
+                remethodizeClass(cls);
+                classExists <span style=color:#f92672>=</span> YES;
+            }
+            <span style=color:#66d9ef>if</span> (PrintConnecting) {
+                _objc_inform(<span style=color:#e6db74>&#34;CLASS: found category -%s(%s) %s&#34;</span>,
+                             getName(cls), cat<span style=color:#f92672>-&gt;</span>name,
+                             classExists <span style=color:#f92672>?</span> <span style=color:#e6db74>&#34;on existing class&#34;</span> <span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;&#34;</span>);
+            }
+        }
+        
+        <span style=color:#66d9ef>if</span> (cat<span style=color:#f92672>-&gt;</span>classMethods  <span style=color:#f92672>||</span>  cat<span style=color:#f92672>-&gt;</span>protocols
+            <span style=color:#75715e>/* ||  cat-&gt;classProperties */</span>)
+        {
+            addUnattachedCategoryForClass(cat, cls<span style=color:#f92672>-&gt;</span>isa, hi);
+            <span style=color:#66d9ef>if</span> (isRealized(cls<span style=color:#f92672>-&gt;</span>isa)) {
+                remethodizeClass(cls<span style=color:#f92672>-&gt;</span>isa);
+            }
+            <span style=color:#66d9ef>if</span> (PrintConnecting) {
+                _objc_inform(<span style=color:#e6db74>&#34;CLASS: found category +%s(%s)&#34;</span>,
+                             getName(cls), cat<span style=color:#f92672>-&gt;</span>name);
+            }
+        }
+    }
+}
+
+</code></pre></div><p>在这个加载中，for循环中会反复调用_getObjc2CategoryList
+方法，这个方法的具体实现是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>//      function name                 content type     section name
+</span><span style=color:#75715e></span>GETSECT(_getObjc2CategoryList,        category_t <span style=color:#f92672>*</span>,    <span style=color:#e6db74>&#34;__objc_catlist&#34;</span>);
+
+</code></pre></div><p>最后一个参数__objc_catlist就是编译器刚刚生成的category数组。</p><p>加载完所有的category之后，就开始处理这些类别。大体思路还是分为2类来分开处理。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>if</span> (cat<span style=color:#f92672>-&gt;</span>instanceMethods <span style=color:#f92672>||</span> cat<span style=color:#f92672>-&gt;</span>protocols <span style=color:#f92672>||</span> cat<span style=color:#f92672>-&gt;</span>instanceProperties){
+}
+
+</code></pre></div><p>第一类是实例方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>if</span> (cat<span style=color:#f92672>-&gt;</span>classMethods <span style=color:#f92672>||</span> cat<span style=color:#f92672>-&gt;</span>protocols <span style=color:#75715e>/* || cat-&gt;classProperties */</span>) {
+}
+</code></pre></div><p>第二类是类方法。</p><p>处理完之后的结果<br>1)、把category的实例方法、协议以及属性添加到类上
+2)、把category的类方法和协议添加到类的metaclass上</p><p>这两种情况里面的处理方式都差不多，先去调用addUnattachedCategoryForClass函数，申请内存，分配空间。remethodizeClass这个方法里面会调用attachCategories方法。</p><p>attachCategories方法代码就不贴了，有兴趣的可以自己去看看。这个方法里面会用头插法，把新加的方法从头插入方法链表中。并且最后还会flushCaches。</p><p>这也就是为什么我们可以在Category里面覆盖原有的方法的原因，因为头插法，新的方法在链表的前面，会优先被遍历到。</p><p>以上就是Category加载时候的流程。</p><p>再回到这道题目上面来，在加载NSObject的Category中，在编译期会提示我们没有实现+(void)foo的方法，因为在.m文件中并没有找到+的方法，而是一个-号的方法，所以会提示。</p><p>但是在实际加载Category的时候，会把-(void)foo加载进去，由于是实例方法，所以会放在NSObject的实例方法链表里面。</p><p>根据第二章分析的objc_msgSend源码实现，我们可以知道：</p><p>在调用[NSObject foo]的时候，会先在NSObject的meta-class中去查找foo方法的IMP，未找到，继续在superClass中去查找，NSObject的meta-class的superClass就是本身NSObject，于是又回到NSObject的类方法中查找foo方法，于是乎找到了，执行foo方法，输出</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>IMP</span>: -[<span style=color:#a6e22e>NSObject</span>(<span style=color:#a6e22e>Sark</span>) <span style=color:#a6e22e>foo</span>]<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>在调用[[NSObject new] foo]的时候，会先生成一个NSObject的对象，用这个NSObject实例对象再去调用foo方法的时候，会去NSObject的类方法里面去查找，找到，于是也会输出</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>IMP</span>: -[<span style=color:#a6e22e>NSObject</span>(<span style=color:#a6e22e>Sark</span>) <span style=color:#a6e22e>foo</span>]<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>所以上面这题，不会Compile Error ，更不会 Runtime Crash ，会输出两个相同的结果。</p><h4 id=六-runtime中的优化>六. Runtime中的优化</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/24_5.png alt></p><p>关于Runtime系统中，有3种地方进行了优化。</p><ul><li>1.方法列表的缓存</li><li>2.虚函数表vTable</li><li>3.dyld共享缓存</li></ul><h5 id=1方法列表的缓存>1.方法列表的缓存</h5><p>在消息发送过程中，查找IMP的过程，会优先查找缓存。这个缓存会存储最近使用过的方法都缓存起来。这个cache和CPU里面的cache的工作方式有点类似。原理是调用的方法有可能经常会被调用。如果没有这个缓存，直接去类方法的方法链表里面去查找，查询效率实在太低。所以查找IMP会优先搜索饭方法缓存，如果没有找到，接着会在虚函数表中寻找IMP。如果找到了，就会把这个IMP存储到缓存中备用。</p><p>基于这个设计，使Runtime系统能能够执行快速高效的方法查询操作。</p><h5 id=2虚函数表>2.虚函数表</h5><p>虚函数表也称为分派表，是编程语言中常用的动态绑定支持机制。在OC的Runtime运行时系统库实现了一种自定义的虚函数表分派机制。这个表是专门用来提高性能和灵活性的。这个虚函数表是用来存储IMP类型的数组。每个object-class都有这样一个指向虚函数表的指针。</p><h5 id=3dyld共享缓存>3.dyld共享缓存</h5><p>在我们的程序中，一定会有很多自定义类，而这些类中，很多SEL是重名的，比如alloc，init等等。Runtime系统需要为每一个方法给定一个SEL指针，然后为每次调用个各个方法更新元数据，以获取唯一值。这个过程是在应用程序启动的时候完成。为了提高这一部分的执行效率，Runtime会通过dyld共享缓存实现选择器的唯一性。</p><p>dyld是一种系统服务，用于定位和加载动态库。它含有共享缓存，能够使多个进程共用这些动态库。dyld共享缓存中含有一个选择器表，从而能使运行时系统能够通过使用缓存访问共享库和自定义类的选择器。</p><p>关于dyld的知识可以看看这篇文章<a href=https://www.mikeash.com/pyblog/friday-qa-2012-11-09-dyld-dynamic-linking-on-os-x.html>dyld: Dynamic Linking On OS X</a></p><p>未完待续，请大家多多指教。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一objc_msgsend函数简介>一.objc_msgSend函数简介</a></li><li><a href=#二-消息发送messaging阶段objc_msgsend源码解析>二. 消息发送Messaging阶段—objc_msgSend源码解析</a></li><li><a href=#三-消息转发message-forwarding阶段>三. 消息转发Message Forwarding阶段</a></li><li><a href=#四-forwardinvocation的例子>四. forwardInvocation的例子</a></li><li><a href=#五-入院考试>五. 入院考试</a></li><li><a href=#六-runtime中的优化>六. Runtime中的优化</a></li></ul></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&text=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&is_video=false&description=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&name=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91&description=%e5%89%8d%e8%a8%80%20%e7%8e%b0%e5%9c%a8%e8%b6%8a%e6%9d%a5%e8%b6%8a%e5%a4%9a%e7%9a%84app%e9%83%bd%e4%bd%bf%e7%94%a8%e4%ba%86JSPatch%e5%ae%9e%e7%8e%b0app%e7%83%ad%e4%bf%ae%e5%a4%8d%ef%bc%8c%e8%80%8cJSPatch%20%e8%83%bd%e5%81%9a%e5%88%b0%e9%80%9a%e8%bf%87%20JS%20%e8%b0%83%e7%94%a8%e5%92%8c%e6%94%b9%e5%86%99%20OC%20%e6%96%b9%e6%b3%95%e6%9c%80%e6%a0%b9%e6%9c%ac%e7%9a%84%e5%8e%9f%e5%9b%a0%e6%98%af%20Objective-C%20%e6%98%af%e5%8a%a8%e6%80%81%e8%af%ad%e8%a8%80%ef%bc%8cOC%20%e4%b8%8a%e6%89%80%e6%9c%89%e6%96%b9%e6%b3%95%e7%9a%84%e8%b0%83%e7%94%a8%2f%e7%b1%bb%e7%9a%84%e7%94%9f%e6%88%90%e9%83%bd%e9%80%9a%e8%bf%87%20Objective-C%20Runtime%20%e5%9c%a8%e8%bf%90%e8%a1%8c%e6%97%b6%e8%bf%9b%e8%a1%8c%ef%bc%8c%e6%88%91%e4%bb%ac%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87%e7%b1%bb%e5%90%8d%2f%e6%96%b9%e6%b3%95%e5%90%8d%e5%8f%8d%e5%b0%84%e5%be%97%e5%88%b0%e7%9b%b8%e5%ba%94%e7%9a%84%e7%b1%bb%e5%92%8c%e6%96%b9%e6%b3%95%ef%bc%8c%e4%b9%9f%e5%8f%af%e4%bb%a5%e6%9b%bf%e6%8d%a2%e6%9f%90%e4%b8%aa%e7%b1%bb%e7%9a%84%e6%96%b9%e6%b3%95%e4%b8%ba%e6%96%b0%e7%9a%84%e5%ae%9e%e7%8e%b0%ef%bc%8c%e7%90%86%e8%ae%ba%e4%b8%8a%e4%bd%a0%e5%8f%af%e4%bb%a5%e5%9c%a8%e8%bf%90%e8%a1%8c%e6%97%b6%e9%80%9a%e8%bf%87%e7%b1%bb%e5%90%8d%2f%e6%96%b9%e6%b3%95%e5%90%8d%e8%b0%83%e7%94%a8%e5%88%b0%e4%bb%bb%e4%bd%95%20OC%20%e6%96%b9%e6%b3%95%ef%bc%8c%e6%9b%bf%e6%8d%a2%e4%bb%bb%e4%bd%95%e7%b1%bb%e7%9a%84%e5%ae%9e%e7%8e%b0%e4%bb%a5%e5%8f%8a%e6%96%b0%e5%a2%9e%e4%bb%bb%e6%84%8f%e7%b1%bb%e3%80%82%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e8%af%a6%e7%bb%86%e8%a7%a3%e6%9e%90%e4%b8%80%e4%b8%8bOC%e4%b8%adruntime%e6%9c%80%e4%b8%ba%e5%90%b8%e5%bc%95%e4%ba%ba%e7%9a%84%e5%9c%b0%e6%96%b9%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.objc_msgSend%e5%87%bd%e6%95%b0%e7%ae%80%e4%bb%8b%202.%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81Messaging%e9%98%b6%e6%ae%b5%e2%80%94objc_msgSend%e6%ba%90%e7%a0%81%e8%a7%a3%e6%9e%90%203.%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91Message%20Forwarding%e9%98%b6%e6%ae%b5%204.forwardInvocation%e7%9a%84%e4%be%8b%e5%ad%90%205.%e5%85%a5%e9%99%a2%e8%80%83%e8%af%95%206.Runtime%e4%b8%ad%e7%9a%84%e4%bc%98%e5%8c%96%20%20%e4%b8%80.objc_msgSend%e5%87%bd%e6%95%b0%e7%ae%80%e4%bb%8b%20%e6%9c%80%e5%88%9d%e6%8e%a5%e8%a7%a6%e5%88%b0OC%20Runtime%ef%bc%8c%e4%b8%80%e5%ae%9a%e6%98%af%e4%bb%8e%5breceiver%20message%5d%e8%bf%99%e9%87%8c%e5%bc%80%e5%a7%8b%e7%9a%84%e3%80%82%5breceiver%20message%5d%e4%bc%9a%e8%a2%ab%e7%bc%96%e8%af%91%e5%99%a8%e8%bd%ac%e5%8c%96%e4%b8%ba%ef%bc%9a%0aid%20objc_msgSend%20%28%20id%20self%2c%20SEL%20op%2c%20...%20%29%3b%20%e8%bf%99%e6%98%af%e4%b8%80%e4%b8%aa%e5%8f%af%e5%8f%98%e5%8f%82%e6%95%b0%e5%87%bd%e6%95%b0%e3%80%82%e7%ac%ac%e4%ba%8c%e4%b8%aa%e5%8f%82%e6%95%b0%e7%b1%bb%e5%9e%8b%e6%98%afSEL%e3%80%82SEL%e5%9c%a8OC%e4%b8%ad%e6%98%afselector%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e3%80%82%0atypedef%20struct%20objc_selector%20%2aSEL%3b%20objc_selector%e6%98%af%e4%b8%80%e4%b8%aa%e6%98%a0%e5%b0%84%e5%88%b0%e6%96%b9%e6%b3%95%e7%9a%84C%e5%ad%97%e7%ac%a6%e4%b8%b2%e3%80%82%e9%9c%80%e8%a6%81%e6%b3%a8%e6%84%8f%e7%9a%84%e6%98%af%40selector%28%29%e9%80%89%e6%8b%a9%e5%ad%90%e5%8f%aa%e4%b8%8e%e5%87%bd%e6%95%b0%e5%90%8d%e6%9c%89%e5%85%b3%e3%80%82%e4%b8%8d%e5%90%8c%e7%b1%bb%e4%b8%ad%e7%9b%b8%e5%90%8c%e5%90%8d%e5%ad%97%e7%9a%84%e6%96%b9%e6%b3%95%e6%89%80%e5%af%b9%e5%ba%94%e7%9a%84%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e6%98%af%e7%9b%b8%e5%90%8c%e7%9a%84%ef%bc%8c%e5%8d%b3%e4%bd%bf%e6%96%b9%e6%b3%95%e5%90%8d%e5%ad%97%e7%9b%b8%e5%90%8c%e8%80%8c%e5%8f%98%e9%87%8f%e7%b1%bb%e5%9e%8b%e4%b8%8d%e5%90%8c%e4%b9%9f%e4%bc%9a%e5%af%bc%e8%87%b4%e5%ae%83%e4%bb%ac%e5%85%b7%e6%9c%89%e7%9b%b8%e5%90%8c%e7%9a%84%e6%96%b9%e6%b3%95%e9%80%89%e6%8b%a9%e5%99%a8%e3%80%82%e7%94%b1%e4%ba%8e%e8%bf%99%e7%82%b9%e7%89%b9%e6%80%a7%ef%bc%8c%e4%b9%9f%e5%af%bc%e8%87%b4%e4%ba%86OC%e4%b8%8d%e6%94%af%e6%8c%81%e5%87%bd%e6%95%b0%e9%87%8d%e8%bd%bd%e3%80%82%0a%e5%9c%a8receiver%e6%8b%bf%e5%88%b0%e5%af%b9%e5%ba%94%e7%9a%84selector%e4%b9%8b%e5%90%8e%ef%bc%8c%e5%a6%82%e6%9e%9c%e8%87%aa%e5%b7%b1%e6%97%a0%e6%b3%95%e6%89%a7%e8%a1%8c%e8%bf%99%e4%b8%aa%e6%96%b9%e6%b3%95%ef%bc%8c%e9%82%a3%e4%b9%88%e8%af%a5%e6%9d%a1%e6%b6%88%e6%81%af%e8%a6%81%e8%a2%ab%e8%bd%ac%e5%8f%91%e3%80%82%e6%88%96%e8%80%85%e4%b8%b4%e6%97%b6%e5%8a%a8%e6%80%81%e7%9a%84%e6%b7%bb%e5%8a%a0%e6%96%b9%e6%b3%95%e5%ae%9e%e7%8e%b0%e3%80%82%e5%a6%82%e6%9e%9c%e8%bd%ac%e5%8f%91%e5%88%b0%e6%9c%80%e5%90%8e%e4%be%9d%e6%97%a7%e6%b2%a1%e6%b3%95%e5%a4%84%e7%90%86%ef%bc%8c%e7%a8%8b%e5%ba%8f%e5%b0%b1%e4%bc%9a%e5%b4%a9%e6%ba%83%e3%80%82%0a%e6%89%80%e4%bb%a5%e7%bc%96%e8%af%91%e6%9c%9f%e4%bb%85%e4%bb%85%e6%98%af%e7%a1%ae%e5%ae%9a%e4%ba%86%e8%a6%81%e5%8f%91%e9%80%81%e6%b6%88%e6%81%af%ef%bc%8c%e8%80%8c%e6%b6%88%e6%81%af%e5%a6%82%e4%bd%95%e5%a4%84%e7%90%86%e6%98%af%e8%a6%81%e8%bf%90%e8%a1%8c%e6%9c%9f%e9%9c%80%e8%a6%81%e8%a7%a3%e5%86%b3%e7%9a%84%e4%ba%8b%e6%83%85%e3%80%82%0aobjc_msgSend%e5%87%bd%e6%95%b0%e7%a9%b6%e7%ab%9f%e4%bc%9a%e5%b9%b2%e4%bb%80%e4%b9%88%e4%ba%8b%e6%83%85%e5%91%a2%ef%bc%9f%e4%bb%8e%e8%bf%99%e7%af%87%e3%80%8cobjc_msgSend%28%29%20Tour%e3%80%8d%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e5%8f%af%e4%bb%a5%e5%be%97%e5%88%b0%e4%b8%80%e4%b8%aa%e6%af%94%e8%be%83%e8%af%a6%e7%bb%86%e7%9a%84%e7%bb%93%e8%ae%ba%e3%80%82%0a1.%20Check%20for%20ignored%20selectors%20%28GC%29%20and%20short-circuit.%202.%20Check%20for%20nil%20target.%20If%20nil%20%26amp%3b%20nil%20receiver%20handler%20configured%2c%20jump%20to%20handler%20If%20nil%20%26amp%3b%20no%20handler%20%28default%29%2c%20cleanup%20and%20return."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fobjc_runtime_objc_msgsend%2f&t=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e4%bd%8f%e9%99%a2%e7%ac%ac%e4%ba%8c%e5%a4%a9%e2%80%94%e2%80%94%e6%b6%88%e6%81%af%e5%8f%91%e9%80%81%e4%b8%8e%e8%bd%ac%e5%8f%91"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Runtime on prometheus</title><link>https://new.halfrost.com/categories/runtime/</link><description>Recent content in Runtime on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 15 Oct 2016 09:54:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/runtime/index.xml" rel="self" type="application/rss+xml"/><item><title>iOS 如何实现 Aspect Oriented Programming</title><link>https://new.halfrost.com/ios_aspect/</link><pubDate>Sat, 15 Oct 2016 09:54:00 +0000</pubDate><guid>https://new.halfrost.com/ios_aspect/</guid><description>前言 在“Runtime病院”住院的后两天，分析了一下AOP的实现原理。“出院”后，发现Aspect库还没有详细分析，于是就有了这篇文章，今天就来说说iOS 是如何实现Aspect Oriented Programming。
+目录 1.Aspect Oriented Programming简介 2.什么是Aspects 3.Aspects 中4个基本类 解析 4.Aspects hook前的准备工作 5.Aspects hook过程详解 6.关于Aspects的一些 “坑” 一.Aspect Oriented Programming简介 面向切面的程序设计（aspect-oriented programming，AOP，又译作面向方面的程序设计、观点导向编程、剖面导向程序设计）是计算机科学中的一个术语，指一种程序设计范型。该范型以一种称为侧面（aspect，又译作方面）的语言构造为基础，侧面是一种新的模块化机制，用来描述分散在对象、类或函数中的横切关注点（crosscutting concern）。
+侧面的概念源于对面向对象的程序设计的改进，但并不只限于此，它还可以用来改进传统的函数。与侧面相关的编程概念还包括元对象协议、主题（subject）、混入（mixin）和委托。
+AOP通过预编译方式和运行期动态代理实现程序功能的统一维护的一种技术。
+OOP（面向对象编程）针对业务处理过程的实体及其属性和行为进行抽象封装，以获得更加清晰高效的逻辑单元划分。
+AOP则是针对业务处理过程中的切面进行提取，它所面对的是处理过程中的某个步骤或阶段，以获得逻辑过程中各部分之间低耦合性的隔离效果。
+OOP和AOP属于两个不同的“思考方式”。OOP专注于对象的属性和行为的封装，AOP专注于处理某个步骤和阶段的，从中进行切面的提取。
+举个例子，如果有一个判断权限的需求，OOP的做法肯定是在每个操作前都加入权限判断。那日志记录怎么办？在每个方法的开始结束的地方都加上日志记录。AOP就是把这些重复的逻辑和操作，提取出来，运用动态代理，实现这些模块的解耦。OOP和AOP不是互斥，而是相互配合。
+在iOS里面使用AOP进行编程，可以实现非侵入。不需要更改之前的代码逻辑，就能加入新的功能。主要用来处理一些具有横切性质的系统性服务，如日志记录、权限管理、缓存、对象池管理等。
+二. 什么是Aspects Aspects是一个轻量级的面向切面编程的库。它能允许你在每一个类和每一个实例中存在的方法里面加入任何代码。可以在以下切入点插入代码：before(在原始的方法前执行) / instead(替换原始的方法执行) / after(在原始的方法后执行,默认)。通过Runtime消息转发实现Hook。Aspects会自动的调用super方法，使用method swizzling起来会更加方便。
+这个库很稳定，目前用在数百款app上了。它也是PSPDFKit的一部分，PSPDFKit是一个iOS 看PDF的framework库。作者最终决定把它开源出来。
+三.Aspects 中4个基本类 解析 我们从头文件开始看起。
+1.Aspects.h typedef NS_OPTIONS(NSUInteger, AspectOptions) { AspectPositionAfter = 0, /// Called after the original implementation (default)  AspectPositionInstead = 1, /// Will replace the original implementation.</description></item><item><title>神经病院 Objective-C Runtime 出院第三天——如何正确使用 Runtime</title><link>https://new.halfrost.com/how_to_use_runtime/</link><pubDate>Fri, 30 Sep 2016 05:00:00 +0000</pubDate><guid>https://new.halfrost.com/how_to_use_runtime/</guid><description>前言 到了今天终于要&amp;quot;出院&amp;quot;了，要总结一下住院几天的收获，谈谈Runtime到底能为我们开发带来些什么好处。当然它也是把双刃剑，使用不当的话，也会成为开发路上的一个大坑。
+####目录
+1.Runtime的优点 (1) 实现多继承Multiple Inheritance (2) Method Swizzling (3) Aspect Oriented Programming (4) Isa Swizzling (5) Associated Object关联对象 (6) 动态的增加方法 (7) NSCoding的自动归档和自动解档 (8) 字典和模型互相转换 2.Runtime的缺点 一. 实现多继承Multiple Inheritance 在上一篇文章里面讲到的forwardingTargetForSelector:方法就能知道，一个类可以做到继承多个类的效果，只需要在这一步将消息转发给正确的类对象就可以模拟多继承的效果。
+在官方文档上记录了这样一段例子。
+在OC程序中可以借用消息转发机制来实现多继承的功能。 在上图中，一个对象对一个消息做出回应，类似于另一个对象中的方法借过来或是“继承”过来一样。 在图中，warrior实例转发了一个negotiate消息到Diplomat实例中，执行Diplomat中的negotiate方法，结果看起来像是warrior实例执行了一个和Diplomat实例一样的negotiate方法，其实执行者还是Diplomat实例。
+这使得不同继承体系分支下的两个类可以“继承”对方的方法，这样一个类可以响应自己继承分支里面的方法，同时也能响应其他不相干类发过来的消息。在上图中Warrior和Diplomat没有继承关系，但是Warrior将negotiate消息转发给了Diplomat后，就好似Diplomat是Warrior的超类一样。
+消息转发提供了许多类似于多继承的特性，但是他们之间有一个很大的不同：
+多继承：合并了不同的行为特征在一个单独的对象中，会得到一个重量级多层面的对象。
+消息转发：将各个功能分散到不同的对象中，得到的一些轻量级的对象，这些对象通过消息通过消息转发联合起来。
+这里值得说明的一点是，即使我们利用转发消息来实现了“假”继承，但是NSObject类还是会将两者区分开。像respondsToSelector:和 isKindOfClass:这类方法只会考虑继承体系，不会考虑转发链。比如上图中一个Warrior对象如果被问到是否能响应negotiate消息：
+if ( [aWarrior respondsToSelector:@selector(negotiate)] ) 结果是NO，虽然它能够响应negotiate消息而不报错，但是它是靠转发消息给Diplomat类来响应消息的。
+如果非要制造假象，反应出这种“假”的继承关系，那么需要重新实现 respondsToSelector:和 isKindOfClass:来加入你的转发算法：
+- (BOOL)respondsToSelector:(SEL)aSelector { if ( [super respondsToSelector:aSelector] ) return YES; else { /* Here, test whether the aSelector message can * * be forwarded to another object and whether that * * object can respond to it.</description></item><item><title>神经病院 Objective-C Runtime 住院第二天——消息发送与转发</title><link>https://new.halfrost.com/objc_runtime_objc_msgsend/</link><pubDate>Sat, 17 Sep 2016 01:47:58 +0000</pubDate><guid>https://new.halfrost.com/objc_runtime_objc_msgsend/</guid><description>前言 现在越来越多的app都使用了JSPatch实现app热修复，而JSPatch 能做到通过 JS 调用和改写 OC 方法最根本的原因是 Objective-C 是动态语言，OC 上所有方法的调用/类的生成都通过 Objective-C Runtime 在运行时进行，我们可以通过类名/方法名反射得到相应的类和方法，也可以替换某个类的方法为新的实现，理论上你可以在运行时通过类名/方法名调用到任何 OC 方法，替换任何类的实现以及新增任意类。今天就来详细解析一下OC中runtime最为吸引人的地方。
+####目录
+1.objc_msgSend函数简介 2.消息发送Messaging阶段—objc_msgSend源码解析 3.消息转发Message Forwarding阶段 4.forwardInvocation的例子 5.入院考试 6.Runtime中的优化 一.objc_msgSend函数简介 最初接触到OC Runtime，一定是从[receiver message]这里开始的。[receiver message]会被编译器转化为：
+id objc_msgSend ( id self, SEL op, ... ); 这是一个可变参数函数。第二个参数类型是SEL。SEL在OC中是selector方法选择器。
+typedef struct objc_selector *SEL; objc_selector是一个映射到方法的C字符串。需要注意的是@selector()选择子只与函数名有关。不同类中相同名字的方法所对应的方法选择器是相同的，即使方法名字相同而变量类型不同也会导致它们具有相同的方法选择器。由于这点特性，也导致了OC不支持函数重载。
+在receiver拿到对应的selector之后，如果自己无法执行这个方法，那么该条消息要被转发。或者临时动态的添加方法实现。如果转发到最后依旧没法处理，程序就会崩溃。
+所以编译期仅仅是确定了要发送消息，而消息如何处理是要运行期需要解决的事情。
+objc_msgSend函数究竟会干什么事情呢？从这篇「objc_msgSend() Tour」文章里面可以得到一个比较详细的结论。
+1. Check for ignored selectors (GC) and short-circuit. 2. Check for nil target. If nil &amp;amp; nil receiver handler configured, jump to handler If nil &amp;amp; no handler (default), cleanup and return.</description></item><item><title>神经病院 Objective-C Runtime 入院第一天—— isa 和 Class</title><link>https://new.halfrost.com/objc_runtime_isa_class/</link><pubDate>Sat, 10 Sep 2016 01:25:00 +0000</pubDate><guid>https://new.halfrost.com/objc_runtime_isa_class/</guid><description>前言 我第一次开始重视Objective-C Runtime是从2014年11月1日，@唐巧老师在微博上发的一条微博开始。
+这是sunnyxx在线下的一次分享会。会上还给了4道题目。
+这4道题以我当时的知识，很多就不确定，拿不准。从这次入院考试开始，就成功入院了。后来这两年对Runtime的理解慢慢增加了，打算今天自己总结总结平时一直躺在我印象笔记里面的笔记。有些人可能有疑惑，学习Runtime到底有啥用，平时好像并不会用到。希望看完我这次的总结，心中能解开一些疑惑。
+####目录
+1.Runtime简介 2.NSObject起源 (1) isa_t结构体的具体实现 (2) cache_t的具体实现 (3) class_data_bits_t的具体实现 3.入院考试 一. Runtime简介 Runtime 又叫运行时，是一套底层的 C 语言 API，是 iOS 系统的核心之一。开发者在编码过程中，可以给任意一个对象发送消息，在编译阶段只是确定了要向接收者发送这条消息，而接受者将要如何响应和处理这条消息，那就要看运行时来决定了。
+C语言中，在编译期，函数的调用就会决定调用哪个函数。 而OC的函数，属于动态调用过程，在编译期并不能决定真正调用哪个函数，只有在真正运行时才会根据函数的名称找到对应的函数来调用。
+Objective-C 是一个动态语言，这意味着它不仅需要一个编译器，也需要一个运行时系统来动态得创建类和对象、进行消息传递和转发。
+Objc 在三种层面上与 Runtime 系统进行交互：
+1. 通过 Objective-C 源代码 一般情况开发者只需要编写 OC 代码即可，Runtime 系统自动在幕后把我们写的源代码在编译阶段转换成运行时代码，在运行时确定对应的数据结构和调用具体哪个方法。
+2. 通过 Foundation 框架的 NSObject 类定义的方法 在OC的世界中，除了NSProxy类以外，所有的类都是NSObject的子类。在Foundation框架下，NSObject和NSProxy两个基类，定义了类层次结构中该类下方所有类的公共接口和行为。NSProxy是专门用于实现代理对象的类，这个类暂时本篇文章不提。这两个类都遵循了NSObject协议。在NSObject协议中，声明了所有OC对象的公共方法。
+在NSObject协议中，有以下5个方法，是可以从Runtime中获取信息，让对象进行自我检查。
+- (Class)class OBJC_SWIFT_UNAVAILABLE(&amp;#34;use &amp;#39;anObject.dynamicType&amp;#39; instead&amp;#34;); - (BOOL)isKindOfClass:(Class)aClass; - (BOOL)isMemberOfClass:(Class)aClass; - (BOOL)conformsToProtocol:(Protocol *)aProtocol; - (BOOL)respondsToSelector:(SEL)aSelector; -class方法返回对象的类； -isKindOfClass: 和 -isMemberOfClass: 方法检查对象是否存在于指定的类的继承体系中； -respondsToSelector: 检查对象能否响应指定的消息； -conformsToProtocol:检查对象是否实现了指定协议类的方法；</description></item></channel></rss>

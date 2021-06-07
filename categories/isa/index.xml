@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>isa on prometheus</title><link>https://new.halfrost.com/categories/isa/</link><description>Recent content in isa on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 10 Sep 2016 01:25:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/isa/index.xml" rel="self" type="application/rss+xml"/><item><title>神经病院 Objective-C Runtime 入院第一天—— isa 和 Class</title><link>https://new.halfrost.com/objc_runtime_isa_class/</link><pubDate>Sat, 10 Sep 2016 01:25:00 +0000</pubDate><guid>https://new.halfrost.com/objc_runtime_isa_class/</guid><description>前言 我第一次开始重视Objective-C Runtime是从2014年11月1日，@唐巧老师在微博上发的一条微博开始。
+这是sunnyxx在线下的一次分享会。会上还给了4道题目。
+这4道题以我当时的知识，很多就不确定，拿不准。从这次入院考试开始，就成功入院了。后来这两年对Runtime的理解慢慢增加了，打算今天自己总结总结平时一直躺在我印象笔记里面的笔记。有些人可能有疑惑，学习Runtime到底有啥用，平时好像并不会用到。希望看完我这次的总结，心中能解开一些疑惑。
+####目录
+1.Runtime简介 2.NSObject起源 (1) isa_t结构体的具体实现 (2) cache_t的具体实现 (3) class_data_bits_t的具体实现 3.入院考试 一. Runtime简介 Runtime 又叫运行时，是一套底层的 C 语言 API，是 iOS 系统的核心之一。开发者在编码过程中，可以给任意一个对象发送消息，在编译阶段只是确定了要向接收者发送这条消息，而接受者将要如何响应和处理这条消息，那就要看运行时来决定了。
+C语言中，在编译期，函数的调用就会决定调用哪个函数。 而OC的函数，属于动态调用过程，在编译期并不能决定真正调用哪个函数，只有在真正运行时才会根据函数的名称找到对应的函数来调用。
+Objective-C 是一个动态语言，这意味着它不仅需要一个编译器，也需要一个运行时系统来动态得创建类和对象、进行消息传递和转发。
+Objc 在三种层面上与 Runtime 系统进行交互：
+1. 通过 Objective-C 源代码 一般情况开发者只需要编写 OC 代码即可，Runtime 系统自动在幕后把我们写的源代码在编译阶段转换成运行时代码，在运行时确定对应的数据结构和调用具体哪个方法。
+2. 通过 Foundation 框架的 NSObject 类定义的方法 在OC的世界中，除了NSProxy类以外，所有的类都是NSObject的子类。在Foundation框架下，NSObject和NSProxy两个基类，定义了类层次结构中该类下方所有类的公共接口和行为。NSProxy是专门用于实现代理对象的类，这个类暂时本篇文章不提。这两个类都遵循了NSObject协议。在NSObject协议中，声明了所有OC对象的公共方法。
+在NSObject协议中，有以下5个方法，是可以从Runtime中获取信息，让对象进行自我检查。
+- (Class)class OBJC_SWIFT_UNAVAILABLE(&amp;#34;use &amp;#39;anObject.dynamicType&amp;#39; instead&amp;#34;); - (BOOL)isKindOfClass:(Class)aClass; - (BOOL)isMemberOfClass:(Class)aClass; - (BOOL)conformsToProtocol:(Protocol *)aProtocol; - (BOOL)respondsToSelector:(SEL)aSelector; -class方法返回对象的类； -isKindOfClass: 和 -isMemberOfClass: 方法检查对象是否存在于指定的类的继承体系中； -respondsToSelector: 检查对象能否响应指定的消息； -conformsToProtocol:检查对象是否实现了指定协议类的方法；</description></item></channel></rss>

@@ -1,0 +1,941 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>BeeHive —— 一个优雅但还在完善中的解耦框架 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="BeeHive —— 一个优雅但还在完善中的解耦框架"><meta property="og:description" content="前言 BeeHive是阿里巴巴公司开源的一个iOS框架，这个框架是App模块化编程的框架一种实现方案，吸收了Spring框架Service的理念来实现模块间的API解耦。
+BeeHive这个名字灵感来源于蜂窝。蜂窝是世界上高度模块化的工程结构，六边形的设计能带来无限扩张的可能。所以就用了这个名字作为开源项目的名字。
+在前一篇文章iOS 组件化 —— 路由设计思路分析中，我们分析了App组件之间可以通过路由来解除耦合。那么这篇文章就来看看利用模块化的思想如何解除耦合的。
+(看到这里一定会很多人有疑问，那就看看这篇文章组件和模块的区别)
+说明：本文是基于BeeHive v1.2.0版本进行解析的。
+目录  1.BeeHive概述 2.BeeHive模块注册 3.BeeHive模块事件 4.BeeHive模块调用 5.其他的一些辅助类 6.可能还在完善中的功能  一. BeeHive概述 由于BeeHive是基于Spring的Service理念，虽然可以使模块间的具体实现与接口解耦，但无法避免模块对接口类的依赖关系。
+暂时BeeHive没有采用invoke和performSelector:action withObject: params的方法。主要原因还是考虑学习成本难度以及动态调用实现无法在编译检查阶段检测接口参数变更等问题。
+目前BeeHive v1.2.0 全部是利用Protocol的方式，实现了模块间解耦的目的：
+1.各个模块以插件的形式存在。每个都可独立，相互解耦。 2.各个模块具体实现与接口调用分离 3.各个模块也有生命周期，也可以进行管理。
+官方也给出了一个架构图：
+接下来就依次分析模块注册，模块事件，模块调用是如何实现解耦的。
+二. BeeHive模块注册 先从模块的注册开始分析，来看看BeeHive是如何给各个模块进行注册的。
+在BeeHive中是通过BHModuleManager来管理各个模块的。BHModuleManager中只会管理已经被注册过的模块。
+注册Module的方式总共有三种：
+1. Annotation方式注册 通过BeeHiveMod宏进行Annotation标记。
+BeeHiveMod(ShopModule) BeeHiveMod宏定义如下：
+#define BeeHiveMod(name) \ char * k##name##_mod BeeHiveDATA(BeehiveMods) = &#34;&#34;#name&#34;&#34;;  BeeHiveDATA又是一个宏：
+#define BeeHiveDATA(sectname) __attribute((used, section(&#34;__DATA,&#34;#sectname&#34; &#34;)))  最终BeeHiveMod宏会在预编译结束会完全展开成下面的样子：
+char * kShopModule_mod __attribute((used, section(&#34;__DATA,&#34;&#34;BeehiveMods&#34;&#34; &#34;))) = &#34;&#34;&#34;ShopModule&#34;&#34;&#34;; 注意双引号的总对数。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/beehive/"><meta property="article:published_time" content="2017-03-04T10:44:00+00:00"><meta property="article:modified_time" content="2017-03-04T10:44:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="BeeHive —— 一个优雅但还在完善中的解耦框架"><meta name=twitter:description content="前言 BeeHive是阿里巴巴公司开源的一个iOS框架，这个框架是App模块化编程的框架一种实现方案，吸收了Spring框架Service的理念来实现模块间的API解耦。
+BeeHive这个名字灵感来源于蜂窝。蜂窝是世界上高度模块化的工程结构，六边形的设计能带来无限扩张的可能。所以就用了这个名字作为开源项目的名字。
+在前一篇文章iOS 组件化 —— 路由设计思路分析中，我们分析了App组件之间可以通过路由来解除耦合。那么这篇文章就来看看利用模块化的思想如何解除耦合的。
+(看到这里一定会很多人有疑问，那就看看这篇文章组件和模块的区别)
+说明：本文是基于BeeHive v1.2.0版本进行解析的。
+目录  1.BeeHive概述 2.BeeHive模块注册 3.BeeHive模块事件 4.BeeHive模块调用 5.其他的一些辅助类 6.可能还在完善中的功能  一. BeeHive概述 由于BeeHive是基于Spring的Service理念，虽然可以使模块间的具体实现与接口解耦，但无法避免模块对接口类的依赖关系。
+暂时BeeHive没有采用invoke和performSelector:action withObject: params的方法。主要原因还是考虑学习成本难度以及动态调用实现无法在编译检查阶段检测接口参数变更等问题。
+目前BeeHive v1.2.0 全部是利用Protocol的方式，实现了模块间解耦的目的：
+1.各个模块以插件的形式存在。每个都可独立，相互解耦。 2.各个模块具体实现与接口调用分离 3.各个模块也有生命周期，也可以进行管理。
+官方也给出了一个架构图：
+接下来就依次分析模块注册，模块事件，模块调用是如何实现解耦的。
+二. BeeHive模块注册 先从模块的注册开始分析，来看看BeeHive是如何给各个模块进行注册的。
+在BeeHive中是通过BHModuleManager来管理各个模块的。BHModuleManager中只会管理已经被注册过的模块。
+注册Module的方式总共有三种：
+1. Annotation方式注册 通过BeeHiveMod宏进行Annotation标记。
+BeeHiveMod(ShopModule) BeeHiveMod宏定义如下：
+#define BeeHiveMod(name) \ char * k##name##_mod BeeHiveDATA(BeehiveMods) = &#34;&#34;#name&#34;&#34;;  BeeHiveDATA又是一个宏：
+#define BeeHiveDATA(sectname) __attribute((used, section(&#34;__DATA,&#34;#sectname&#34; &#34;)))  最终BeeHiveMod宏会在预编译结束会完全展开成下面的样子：
+char * kShopModule_mod __attribute((used, section(&#34;__DATA,&#34;&#34;BeehiveMods&#34;&#34; &#34;))) = &#34;&#34;&#34;ShopModule&#34;&#34;&#34;; 注意双引号的总对数。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/ios_router/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/weex_ios/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&text=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&is_video=false&description=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fbeehive%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&name=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6&description=%e5%89%8d%e8%a8%80%20BeeHive%e6%98%af%e9%98%bf%e9%87%8c%e5%b7%b4%e5%b7%b4%e5%85%ac%e5%8f%b8%e5%bc%80%e6%ba%90%e7%9a%84%e4%b8%80%e4%b8%aaiOS%e6%a1%86%e6%9e%b6%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%a1%86%e6%9e%b6%e6%98%afApp%e6%a8%a1%e5%9d%97%e5%8c%96%e7%bc%96%e7%a8%8b%e7%9a%84%e6%a1%86%e6%9e%b6%e4%b8%80%e7%a7%8d%e5%ae%9e%e7%8e%b0%e6%96%b9%e6%a1%88%ef%bc%8c%e5%90%b8%e6%94%b6%e4%ba%86Spring%e6%a1%86%e6%9e%b6Service%e7%9a%84%e7%90%86%e5%bf%b5%e6%9d%a5%e5%ae%9e%e7%8e%b0%e6%a8%a1%e5%9d%97%e9%97%b4%e7%9a%84API%e8%a7%a3%e8%80%a6%e3%80%82%0aBeeHive%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e7%81%b5%e6%84%9f%e6%9d%a5%e6%ba%90%e4%ba%8e%e8%9c%82%e7%aa%9d%e3%80%82%e8%9c%82%e7%aa%9d%e6%98%af%e4%b8%96%e7%95%8c%e4%b8%8a%e9%ab%98%e5%ba%a6%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e5%b7%a5%e7%a8%8b%e7%bb%93%e6%9e%84%ef%bc%8c%e5%85%ad%e8%be%b9%e5%bd%a2%e7%9a%84%e8%ae%be%e8%ae%a1%e8%83%bd%e5%b8%a6%e6%9d%a5%e6%97%a0%e9%99%90%e6%89%a9%e5%bc%a0%e7%9a%84%e5%8f%af%e8%83%bd%e3%80%82%e6%89%80%e4%bb%a5%e5%b0%b1%e7%94%a8%e4%ba%86%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e4%bd%9c%e4%b8%ba%e5%bc%80%e6%ba%90%e9%a1%b9%e7%9b%ae%e7%9a%84%e5%90%8d%e5%ad%97%e3%80%82%0a%e5%9c%a8%e5%89%8d%e4%b8%80%e7%af%87%e6%96%87%e7%ab%a0iOS%20%e7%bb%84%e4%bb%b6%e5%8c%96%20%e2%80%94%e2%80%94%20%e8%b7%af%e7%94%b1%e8%ae%be%e8%ae%a1%e6%80%9d%e8%b7%af%e5%88%86%e6%9e%90%e4%b8%ad%ef%bc%8c%e6%88%91%e4%bb%ac%e5%88%86%e6%9e%90%e4%ba%86App%e7%bb%84%e4%bb%b6%e4%b9%8b%e9%97%b4%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87%e8%b7%af%e7%94%b1%e6%9d%a5%e8%a7%a3%e9%99%a4%e8%80%a6%e5%90%88%e3%80%82%e9%82%a3%e4%b9%88%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e6%9d%a5%e7%9c%8b%e7%9c%8b%e5%88%a9%e7%94%a8%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e6%80%9d%e6%83%b3%e5%a6%82%e4%bd%95%e8%a7%a3%e9%99%a4%e8%80%a6%e5%90%88%e7%9a%84%e3%80%82%0a%28%e7%9c%8b%e5%88%b0%e8%bf%99%e9%87%8c%e4%b8%80%e5%ae%9a%e4%bc%9a%e5%be%88%e5%a4%9a%e4%ba%ba%e6%9c%89%e7%96%91%e9%97%ae%ef%bc%8c%e9%82%a3%e5%b0%b1%e7%9c%8b%e7%9c%8b%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e7%bb%84%e4%bb%b6%e5%92%8c%e6%a8%a1%e5%9d%97%e7%9a%84%e5%8c%ba%e5%88%ab%29%0a%e8%af%b4%e6%98%8e%ef%bc%9a%e6%9c%ac%e6%96%87%e6%98%af%e5%9f%ba%e4%ba%8eBeeHive%20v1.2.0%e7%89%88%e6%9c%ac%e8%bf%9b%e8%a1%8c%e8%a7%a3%e6%9e%90%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.BeeHive%e6%a6%82%e8%bf%b0%202.BeeHive%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%203.BeeHive%e6%a8%a1%e5%9d%97%e4%ba%8b%e4%bb%b6%204.BeeHive%e6%a8%a1%e5%9d%97%e8%b0%83%e7%94%a8%205.%e5%85%b6%e4%bb%96%e7%9a%84%e4%b8%80%e4%ba%9b%e8%be%85%e5%8a%a9%e7%b1%bb%206.%e5%8f%af%e8%83%bd%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e5%8a%9f%e8%83%bd%20%20%e4%b8%80.%20BeeHive%e6%a6%82%e8%bf%b0%20%e7%94%b1%e4%ba%8eBeeHive%e6%98%af%e5%9f%ba%e4%ba%8eSpring%e7%9a%84Service%e7%90%86%e5%bf%b5%ef%bc%8c%e8%99%bd%e7%84%b6%e5%8f%af%e4%bb%a5%e4%bd%bf%e6%a8%a1%e5%9d%97%e9%97%b4%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e4%b8%8e%e6%8e%a5%e5%8f%a3%e8%a7%a3%e8%80%a6%ef%bc%8c%e4%bd%86%e6%97%a0%e6%b3%95%e9%81%bf%e5%85%8d%e6%a8%a1%e5%9d%97%e5%af%b9%e6%8e%a5%e5%8f%a3%e7%b1%bb%e7%9a%84%e4%be%9d%e8%b5%96%e5%85%b3%e7%b3%bb%e3%80%82%0a%e6%9a%82%e6%97%b6BeeHive%e6%b2%a1%e6%9c%89%e9%87%87%e7%94%a8invoke%e5%92%8cperformSelector%3aaction%20withObject%3a%20params%e7%9a%84%e6%96%b9%e6%b3%95%e3%80%82%e4%b8%bb%e8%a6%81%e5%8e%9f%e5%9b%a0%e8%bf%98%e6%98%af%e8%80%83%e8%99%91%e5%ad%a6%e4%b9%a0%e6%88%90%e6%9c%ac%e9%9a%be%e5%ba%a6%e4%bb%a5%e5%8f%8a%e5%8a%a8%e6%80%81%e8%b0%83%e7%94%a8%e5%ae%9e%e7%8e%b0%e6%97%a0%e6%b3%95%e5%9c%a8%e7%bc%96%e8%af%91%e6%a3%80%e6%9f%a5%e9%98%b6%e6%ae%b5%e6%a3%80%e6%b5%8b%e6%8e%a5%e5%8f%a3%e5%8f%82%e6%95%b0%e5%8f%98%e6%9b%b4%e7%ad%89%e9%97%ae%e9%a2%98%e3%80%82%0a%e7%9b%ae%e5%89%8dBeeHive%20v1.2.0%20%e5%85%a8%e9%83%a8%e6%98%af%e5%88%a9%e7%94%a8Protocol%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%8c%e5%ae%9e%e7%8e%b0%e4%ba%86%e6%a8%a1%e5%9d%97%e9%97%b4%e8%a7%a3%e8%80%a6%e7%9a%84%e7%9b%ae%e7%9a%84%ef%bc%9a%0a1.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e4%bb%a5%e6%8f%92%e4%bb%b6%e7%9a%84%e5%bd%a2%e5%bc%8f%e5%ad%98%e5%9c%a8%e3%80%82%e6%af%8f%e4%b8%aa%e9%83%bd%e5%8f%af%e7%8b%ac%e7%ab%8b%ef%bc%8c%e7%9b%b8%e4%ba%92%e8%a7%a3%e8%80%a6%e3%80%82%202.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e4%b8%8e%e6%8e%a5%e5%8f%a3%e8%b0%83%e7%94%a8%e5%88%86%e7%a6%bb%203.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e4%b9%9f%e6%9c%89%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%ef%bc%8c%e4%b9%9f%e5%8f%af%e4%bb%a5%e8%bf%9b%e8%a1%8c%e7%ae%a1%e7%90%86%e3%80%82%0a%e5%ae%98%e6%96%b9%e4%b9%9f%e7%bb%99%e5%87%ba%e4%ba%86%e4%b8%80%e4%b8%aa%e6%9e%b6%e6%9e%84%e5%9b%be%ef%bc%9a%0a%e6%8e%a5%e4%b8%8b%e6%9d%a5%e5%b0%b1%e4%be%9d%e6%ac%a1%e5%88%86%e6%9e%90%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%ef%bc%8c%e6%a8%a1%e5%9d%97%e4%ba%8b%e4%bb%b6%ef%bc%8c%e6%a8%a1%e5%9d%97%e8%b0%83%e7%94%a8%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e8%a7%a3%e8%80%a6%e7%9a%84%e3%80%82%0a%e4%ba%8c.%20BeeHive%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%20%e5%85%88%e4%bb%8e%e6%a8%a1%e5%9d%97%e7%9a%84%e6%b3%a8%e5%86%8c%e5%bc%80%e5%a7%8b%e5%88%86%e6%9e%90%ef%bc%8c%e6%9d%a5%e7%9c%8b%e7%9c%8bBeeHive%e6%98%af%e5%a6%82%e4%bd%95%e7%bb%99%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e8%bf%9b%e8%a1%8c%e6%b3%a8%e5%86%8c%e7%9a%84%e3%80%82%0a%e5%9c%a8BeeHive%e4%b8%ad%e6%98%af%e9%80%9a%e8%bf%87BHModuleManager%e6%9d%a5%e7%ae%a1%e7%90%86%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e7%9a%84%e3%80%82BHModuleManager%e4%b8%ad%e5%8f%aa%e4%bc%9a%e7%ae%a1%e7%90%86%e5%b7%b2%e7%bb%8f%e8%a2%ab%e6%b3%a8%e5%86%8c%e8%bf%87%e7%9a%84%e6%a8%a1%e5%9d%97%e3%80%82%0a%e6%b3%a8%e5%86%8cModule%e7%9a%84%e6%96%b9%e5%bc%8f%e6%80%bb%e5%85%b1%e6%9c%89%e4%b8%89%e7%a7%8d%ef%bc%9a%0a1.%20Annotation%e6%96%b9%e5%bc%8f%e6%b3%a8%e5%86%8c%20%e9%80%9a%e8%bf%87BeeHiveMod%e5%ae%8f%e8%bf%9b%e8%a1%8cAnnotation%e6%a0%87%e8%ae%b0%e3%80%82%0aBeeHiveMod%28ShopModule%29%20BeeHiveMod%e5%ae%8f%e5%ae%9a%e4%b9%89%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%23define%20BeeHiveMod%28name%29%20%5c%20char%20%2a%20k%23%23name%23%23_mod%20BeeHiveDATA%28BeehiveMods%29%20%3d%20%26%2334%3b%26%2334%3b%23name%26%2334%3b%26%2334%3b%3b%20%20BeeHiveDATA%e5%8f%88%e6%98%af%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%9a%0a%23define%20BeeHiveDATA%28sectname%29%20__attribute%28%28used%2c%20section%28%26%2334%3b__DATA%2c%26%2334%3b%23sectname%26%2334%3b%20%26%2334%3b%29%29%29%20%20%e6%9c%80%e7%bb%88BeeHiveMod%e5%ae%8f%e4%bc%9a%e5%9c%a8%e9%a2%84%e7%bc%96%e8%af%91%e7%bb%93%e6%9d%9f%e4%bc%9a%e5%ae%8c%e5%85%a8%e5%b1%95%e5%bc%80%e6%88%90%e4%b8%8b%e9%9d%a2%e7%9a%84%e6%a0%b7%e5%ad%90%ef%bc%9a%0achar%20%2a%20kShopModule_mod%20__attribute%28%28used%2c%20section%28%26%2334%3b__DATA%2c%26%2334%3b%26%2334%3bBeehiveMods%26%2334%3b%26%2334%3b%20%26%2334%3b%29%29%29%20%3d%20%26%2334%3b%26%2334%3b%26%2334%3bShopModule%26%2334%3b%26%2334%3b%26%2334%3b%3b%20%e6%b3%a8%e6%84%8f%e5%8f%8c%e5%bc%95%e5%8f%b7%e7%9a%84%e6%80%bb%e5%af%b9%e6%95%b0%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&t=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-beehive概述>一. BeeHive概述</a></li><li><a href=#二-beehive模块注册>二. BeeHive模块注册</a><ul><li><a href=#1-annotation方式注册>1. Annotation方式注册</a></li><li><a href=#2-读取本地pilst文件>2. 读取本地Pilst文件</a></li><li><a href=#3-load方法注册>3. Load方法注册</a></li></ul></li><li><a href=#三-beehive模块事件>三. BeeHive模块事件</a><ul><li><a href=#1-系统事件>1. 系统事件。</a></li><li><a href=#2-应用事件>2. 应用事件</a></li><li><a href=#3-业务自定义事件>3. 业务自定义事件</a></li></ul></li><li><a href=#四-beehive模块调用>四. BeeHive模块调用</a><ul><li><a href=#1-annotation方式注册-1>1. Annotation方式注册</a></li><li><a href=#2-读取本地pilst文件-1>2. 读取本地Pilst文件</a></li><li><a href=#3-load方法注册-1>3. Load方法注册</a></li></ul></li><li><a href=#五-其他的一些辅助类>五. 其他的一些辅助类</a></li><li><a href=#六-可能还在完善中的功能>六. 可能还在完善中的功能</a><ul><li><a href=#1-功能还有待完善>1. 功能还有待完善</a></li><li><a href=#2-解耦还不够彻底>2. 解耦还不够彻底</a></li><li><a href=#3-设计思路还可以继续改进和优化>3. 设计思路还可以继续改进和优化</a></li></ul></li><li><a href=#结尾>结尾</a></li><li><a href=#更新>更新：</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">BeeHive —— 一个优雅但还在完善中的解耦框架</h1><div class=meta><div class=postdate><time datetime="2017-03-04 10:44:00 +0000 UTC" itemprop=datePublished>Mar 04</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/%E7%BB%84%E4%BB%B6%E5%8C%96>组件化</a>
+,
+<a class=category-link href=/categories/beehive>BeeHive</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/%E7%BB%84%E4%BB%B6%E5%8C%96 rel=tag>组件化</a>
+,
+<a class=tag-link href=/tags/beehive rel=tag>BeeHive</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>BeeHive是阿里巴巴公司开源的一个iOS框架，这个框架是App模块化编程的框架一种实现方案，吸收了Spring框架Service的理念来实现模块间的API解耦。</p><p>BeeHive这个名字灵感来源于蜂窝。蜂窝是世界上高度模块化的工程结构，六边形的设计能带来无限扩张的可能。所以就用了这个名字作为开源项目的名字。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_1.png alt></p><p>在前一篇文章<a href=http://www.jianshu.com/p/76da56b3bd55>iOS 组件化 —— 路由设计思路分析</a>中，我们分析了App组件之间可以通过路由来解除耦合。那么这篇文章就来看看利用模块化的思想如何解除耦合的。</p><p>(看到这里一定会很多人有疑问，那就看看这篇文章<a href=http://blog.csdn.net/horkychen/article/details/45083467>组件和模块的区别</a>)</p><p>说明：本文是基于BeeHive v1.2.0版本进行解析的。</p><h3 id=目录>目录</h3><ul><li>1.BeeHive概述</li><li>2.BeeHive模块注册</li><li>3.BeeHive模块事件</li><li>4.BeeHive模块调用</li><li>5.其他的一些辅助类</li><li>6.可能还在完善中的功能</li></ul><h3 id=一-beehive概述>一. BeeHive概述</h3><p>由于BeeHive是基于Spring的Service理念，虽然可以使模块间的具体实现与接口解耦，但无法避免模块对接口类的依赖关系。</p><p>暂时BeeHive没有采用invoke和performSelector:action withObject: params的方法。主要原因还是考虑学习成本难度以及动态调用实现无法在编译检查阶段检测接口参数变更等问题。</p><p>目前BeeHive v1.2.0 全部是利用Protocol的方式，实现了模块间解耦的目的：</p><p>1.各个模块以插件的形式存在。每个都可独立，相互解耦。
+2.各个模块具体实现与接口调用分离
+3.各个模块也有生命周期，也可以进行管理。</p><p>官方也给出了一个架构图：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_2.png alt></p><p>接下来就依次分析模块注册，模块事件，模块调用是如何实现解耦的。</p><h3 id=二-beehive模块注册>二. BeeHive模块注册</h3><p>先从模块的注册开始分析，来看看BeeHive是如何给各个模块进行注册的。</p><p>在BeeHive中是通过BHModuleManager来管理各个模块的。BHModuleManager中只会管理已经被注册过的模块。</p><p>注册Module的方式总共有三种：</p><h4 id=1-annotation方式注册>1. Annotation方式注册</h4><p>通过BeeHiveMod宏进行Annotation标记。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+BeeHiveMod(ShopModule)
+
+</code></pre></div><p>BeeHiveMod宏定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define BeeHiveMod(name) \
+</span><span style=color:#75715e>char * k##name##_mod BeeHiveDATA(BeehiveMods) = &#34;&#34;#name&#34;&#34;;
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>BeeHiveDATA又是一个宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define BeeHiveDATA(sectname) __attribute((used, section(&#34;__DATA,&#34;#sectname&#34; &#34;)))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>最终BeeHiveMod宏会在预编译结束会完全展开成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kShopModule_mod <span style=color:#a6e22e>__attribute</span>((used, section(<span style=color:#e6db74>&#34;__DATA,&#34;&#34;BeehiveMods&#34;&#34; &#34;</span>))) <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;&#34;ShopModule&#34;&#34;&#34;</span>;
+
+
+
+</code></pre></div><p>注意双引号的总对数。</p><p>到这里__attribute((used,section(&ldquo;segmentname,sectionname&rdquo;)))就需要先说明2个地方。</p><p>__attribute第一个参数used很有用。这个关键字是用来修饰函数的。被used修饰以后，意味着即使函数没有被引用，在Release下也不会被优化。如果不加这个修饰，那么Release环境链接器下会去掉没有被引用的段。具体的描述可以看这个<a href=https://gcc.gnu.org/onlinedocs/gcc-3.2/gcc/Function-Attributes.html#Function%20Attributes>gun的官方文档</a>。</p><p>Static静态变量会按照他们申明的顺序，放到一个单独的段中。我们通过使用__attribute__((section(&ldquo;name&rdquo;)))来指明哪个段。数据则用__attribute__((used))来标记，防止链接器会优化删除未被使用的段。</p><p>再来具体说说section的作用。</p><p>编译器编译源代码后生成的文件叫目标文件，从文件结构上来说，它已经是编译后可执行的文件格式，只是还没有经过链接的过程。可执行文件(Executable)主要是Windows下的PE(Portable Executable)和Linux的ELF(Executable Linkable Format)，它们也都是COFF(Common file format)格式的变种。程序源程序代码被编译之后会主要分成两个段：程序指令和程序数据。代码段属于程序指令，数据段和.bss段属于数据段。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_3.png alt></p><p>具体的例子见上图，可见.data数据段里面保存的都是初始化过的全局静态变量和局部静态变量。.rodata段存放的是只读数据，一般都是const修饰的变量和字符串常量。.bss段存放的是未初始化的全局变量和局部静态变量。代码段就在.text段。</p><p>有时候我们需要指定一个特殊的段，来存放我们想要的数据。这里我们就把数据存在data数据段里面的"BeehiveMods"段中。</p><p>当然还有其他的Attributes的修饰关键字，详情见<a href=https://gcc.gnu.org/onlinedocs/gcc-3.2/gcc/Variable-Attributes.html>官方文档</a></p><p>回到代码上来：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kShopModule_mod <span style=color:#a6e22e>__attribute</span>((used, section(<span style=color:#e6db74>&#34;__DATA,&#34;&#34;BeehiveMods&#34;&#34; &#34;</span>))) <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;&#34;ShopModule&#34;&#34;&#34;</span>;
+
+</code></pre></div><p>也就相当于：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kShopModule_mod <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;&#34;ShopModule&#34;&#34;&#34;</span>;
+
+</code></pre></div><p>只不过是把kShopModule_mod字符串放到了特殊的段里面。</p><p>Module被这样存到了特殊的段中，那怎么取出来的呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>static</span> NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;*</span> BHReadConfiguration(<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>section)
+{
+    NSMutableArray <span style=color:#f92672>*</span>configs <span style=color:#f92672>=</span> [NSMutableArray array];
+    
+    Dl_info info;
+    dladdr(BHReadConfiguration, <span style=color:#f92672>&amp;</span>info);
+    
+<span style=color:#75715e>#ifndef __LP64__
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// const struct mach_header *mhp = _dyld_get_image_header(0); // both works as below line
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>struct</span> mach_header <span style=color:#f92672>*</span>mhp <span style=color:#f92672>=</span> (<span style=color:#66d9ef>struct</span> mach_header<span style=color:#f92672>*</span>)info.dli_fbase;
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> size <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    <span style=color:#75715e>// 找到之前存储的数据段(Module找BeehiveMods段 和 Service找BeehiveServices段)的一片内存
+</span><span style=color:#75715e></span>    uint32_t <span style=color:#f92672>*</span>memory <span style=color:#f92672>=</span> (uint32_t<span style=color:#f92672>*</span>)getsectiondata(mhp, <span style=color:#e6db74>&#34;__DATA&#34;</span>, section, <span style=color:#f92672>&amp;</span> size);
+<span style=color:#75715e>#else </span><span style=color:#75715e>/* defined(__LP64__) */</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>struct</span> mach_header_64 <span style=color:#f92672>*</span>mhp <span style=color:#f92672>=</span> (<span style=color:#66d9ef>struct</span> mach_header_64<span style=color:#f92672>*</span>)info.dli_fbase;
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span> size <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    uint64_t <span style=color:#f92672>*</span>memory <span style=color:#f92672>=</span> (uint64_t<span style=color:#f92672>*</span>)getsectiondata(mhp, <span style=color:#e6db74>&#34;__DATA&#34;</span>, section, <span style=color:#f92672>&amp;</span> size);
+<span style=color:#75715e>#endif </span><span style=color:#75715e>/* defined(__LP64__) */</span><span style=color:#75715e>
+</span><span style=color:#75715e></span>    
+    <span style=color:#75715e>// 把特殊段里面的数据都转换成字符串存入数组中
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>for</span>(<span style=color:#66d9ef>int</span> idx <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; idx <span style=color:#f92672>&lt;</span> size<span style=color:#f92672>/</span><span style=color:#66d9ef>sizeof</span>(<span style=color:#66d9ef>void</span><span style=color:#f92672>*</span>); <span style=color:#f92672>++</span>idx){
+        <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>string <span style=color:#f92672>=</span> (<span style=color:#66d9ef>char</span><span style=color:#f92672>*</span>)memory[idx];
+        
+        NSString <span style=color:#f92672>*</span>str <span style=color:#f92672>=</span> [NSString stringWithUTF8String:string];
+        <span style=color:#66d9ef>if</span>(<span style=color:#f92672>!</span>str)<span style=color:#66d9ef>continue</span>;
+        
+        BHLog(<span style=color:#e6db74>@&#34;config = %@&#34;</span>, str);
+        <span style=color:#66d9ef>if</span>(str) [configs addObject:str];
+    }
+    
+    <span style=color:#66d9ef>return</span> configs;
+}
+
+
+</code></pre></div><p>Dl_info是一个Mach-O里面的一个数据结构。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>struct</span> dl_info {
+        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span>      <span style=color:#f92672>*</span>dli_fname;     <span style=color:#75715e>/* Pathname of shared object */</span>
+        <span style=color:#66d9ef>void</span>            <span style=color:#f92672>*</span>dli_fbase;     <span style=color:#75715e>/* Base address of shared object */</span>
+        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span>      <span style=color:#f92672>*</span>dli_sname;     <span style=color:#75715e>/* Name of nearest symbol */</span>
+        <span style=color:#66d9ef>void</span>            <span style=color:#f92672>*</span>dli_saddr;     <span style=color:#75715e>/* Address of nearest symbol */</span>
+} Dl_info;
+
+</code></pre></div><p>这个数据结构的数据默认就是通过</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>extern</span> <span style=color:#66d9ef>int</span> <span style=color:#a6e22e>dladdr</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>, Dl_info <span style=color:#f92672>*</span>);
+
+
+</code></pre></div><p>dladdr这个函数来获取Dl_info里面的数据。</p><p>dli_fname：路径名，例如</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>/Applications/</span><span style=color:#a6e22e>Xcode</span>.<span style=color:#a6e22e>app</span><span style=color:#e6db74>/Contents/</span><span style=color:#a6e22e>Developer</span><span style=color:#e6db74>/Platforms/</span><span style=color:#a6e22e>iPhoneSimulator</span>.<span style=color:#a6e22e>platform</span><span style=color:#e6db74>/Developer/</span><span style=color:#a6e22e>SDKs</span><span style=color:#e6db74>/iPhoneSimulator.sdk/</span><span style=color:#a6e22e>System</span><span style=color:#e6db74>/Library/</span><span style=color:#a6e22e>Frameworks</span><span style=color:#e6db74>/CoreFoundation.framework/</span><span style=color:#a6e22e>CoreFoundation</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>dli_fbase：共享对象的的起始地址（Base address of shared object，比如上面的 CoreFoundation)</p><p>dli_saddr ：符号的地址
+dli_sname：符号的名字，即下面的第四列的函数信息</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Thread</span> <span style=color:#ae81ff>0</span>:<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>0</span>     <span style=color:#a6e22e>libsystem_kernel</span>.<span style=color:#a6e22e>dylib</span>          <span style=color:#ae81ff>0</span>x<span style=color:#ae81ff>11135810</span>a <span style=color:#a6e22e>__semwait_signal</span> + <span style=color:#ae81ff>94474</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>1</span>     <span style=color:#a6e22e>libsystem_c</span>.<span style=color:#a6e22e>dylib</span>               <span style=color:#ae81ff>0</span>x<span style=color:#ae81ff>1110</span>dab<span style=color:#ae81ff>0</span>b <span style=color:#a6e22e>sleep</span> + <span style=color:#ae81ff>518923</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>2</span>     <span style=color:#a6e22e>QYPerformanceMonitor</span>            <span style=color:#ae81ff>0</span>x<span style=color:#ae81ff>10</span>dda<span style=color:#ae81ff>4</span>f<span style=color:#ae81ff>1</span>b -[<span style=color:#a6e22e>ViewController</span> <span style=color:#a6e22e>tableView</span>:<span style=color:#a6e22e>cellForRowAtIndexPath</span>:] + <span style=color:#ae81ff>7963</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>3</span>     <span style=color:#a6e22e>UIKit</span>                           <span style=color:#ae81ff>0</span>x<span style=color:#ae81ff>10</span>ed<span style=color:#ae81ff>4</span>d<span style=color:#ae81ff>4</span>f<span style=color:#ae81ff>4</span> -[<span style=color:#a6e22e>UITableView</span> <span style=color:#a6e22e>_createPreparedCellForGlobalRow</span>:<span style=color:#a6e22e>withIndexPath</span>:<span style=color:#a6e22e>willDisplay</span>:] + <span style=color:#ae81ff>1586420</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>通过调用这个static函数BHReadConfiguration，我们就可以拿到之前注册到BeehiveMods特殊段里面的各个Module的类名，都用字符串装在数据里。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)<span style=color:#a6e22e>AnnotationModules</span>
+{
+    <span style=color:#66d9ef>static</span> NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>mods <span style=color:#f92672>=</span> nil;
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        mods <span style=color:#f92672>=</span> BHReadConfiguration(BeehiveModSectName);
+    });
+    <span style=color:#66d9ef>return</span> mods;
+}
+
+
+</code></pre></div><p>这是一个单例数组，里面装的都是之前放在特殊段里面的Module名字对应的字符串数组。</p><p>拿到这个数组以后，就可以注册所有的Module了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registedAnnotationModules</span>
+{
+    
+    NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;*</span>mods <span style=color:#f92672>=</span> [BHAnnotation AnnotationModules];
+    <span style=color:#66d9ef>for</span> (NSString <span style=color:#f92672>*</span>modName <span style=color:#66d9ef>in</span> mods) {
+        <span style=color:#66d9ef>Class</span> cls;
+        <span style=color:#66d9ef>if</span> (modName) {
+            cls <span style=color:#f92672>=</span> NSClassFromString(modName);
+            
+            <span style=color:#66d9ef>if</span> (cls) {
+                [self registerDynamicModule:cls];
+            }
+        }
+    }
+}
+
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerDynamicModule:</span>(<span style=color:#66d9ef>Class</span>)moduleClass
+{
+    [self addModuleFromObject:moduleClass];
+ 
+}
+
+
+</code></pre></div><p>最后还需要把所有已经注册的Module添加到BHModuleManager里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addModuleFromObject:</span>(<span style=color:#66d9ef>id</span>)object
+{
+    <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span>;
+    NSString <span style=color:#f92672>*</span>moduleName <span style=color:#f92672>=</span> nil;
+    
+    <span style=color:#66d9ef>if</span> (object) {
+        <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> object;
+        moduleName <span style=color:#f92672>=</span> NSStringFromClass(<span style=color:#66d9ef>class</span>);
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#66d9ef>return</span> ;
+    }
+    
+    <span style=color:#66d9ef>if</span> ([<span style=color:#66d9ef>class</span> conformsToProtocol:@protocol(BHModuleProtocol)]) {
+        NSMutableDictionary <span style=color:#f92672>*</span>moduleInfo <span style=color:#f92672>=</span> [NSMutableDictionary dictionary];
+        
+        <span style=color:#75715e>// basicModuleLevel 这个方法如果默认不实现，Level默认是Normal
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>BOOL</span> responseBasicLevel <span style=color:#f92672>=</span> [<span style=color:#66d9ef>class</span> instancesRespondToSelector:<span style=color:#66d9ef>@selector</span>(basicModuleLevel)];
+
+        <span style=color:#75715e>// Level是BHModuleNormal，就是1
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>int</span> levelInt <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>;
+        
+        <span style=color:#75715e>// 如果实现了basicModuleLevel方法，那么Level就是BHModuleBasic
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (responseBasicLevel) {
+            <span style=color:#75715e>// Level是Basic，BHModuleBasic就是0
+</span><span style=color:#75715e></span>            levelInt <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+        }
+        
+        <span style=color:#75715e>// @&#34;moduleLevel&#34; 为Key，Level为Value
+</span><span style=color:#75715e></span>        [moduleInfo setObject:<span style=color:#ae81ff>@(</span>levelInt<span style=color:#ae81ff>)</span> forKey:kModuleInfoLevelKey];
+        <span style=color:#66d9ef>if</span> (moduleName) {
+            <span style=color:#75715e>// @&#34;moduleClass&#34;为Key，moduleName为Value
+</span><span style=color:#75715e></span>            [moduleInfo setObject:moduleName forKey:kModuleInfoNameKey];
+        }
+
+        [self.BHModules addObject:moduleInfo];
+    }
+}
+
+</code></pre></div><p>一些需要说明已经在上述代码里面添加了注释。BHModules是一个NSMutableArray，里面存的都是一个个的字典，字典里面有两个Key，一个是@&ldquo;moduleLevel&rdquo;，另一个是@&ldquo;moduleClass&rdquo;。存储已经注册的Module的时候都要判断Level。还有一点需要说明的，所有需要注册的Module必须遵循BHModuleProtocol协议，否则不能被存储。</p><h4 id=2-读取本地pilst文件>2. 读取本地Pilst文件</h4><p>要读取本地的Plist文件之前，需要先设置好路径。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    [BHContext shareInstance].moduleConfigName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;BeeHive.bundle/BeeHive&#34;</span>;<span style=color:#75715e>//可选，默认为BeeHive.bundle/BeeHive.plist
+</span><span style=color:#75715e></span>
+</code></pre></div><p>BeeHive所有的配置都可以写在BHContext进行传递。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_4.png alt></p><p>Plist文件的格式也要是数组里面包一个个的字典。字典里面有两个Key，一个是@&ldquo;moduleLevel&rdquo;，另一个是@&ldquo;moduleClass&rdquo;。注意根的数组的名字叫@“moduleClasses”。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>loadLocalModules</span>
+{
+    
+    NSString <span style=color:#f92672>*</span>plistPath <span style=color:#f92672>=</span> [[NSBundle mainBundle] pathForResource:[BHContext shareInstance].moduleConfigName ofType:<span style=color:#e6db74>@&#34;plist&#34;</span>];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[[NSFileManager defaultManager] fileExistsAtPath:plistPath]) {
+        <span style=color:#66d9ef>return</span>;
+    }
+
+    NSDictionary <span style=color:#f92672>*</span>moduleList <span style=color:#f92672>=</span> [[NSDictionary alloc] initWithContentsOfFile:plistPath];
+    
+    NSArray <span style=color:#f92672>*</span>modulesArray <span style=color:#f92672>=</span> [moduleList objectForKey:kModuleArrayKey];
+    
+    [self.BHModules addObjectsFromArray:modulesArray];
+    
+}
+
+
+</code></pre></div><p>从Plist里面取出数组，然后把数组加入到BHModules数组里面。</p><h4 id=3-load方法注册>3. Load方法注册</h4><p>最后一种注册Module的方法就是在Load方法里面注册Module的类。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span>
+{
+    [BeeHive registerDynamicModule:[self <span style=color:#66d9ef>class</span>]];
+}
+
+
+</code></pre></div><p>调用BeeHive里面的registerDynamicModule:完成Module的注册。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerDynamicModule:</span>(<span style=color:#66d9ef>Class</span>)moduleClass
+{
+    [[BHModuleManager sharedManager] registerDynamicModule:moduleClass];
+}
+
+
+
+</code></pre></div><p>BeeHive里面的registerDynamicModule:的实现还是调用的BHModuleManager的注册方法registerDynamicModule:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerDynamicModule:</span>(<span style=color:#66d9ef>Class</span>)moduleClass
+{
+    [self addModuleFromObject:moduleClass];
+ 
+}
+
+
+</code></pre></div><p>最后还是调用到了BHModuleManager里面的addModuleFromObject:方法，这个方法上面分析过了，不再赘述。</p><p>Load方法还可以用一个宏BH_EXPORT_MODULE来完成。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+
+<span style=color:#75715e>#define BH_EXPORT_MODULE(isAsync) \
+</span><span style=color:#75715e>+ (void)load { [BeeHive registerDynamicModule:[self class]]; } \
+</span><span style=color:#75715e>-(BOOL)async { return [[NSString stringWithUTF8String:#isAsync] boolValue];}
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>BH_EXPORT_MODULE宏里面可以传入一个参数，代表是否异步加载Module模块，如果是YES就是异步加载，如果是NO就是同步加载。</p><p>注册的三种方式就完成了。最后BeeHive还会对这些Module的Class进行一下操作。</p><p>首先在BeeHive初始化setContext:的时候，会分别加载Modules和Services。这里先谈Modules。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setContext:</span>(BHContext <span style=color:#f92672>*</span>)context
+{
+    _context <span style=color:#f92672>=</span> context;
+    
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        [self loadStaticServices];
+        [self loadStaticModules];
+    });
+}
+
+
+</code></pre></div><p>看看loadStaticModules方法里面做了什么事情。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>loadStaticModules</span>
+{
+    <span style=color:#75715e>// 读取本地plist文件里面的Module，并注册到BHModuleManager的BHModules数组中
+</span><span style=color:#75715e></span>    [[BHModuleManager sharedManager] loadLocalModules];
+    
+    <span style=color:#75715e>// 读取特殊段里面的标记数据，并注册到BHModuleManager的BHModules数组中
+</span><span style=color:#75715e></span>    [[BHModuleManager sharedManager] registedAnnotationModules];
+
+    [[BHModuleManager sharedManager] registedAllModules];
+    
+}
+
+
+</code></pre></div><p>这里虽然我们只看到了两种方式，但是实际上BHModules数组里面还会包括通过Load方法注册进来的Module。那么BHModules数组实际上是包含了3种注册方式加进来的Module。</p><p>最后一步，registedAllModules比较关键。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registedAllModules</span>
+{
+
+    <span style=color:#75715e>// 根据优先级从大到小进行排序
+</span><span style=color:#75715e></span>    [self.BHModules sortUsingComparator:<span style=color:#f92672>^</span>NSComparisonResult(NSDictionary <span style=color:#f92672>*</span>module1, NSDictionary <span style=color:#f92672>*</span>module2) {
+      NSNumber <span style=color:#f92672>*</span>module1Level <span style=color:#f92672>=</span> (NSNumber <span style=color:#f92672>*</span>)[module1 objectForKey:kModuleInfoLevelKey];
+      NSNumber <span style=color:#f92672>*</span>module2Level <span style=color:#f92672>=</span>  (NSNumber <span style=color:#f92672>*</span>)[module2 objectForKey:kModuleInfoLevelKey];
+        
+        <span style=color:#66d9ef>return</span> [module1Level intValue] <span style=color:#f92672>&gt;</span> [module2Level intValue];
+    }];
+    
+    NSMutableArray <span style=color:#f92672>*</span>tmpArray <span style=color:#f92672>=</span> [NSMutableArray array];
+    
+    <span style=color:#75715e>//module init
+</span><span style=color:#75715e></span>    [self.BHModules enumerateObjectsUsingBlock:<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>module, NSUInteger idx, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span> _Nonnull stop) {
+        
+        NSString <span style=color:#f92672>*</span>classStr <span style=color:#f92672>=</span> [module objectForKey:kModuleInfoNameKey];
+        
+        <span style=color:#66d9ef>Class</span> moduleClass <span style=color:#f92672>=</span> NSClassFromString(classStr);
+        
+        <span style=color:#66d9ef>if</span> (NSStringFromClass(moduleClass)) {
+            
+            <span style=color:#75715e>// 初始化所有的Module
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>BHModuleProtocol<span style=color:#f92672>&gt;</span> moduleInstance <span style=color:#f92672>=</span> [[moduleClass alloc] init];
+            [tmpArray addObject:moduleInstance];
+        }
+        
+    }];
+    
+    [self.BHModules removeAllObjects];
+
+    [self.BHModules addObjectsFromArray:tmpArray];
+    
+}
+
+
+</code></pre></div><p>BHModules数组在进行registedAllModules方法之前，装的都是一个个的字典，再执行完registedAllModules方法之后，里面装的就都是一个个的Module的实例了。</p><p>registedAllModules方法会先按照Level的优先级从大到小进行排序，然后再按照这个顺序依次初始化所有的Module的实例，存入数组中。最终BHModules数组里面装的是所有的Module实例对象。</p><p>注意，这里有两点需要额外说明：</p><ol><li>限制住了所有的Module的对象都要是遵守BHModuleProtocol协议的。至于为何要遵守BHModuleProtocol协议，下一章节会有详细说明。</li><li>Module不能在任何其他地方alloc创建出来，即使创建一个新的Module实例出来，它也并不在BHModuleManager的管理下，是无法接收BHModuleManager分发的系统事件，创建出来是没有任何意义的。</li></ol><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_5.png alt></p><h3 id=三-beehive模块事件>三. BeeHive模块事件</h3><p>BeeHive会给每个模块提供生命周期事件，用于与BeeHive宿主环境进行必要信息交互，感知模块生命周期的变化。</p><p>BeeHive各个模块会收到一些事件。在BHModuleManager中，所有的事件被定义成了BHModuleEventType枚举。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>NS_ENUM</span>(NSInteger, BHModuleEventType)
+{
+    BHMSetupEvent <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>,
+    BHMInitEvent,
+    BHMTearDownEvent,
+    BHMSplashEvent,
+    BHMQuickActionEvent,
+    BHMWillResignActiveEvent,
+    BHMDidEnterBackgroundEvent,
+    BHMWillEnterForegroundEvent,
+    BHMDidBecomeActiveEvent,
+    BHMWillTerminateEvent,
+    BHMUnmountEvent,
+    BHMOpenURLEvent,
+    BHMDidReceiveMemoryWarningEvent,
+    BHMDidFailToRegisterForRemoteNotificationsEvent,
+    BHMDidRegisterForRemoteNotificationsEvent,
+    BHMDidReceiveRemoteNotificationEvent,
+    BHMDidReceiveLocalNotificationEvent,
+    BHMWillContinueUserActivityEvent,
+    BHMContinueUserActivityEvent,
+    BHMDidFailToContinueUserActivityEvent,
+    BHMDidUpdateUserActivityEvent,
+    BHMDidCustomEvent <span style=color:#f92672>=</span> <span style=color:#ae81ff>1000</span>
+    
+};
+
+
+</code></pre></div><p>上面BHModuleEventType枚举主要分为三种，一种是系统事件，另外一种是应用事件，最后一种是业务自定义事件。</p><h4 id=1-系统事件>1. 系统事件。</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_6.png alt></p><p>上图是官方给出的一个系统事件基本工作流。</p><p>系统事件通常是Application生命周期事件，例如DidBecomeActive、WillEnterBackground等。</p><p>一般做法是把BHAppDelegate接管原来的AppDelegate。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didFinishLaunchingWithOptions:</span>(NSDictionary <span style=color:#f92672>*</span>)launchOptions
+{
+    
+    [[BHModuleManager sharedManager] triggerEvent:BHMSetupEvent];
+    [[BHModuleManager sharedManager] triggerEvent:BHMInitEvent];
+    
+    dispatch_async(dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+        [[BHModuleManager sharedManager] triggerEvent:BHMSplashEvent];
+    });
+    
+    <span style=color:#66d9ef>return</span> YES;
+}
+
+
+<span style=color:#75715e>#if __IPHONE_OS_VERSION_MAX_ALLOWED &gt; 80400 
+</span><span style=color:#75715e></span>
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>performActionForShortcutItem:</span>(UIApplicationShortcutItem <span style=color:#f92672>*</span>)shortcutItem <span style=color:#a6e22e>completionHandler:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>BOOL</span>))completionHandler
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMQuickActionEvent];
+}
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationWillResignActive:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMWillResignActiveEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationDidEnterBackground:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidEnterBackgroundEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationWillEnterForeground:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMWillEnterForegroundEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationDidBecomeActive:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidBecomeActiveEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationWillTerminate:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMWillTerminateEvent];
+}
+
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>openURL:</span>(NSURL <span style=color:#f92672>*</span>)url <span style=color:#a6e22e>sourceApplication:</span>(NSString <span style=color:#f92672>*</span>)sourceApplication <span style=color:#a6e22e>annotation:</span>(<span style=color:#66d9ef>id</span>)annotation
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMOpenURLEvent];
+    <span style=color:#66d9ef>return</span> YES;
+}
+
+<span style=color:#75715e>#if __IPHONE_OS_VERSION_MAX_ALLOWED &gt; 80400
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)app <span style=color:#a6e22e>openURL:</span>(NSURL <span style=color:#f92672>*</span>)url <span style=color:#a6e22e>options:</span>(NSDictionary<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*</span>,<span style=color:#66d9ef>id</span><span style=color:#f92672>&gt;</span> <span style=color:#f92672>*</span>)options
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMOpenURLEvent];
+    <span style=color:#66d9ef>return</span> YES;
+}
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>applicationDidReceiveMemoryWarning:</span>(UIApplication <span style=color:#f92672>*</span>)application
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidReceiveMemoryWarningEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didFailToRegisterForRemoteNotificationsWithError:</span>(NSError <span style=color:#f92672>*</span>)error
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidFailToRegisterForRemoteNotificationsEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didRegisterForRemoteNotificationsWithDeviceToken:</span>(NSData <span style=color:#f92672>*</span>)deviceToken
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidRegisterForRemoteNotificationsEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didReceiveRemoteNotification:</span>(NSDictionary <span style=color:#f92672>*</span>)userInfo
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidReceiveRemoteNotificationEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didReceiveRemoteNotification:</span>(NSDictionary <span style=color:#f92672>*</span>)userInfo <span style=color:#a6e22e>fetchCompletionHandler:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(UIBackgroundFetchResult))completionHandler
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidReceiveRemoteNotificationEvent];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didReceiveLocalNotification:</span>(UILocalNotification <span style=color:#f92672>*</span>)notification
+{
+    [[BHModuleManager sharedManager] triggerEvent:BHMDidReceiveLocalNotificationEvent];
+}
+
+<span style=color:#75715e>#if __IPHONE_OS_VERSION_MAX_ALLOWED &gt; 80000
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didUpdateUserActivity:</span>(NSUserActivity <span style=color:#f92672>*</span>)userActivity
+{
+    <span style=color:#66d9ef>if</span>([UIDevice currentDevice].systemVersion.floatValue <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>8.0f</span>){
+        [[BHModuleManager sharedManager] triggerEvent:BHMDidUpdateUserActivityEvent];
+    }
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>didFailToContinueUserActivityWithType:</span>(NSString <span style=color:#f92672>*</span>)userActivityType <span style=color:#a6e22e>error:</span>(NSError <span style=color:#f92672>*</span>)error
+{
+    <span style=color:#66d9ef>if</span>([UIDevice currentDevice].systemVersion.floatValue <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>8.0f</span>){
+        [[BHModuleManager sharedManager] triggerEvent:BHMDidFailToContinueUserActivityEvent];
+    }
+}
+
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>continueUserActivity:</span>(NSUserActivity <span style=color:#f92672>*</span>)userActivity <span style=color:#a6e22e>restorationHandler:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(NSArray <span style=color:#f92672>*</span> _Nullable))restorationHandler
+{
+    <span style=color:#66d9ef>if</span>([UIDevice currentDevice].systemVersion.floatValue <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>8.0f</span>){
+        [[BHModuleManager sharedManager] triggerEvent:BHMContinueUserActivityEvent];
+    }
+    <span style=color:#66d9ef>return</span> YES;
+}
+
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>application:</span>(UIApplication <span style=color:#f92672>*</span>)application <span style=color:#a6e22e>willContinueUserActivityWithType:</span>(NSString <span style=color:#f92672>*</span>)userActivityType
+{
+    <span style=color:#66d9ef>if</span>([UIDevice currentDevice].systemVersion.floatValue <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>8.0f</span>){
+        [[BHModuleManager sharedManager] triggerEvent:BHMWillContinueUserActivityEvent];
+    }
+    <span style=color:#66d9ef>return</span> YES;
+}
+
+
+
+
+</code></pre></div><p>这样所有的系统事件都可以通过调用BHModuleManager的triggerEvent:来处理。</p><p>在BHModuleManager中有2个事件很特殊，一个是BHMInitEvent，一个是BHMTearDownEvent。</p><p>先来说说BHMInitEvent事件。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>handleModulesInitEvent</span>
+{
+    
+    [self.BHModules enumerateObjectsUsingBlock:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>BHModuleProtocol<span style=color:#f92672>&gt;</span> moduleInstance, NSUInteger idx, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span> _Nonnull stop) {
+        <span style=color:#66d9ef>__weak</span> <span style=color:#66d9ef>typeof</span>(<span style=color:#f92672>&amp;*</span>self) wself <span style=color:#f92672>=</span> self;
+        <span style=color:#66d9ef>void</span> ( <span style=color:#f92672>^</span> bk )();
+        bk <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(){
+            <span style=color:#66d9ef>__strong</span> <span style=color:#66d9ef>typeof</span>(<span style=color:#f92672>&amp;*</span>self) sself <span style=color:#f92672>=</span> wself;
+            <span style=color:#66d9ef>if</span> (sself) {
+                <span style=color:#66d9ef>if</span> ([moduleInstance respondsToSelector:<span style=color:#66d9ef>@selector</span>(modInit:)]) {
+                    [moduleInstance modInit:[BHContext shareInstance]];
+                }
+            }
+        };
+
+        [[BHTimeProfiler sharedTimeProfiler] recordEventTime:[NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ --- modInit:&#34;</span>, [moduleInstance <span style=color:#66d9ef>class</span>]]];
+        
+        <span style=color:#66d9ef>if</span> ([moduleInstance respondsToSelector:<span style=color:#66d9ef>@selector</span>(async)]) {
+            <span style=color:#66d9ef>BOOL</span> async <span style=color:#f92672>=</span> [moduleInstance async];
+            
+            <span style=color:#66d9ef>if</span> (async) {
+                dispatch_async(dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+                    bk();
+                });
+                
+            } <span style=color:#66d9ef>else</span> {
+                bk();
+            }
+        } <span style=color:#66d9ef>else</span> {
+            bk();
+        }
+    }];
+}
+
+
+
+</code></pre></div><p>Init事件就是初始化Module模块的事件。遍历BHModules数组，依次对每个Module实例调用modInit:方法。这里会有异步加载的问题。如果moduleInstance重写了async方法，那么就会根据这个方法返回的值来进行是否异步加载的判断。</p><p>modInit:方法里面干很多事情。比如说对环境的判断，根据环境的不同初始化不同的方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>modInit:</span>(BHContext <span style=color:#f92672>*</span>)context
+{
+    <span style=color:#66d9ef>switch</span> (context.env) {
+        <span style=color:#66d9ef>case</span> BHEnvironmentDev:
+            <span style=color:#75715e>//....初始化开发环境
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHEnvironmentProd:
+            <span style=color:#75715e>//....初始化生产环境
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span>
+            <span style=color:#66d9ef>break</span>;
+    }
+}
+
+
+</code></pre></div><p>再比如在初始化的时候注册一些协议：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>modInit:</span>(BHContext <span style=color:#f92672>*</span>)context
+{
+  [[BeeHive shareInstance] registerService:@protocol(UserTrackServiceProtocol) service:[BHUserTrackViewController <span style=color:#66d9ef>class</span>]];
+}
+
+</code></pre></div><p>总之这里可以干一些初始化需要做的事情。</p><p>再来说说BHMTearDownEvent事件。这个事件是拆除Module的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>handleModulesTearDownEvent</span>
+{
+    <span style=color:#75715e>//Reverse Order to unload
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>int</span> i <span style=color:#f92672>=</span> (<span style=color:#66d9ef>int</span>)self.BHModules.count <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>; i <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>0</span>; i<span style=color:#f92672>--</span>) {
+        <span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>BHModuleProtocol<span style=color:#f92672>&gt;</span> moduleInstance <span style=color:#f92672>=</span> [self.BHModules objectAtIndex:i];
+        <span style=color:#66d9ef>if</span> (moduleInstance <span style=color:#f92672>&amp;&amp;</span> [moduleInstance respondsToSelector:<span style=color:#66d9ef>@selector</span>(modTearDown:)]) {
+            [moduleInstance modTearDown:[BHContext shareInstance]];
+        }
+    }
+}
+
+
+</code></pre></div><p>由于Module是有优先级Level，所以拆除的时候需要从低优先级开始拆，即数组逆序循环。对每个Module实例发送modTearDown:事件即可。</p><h4 id=2-应用事件>2. 应用事件</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_7.png alt></p><p>官方给出的应用事件工作流如上：</p><p>在系统事件的基础之上，扩展了应用的通用事件，例如modSetup、modInit等，可以用于编码实现各插件模块的设置与初始化。</p><p>所有的事件都可以通过调用BHModuleManager的triggerEvent:来处理。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>triggerEvent:</span>(BHModuleEventType)eventType
+{
+    <span style=color:#66d9ef>switch</span> (eventType) {
+        <span style=color:#66d9ef>case</span> BHMSetupEvent:
+            [self handleModuleEvent:kSetupSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMInitEvent:
+            <span style=color:#75715e>//special
+</span><span style=color:#75715e></span>            [self handleModulesInitEvent];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMTearDownEvent:
+            <span style=color:#75715e>//special
+</span><span style=color:#75715e></span>            [self handleModulesTearDownEvent];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMSplashEvent:
+            [self handleModuleEvent:kSplashSeletor];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMWillResignActiveEvent:
+            [self handleModuleEvent:kWillResignActiveSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMDidEnterBackgroundEvent:
+            [self handleModuleEvent:kDidEnterBackgroundSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMWillEnterForegroundEvent:
+            [self handleModuleEvent:kWillEnterForegroundSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMDidBecomeActiveEvent:
+            [self handleModuleEvent:kDidBecomeActiveSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMWillTerminateEvent:
+            [self handleModuleEvent:kWillTerminateSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMUnmountEvent:
+            [self handleModuleEvent:kUnmountEventSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMOpenURLEvent:
+            [self handleModuleEvent:kOpenURLSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMDidReceiveMemoryWarningEvent:
+            [self handleModuleEvent:kDidReceiveMemoryWarningSelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMDidReceiveRemoteNotificationEvent:
+            [self handleModuleEvent:kDidReceiveRemoteNotificationsSelector];
+            <span style=color:#66d9ef>break</span>;
+
+        <span style=color:#66d9ef>case</span> BHMDidFailToRegisterForRemoteNotificationsEvent:
+            [self handleModuleEvent:kFailToRegisterForRemoteNotificationsSelector];
+            <span style=color:#66d9ef>break</span>;
+        <span style=color:#66d9ef>case</span> BHMDidRegisterForRemoteNotificationsEvent:
+            [self handleModuleEvent:kDidRegisterForRemoteNotificationsSelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMDidReceiveLocalNotificationEvent:
+            [self handleModuleEvent:kDidReceiveLocalNotificationsSelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMWillContinueUserActivityEvent:
+            [self handleModuleEvent:kWillContinueUserActivitySelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMContinueUserActivityEvent:
+            [self handleModuleEvent:kContinueUserActivitySelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMDidFailToContinueUserActivityEvent:
+            [self handleModuleEvent:kFailToContinueUserActivitySelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMDidUpdateUserActivityEvent:
+            [self handleModuleEvent:kDidUpdateContinueUserActivitySelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>case</span> BHMQuickActionEvent:
+            [self handleModuleEvent:kQuickActionSelector];
+            <span style=color:#66d9ef>break</span>;
+            
+        <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span>
+            [BHContext shareInstance].customEvent <span style=color:#f92672>=</span> eventType;
+            [self handleModuleEvent:kAppCustomSelector];
+            <span style=color:#66d9ef>break</span>;
+    }
+}
+
+
+
+</code></pre></div><p>从上述代码可以看出，除去BHMInitEvent初始化事件和BHMTearDownEvent拆除Module事件这两个特殊事件以外，所有的事件都是调用的handleModuleEvent:方法。上述的switch-case里面，除去系统事件以外的，和default里面的customEvent以外，剩下的事件都是应用事件。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>handleModuleEvent:</span>(NSString <span style=color:#f92672>*</span>)selectorStr
+{
+    <span style=color:#66d9ef>SEL</span> seletor <span style=color:#f92672>=</span> NSSelectorFromString(selectorStr);
+    [self.BHModules enumerateObjectsUsingBlock:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>BHModuleProtocol<span style=color:#f92672>&gt;</span> moduleInstance, NSUInteger idx, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span> _Nonnull stop) {
+        <span style=color:#66d9ef>if</span> ([moduleInstance respondsToSelector:seletor]) {
+<span style=color:#75715e>#pragma clang diagnostic push
+</span><span style=color:#75715e>#pragma clang diagnostic ignored &#34;-Warc-performSelector-leaks&#34;
+</span><span style=color:#75715e></span>            [moduleInstance performSelector:seletor withObject:[BHContext shareInstance]];
+<span style=color:#75715e>#pragma clang diagnostic pop
+</span><span style=color:#75715e></span>
+        [[BHTimeProfiler sharedTimeProfiler] recordEventTime:[NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ --- %@&#34;</span>, [moduleInstance <span style=color:#66d9ef>class</span>], NSStringFromSelector(seletor)]];
+
+        }
+    }];
+}
+
+
+</code></pre></div><p>handleModuleEvent:方法的实现就是遍历BHModules数组，调用performSelector:withObject:方法实现对应方法调用。</p><p>注意这里所有的Module必须是遵循BHModuleProtocol的，否则无法接收到这些事件的消息。</p><h4 id=3-业务自定义事件>3. 业务自定义事件</h4><p>如果觉得系统事件、通用事件不足以满足需要，我们还将事件封装简化成BHAppdelgate，你可以通过继承 BHAppdelegate来扩展自己的事件。</p><p>自定义的事件的type就是BHMDidCustomEvent = 1000 。</p><p>在BeeHive里面有一个tiggerCustomEvent:方法就是用来处理这些事件的，尤其是处理自定义事件的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>tiggerCustomEvent:</span>(NSInteger)eventType
+{
+    <span style=color:#66d9ef>if</span>(eventType <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>1000</span>) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    [[BHModuleManager sharedManager] triggerEvent:eventType];
+}
+
+</code></pre></div><p>这个方法只会把自定义事件透传给BHModuleManager进行处理，其他一切的事件都不会做任何相应。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_8.png alt></p><h3 id=四-beehive模块调用>四. BeeHive模块调用</h3><p>在BeeHive中是通过BHServiceManager来管理各个Protocol的。BHServiceManager中只会管理已经被注册过的Protocol。</p><p>注册Protocol的方式总共有三种，和注册Module是一样一一对应的：</p><h4 id=1-annotation方式注册-1>1. Annotation方式注册</h4><p>通过BeeHiveService宏进行Annotation标记。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+BeeHiveService(HomeServiceProtocol,BHViewController)
+
+</code></pre></div><p>BeeHiveService宏定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define BeeHiveService(servicename,impl) \
+</span><span style=color:#75715e>char * k##servicename##_service BeeHiveDATA(BeehiveServices) = &#34;{ \&#34;&#34;#servicename&#34;\&#34; : \&#34;&#34;#impl&#34;\&#34;}&#34;;
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>BeeHiveDATA又是一个宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define BeeHiveDATA(sectname) __attribute((used, section(&#34;__DATA,&#34;#sectname&#34; &#34;)))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>最终BeeHiveService宏会在预编译结束会完全展开成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kHomeServiceProtocol_service <span style=color:#a6e22e>__attribute</span>((used, section(<span style=color:#e6db74>&#34;__DATA,&#34;&#34;BeehiveServices&#34;&#34; &#34;</span>))) <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;</span>{ <span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>&#34;&#34;&#34;HomeServiceProtocol&#34;&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> : </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;&#34;BHViewController&#34;&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>}&#34;</span>;
+
+</code></pre></div><p>这里类比注册Module，也是把数据存在特殊的段内，具体原理上面已经分析过了，这里不再赘述。</p><p>同理，通过调用static函数BHReadConfiguration，我们就可以拿到之前注册到BeehiveServices特殊段里面的各个Protocol协议对应Class字典的字符串。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#e6db74>&#34;{ </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>HomeServiceProtocol</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> : </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>BHViewController</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>}&#34;</span>
+
+
+</code></pre></div><p>数组里面存的都是这样的一些Json字符串。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>)<span style=color:#a6e22e>AnnotationServices</span>
+{
+    <span style=color:#66d9ef>static</span> NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;</span> <span style=color:#f92672>*</span>services <span style=color:#f92672>=</span> nil;
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        services <span style=color:#f92672>=</span> BHReadConfiguration(BeehiveServiceSectName);
+    });
+    <span style=color:#66d9ef>return</span> services;
+}
+
+
+</code></pre></div><p>这是一个单例数组，里面装的都是之前放在特殊段里面的Protocol协议对应Class字典的字符串数组，即为Json字符串数组。</p><p>拿到这个数组以后，就可以注册所有的Protocol协议了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerAnnotationServices</span>
+{
+    NSArray<span style=color:#f92672>&lt;</span>NSString <span style=color:#f92672>*&gt;*</span>services <span style=color:#f92672>=</span> [BHAnnotation AnnotationServices];
+    
+    <span style=color:#66d9ef>for</span> (NSString <span style=color:#f92672>*</span>map <span style=color:#66d9ef>in</span> services) {
+        NSData <span style=color:#f92672>*</span>jsonData <span style=color:#f92672>=</span>  [map dataUsingEncoding:NSUTF8StringEncoding];
+        NSError <span style=color:#f92672>*</span>error <span style=color:#f92672>=</span> nil;
+        <span style=color:#66d9ef>id</span> json <span style=color:#f92672>=</span> [NSJSONSerialization JSONObjectWithData:jsonData options:<span style=color:#ae81ff>0</span> error:<span style=color:#f92672>&amp;</span>error];
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>error) {
+            <span style=color:#66d9ef>if</span> ([json isKindOfClass:[NSDictionary <span style=color:#66d9ef>class</span>]] <span style=color:#f92672>&amp;&amp;</span> [json allKeys].count) {
+                
+                NSString <span style=color:#f92672>*</span>protocol <span style=color:#f92672>=</span> [json allKeys][<span style=color:#ae81ff>0</span>];
+                NSString <span style=color:#f92672>*</span>clsName  <span style=color:#f92672>=</span> [json allValues][<span style=color:#ae81ff>0</span>];
+                
+                <span style=color:#66d9ef>if</span> (protocol <span style=color:#f92672>&amp;&amp;</span> clsName) {
+                    [self registerService:NSProtocolFromString(protocol) implClass:NSClassFromString(clsName)];
+                }
+                
+            }
+        }
+    }
+
+}
+
+</code></pre></div><p>由于services数组里面存的都是Json字符串，所以先转换成字典，然后再依次取出protocol和className。最后调用registerService:implClass:方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerService:</span>(Protocol <span style=color:#f92672>*</span>)service <span style=color:#a6e22e>implClass:</span>(<span style=color:#66d9ef>Class</span>)implClass
+{
+    NSParameterAssert(service <span style=color:#f92672>!=</span> nil);
+    NSParameterAssert(implClass <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#75715e>// impClass 是否遵循了 Protocol 协议
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[implClass conformsToProtocol:service] <span style=color:#f92672>&amp;&amp;</span> self.enableException) {
+        <span style=color:#66d9ef>@throw</span> [NSException exceptionWithName:NSInternalInconsistencyException reason:[NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ module does not comply with %@ protocol&#34;</span>, NSStringFromClass(implClass), NSStringFromProtocol(service)] userInfo:nil];
+    }
+    
+    <span style=color:#75715e>// Protocol 协议是否已经注册过了
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([self checkValidService:service] <span style=color:#f92672>&amp;&amp;</span> self.enableException) {
+        <span style=color:#66d9ef>@throw</span> [NSException exceptionWithName:NSInternalInconsistencyException reason:[NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ protocol has been registed&#34;</span>, NSStringFromProtocol(service)] userInfo:nil];
+    }
+    
+    NSMutableDictionary <span style=color:#f92672>*</span>serviceInfo <span style=color:#f92672>=</span> [NSMutableDictionary dictionary];
+    [serviceInfo setObject:NSStringFromProtocol(service) forKey:kService];
+    [serviceInfo setObject:NSStringFromClass(implClass) forKey:kImpl];
+    
+    [self.lock lock];
+    [self.allServices addObject:serviceInfo];
+    [self.lock unlock];
+}
+
+</code></pre></div><p>在注册registerService:implClass:之前会有2个检查，一是检查impClass 是否遵循了 Protocol 协议，二是检查Protocol 协议是否已经注册过了。如果有一个检查出现问题，都会抛出异常。</p><p>如果检查都过了，那么就加入Key为@&ldquo;service"的，Value为Protocol的名字，和Key为@“impl”的，Value为Class名字的两个键值对。最后把这个字典存入allServices数组中。</p><p>在存储allServices数组的时候，是要加锁的。这里的lock是NSRecursiveLock。防止出现递归引起的线程安全问题。</p><h4 id=2-读取本地pilst文件-1>2. 读取本地Pilst文件</h4><p>要读取本地的Plist文件之前，需要先设置好路径。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[BHContext shareInstance].serviceConfigName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;BeeHive.bundle/BHService&#34;</span>;
+
+</code></pre></div><p>BeeHive所有的配置都可以写在BHContext进行传递。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_9.png alt></p><p>Plist文件的格式也要是数组里面包一个个的字典。字典里面有两个Key，一个是@&ldquo;service&rdquo;，另一个是@&ldquo;impl&rdquo;。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerLocalServices</span>
+{
+    NSString <span style=color:#f92672>*</span>serviceConfigName <span style=color:#f92672>=</span> [BHContext shareInstance].serviceConfigName;
+    
+    NSString <span style=color:#f92672>*</span>plistPath <span style=color:#f92672>=</span> [[NSBundle mainBundle] pathForResource:serviceConfigName ofType:<span style=color:#e6db74>@&#34;plist&#34;</span>];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>plistPath) {
+        <span style=color:#66d9ef>return</span>;
+    }
+    
+    NSArray <span style=color:#f92672>*</span>serviceList <span style=color:#f92672>=</span> [[NSArray alloc] initWithContentsOfFile:plistPath];
+    
+    [self.lock lock];
+    [self.allServices addObjectsFromArray:serviceList];
+    [self.lock unlock];
+}
+
+
+</code></pre></div><p>从Plist里面取出数组，然后把数组加入到allServices数组里面。</p><h4 id=3-load方法注册-1>3. Load方法注册</h4><p>最后一种注册Protocol的方法就是在Load方法里面注册Protocol协议。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span>
+{
+   [[BeeHive shareInstance] registerService:@protocol(UserTrackServiceProtocol) service:[BHUserTrackViewController <span style=color:#66d9ef>class</span>]];
+}
+
+</code></pre></div><p>调用BeeHive里面的registerService:service:完成Module的注册。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>registerService:</span>(Protocol <span style=color:#f92672>*</span>)proto <span style=color:#a6e22e>service:</span>(<span style=color:#66d9ef>Class</span>) serviceClass
+{
+    [[BHServiceManager sharedManager] registerService:proto implClass:serviceClass];
+}
+
+</code></pre></div><p>BeeHive里面的registerService:service:的实现还是调用的BHServiceManager的注册方法registerService:implClass:。这个方法上面分析过了，不再赘述。</p><p>至此，3种注册Protocol的方式就完成了。</p><p>在之前分析注册Module的时候，我们知道在BeeHive在setContext:的时候会调用loadStaticServices方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+-(<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>loadStaticServices</span>
+{
+    <span style=color:#75715e>// 是否开启异常检测
+</span><span style=color:#75715e></span>    [BHServiceManager sharedManager].enableException <span style=color:#f92672>=</span> self.enableException;
+    
+    <span style=color:#75715e>// 读取本地plist文件里面的Protocol，并注册到BHServiceManager的allServices数组中
+</span><span style=color:#75715e></span>    [[BHServiceManager sharedManager] registerLocalServices];
+    
+    <span style=color:#75715e>// 读取特殊段里面的标记数据，并注册到BHServiceManager的allServices数组中
+</span><span style=color:#75715e></span>    [[BHServiceManager sharedManager] registerAnnotationServices];
+    
+}
+
+</code></pre></div><p>这里虽然我们只看到了两种方式，但是实际上allServices数组里面还会包括通过Load方法注册进来的Protocol。那么allServices数组实际上是包含了3种注册方式加进来的Protocol。</p><p>这里就没有注册Module的最后一步初始化实例的过程。</p><p>但是Protocol比Module多一个方法，返回能相应Protocol实例对象的方法。</p><p>在BeeHive中有这样一个方法，调用这个方法就可以返回一个能相应Protocol的实例对象。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>createService:</span>(Protocol <span style=color:#f92672>*</span>)proto;
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>createService:</span>(Protocol <span style=color:#f92672>*</span>)proto;
+{
+    <span style=color:#66d9ef>return</span> [[BHServiceManager sharedManager] createService:proto];
+}
+
+
+</code></pre></div><p>实质是调用了BHServiceManager的createService:方法。createService:方法具体实现如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>createService:</span>(Protocol <span style=color:#f92672>*</span>)service
+{
+    <span style=color:#66d9ef>id</span> implInstance <span style=color:#f92672>=</span> nil;
+    
+    <span style=color:#75715e>// Protocol 协议是否已经注册过了
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[self checkValidService:service] <span style=color:#f92672>&amp;&amp;</span> self.enableException) {
+        <span style=color:#66d9ef>@throw</span> [NSException exceptionWithName:NSInternalInconsistencyException reason:[NSString stringWithFormat:<span style=color:#e6db74>@&#34;%@ protocol does not been registed&#34;</span>, NSStringFromProtocol(service)] userInfo:nil];
+    }
+    
+    <span style=color:#66d9ef>Class</span> implClass <span style=color:#f92672>=</span> [self serviceImplClass:service];
+    
+    <span style=color:#66d9ef>if</span> ([[implClass <span style=color:#66d9ef>class</span>] respondsToSelector:<span style=color:#66d9ef>@selector</span>(shareInstance)])
+        implInstance <span style=color:#f92672>=</span> [[implClass <span style=color:#66d9ef>class</span>] shareInstance];
+    <span style=color:#66d9ef>else</span>
+        implInstance <span style=color:#f92672>=</span> [[implClass alloc] init];
+    
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[implInstance respondsToSelector:<span style=color:#66d9ef>@selector</span>(singleton)]) {
+        <span style=color:#66d9ef>return</span> implInstance;
+    }
+    
+    NSString <span style=color:#f92672>*</span>serviceStr <span style=color:#f92672>=</span> NSStringFromProtocol(service);
+    
+    <span style=color:#75715e>// 是否需要缓存
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> ([implInstance singleton]) {
+        <span style=color:#66d9ef>id</span> protocol <span style=color:#f92672>=</span> [[BHContext shareInstance] getServiceInstanceFromServiceName:serviceStr];
+        
+        <span style=color:#66d9ef>if</span> (protocol) {
+            <span style=color:#66d9ef>return</span> protocol;
+        } <span style=color:#66d9ef>else</span> {
+            [[BHContext shareInstance] addServiceWithImplInstance:implInstance serviceName:serviceStr];
+        }
+        
+    } <span style=color:#66d9ef>else</span> {
+        [[BHContext shareInstance] addServiceWithImplInstance:implInstance serviceName:serviceStr];
+    }
+    
+    <span style=color:#66d9ef>return</span> implInstance;
+}
+
+</code></pre></div><p>这个方法也会先检查Protocol协议是否是注册过的。然后接着取出字典里面对应的Class，如果实现了shareInstance方法，那么就生成一个单例出来，如果没有，那么就随便生成一个对象出来。如果还实现了singleton，就能进一步的把implInstance和serviceStr对应的加到BHContext的servicesByName字典里面缓存起来。这样就可以随着上下文传递了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>UserTrackServiceProtocol<span style=color:#f92672>&gt;</span> v4 <span style=color:#f92672>=</span> [[BeeHive shareInstance] createService:@protocol(UserTrackServiceProtocol)];
+<span style=color:#66d9ef>if</span> ([v4 isKindOfClass:[UIViewController <span style=color:#66d9ef>class</span>]]) {
+    [self registerViewController:(UIViewController <span style=color:#f92672>*</span>)v4 title:<span style=color:#e6db74>@&#34;埋点3&#34;</span> iconName:nil];
+}
+
+
+</code></pre></div><p>上面是官方给的例子，Module之间的调用就用这种方式，就可以得到很好的解耦了。</p><h3 id=五-其他的一些辅助类>五. 其他的一些辅助类</h3><p>还有一些辅助类，在上面没有提到的，这里就来一个汇总，一起分析了。</p><p>BHConfig这也是一个单例，里面保存了一个config的NSMutableDictionary字典。字典维护了一些动态的环境变量，作为BHContext的补充存在。</p><p>BHContext也是一个单例，里面有2个NSMutableDictionary字典，一个是modulesByName，另一个是servicesByName。BHContext主要就是用来保存各种上下文环境的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>BHContext</span> : <span style=color:#a6e22e>NSObject</span>
+
+<span style=color:#75715e>//global env
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) BHEnvironmentType env;
+
+<span style=color:#75715e>//global config
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) BHConfig <span style=color:#f92672>*</span>config;
+
+<span style=color:#75715e>//application appkey
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSString <span style=color:#f92672>*</span>appkey;
+<span style=color:#75715e>//customEvent&gt;=1000
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>assign</span>) NSInteger customEvent;
+
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) UIApplication <span style=color:#f92672>*</span>application;
+
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSDictionary <span style=color:#f92672>*</span>launchOptions;
+
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSString <span style=color:#f92672>*</span>moduleConfigName;
+
+<span style=color:#66d9ef>@property</span>(<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSString <span style=color:#f92672>*</span>serviceConfigName;
+
+<span style=color:#75715e>//3D-Touch model
+</span><span style=color:#75715e></span><span style=color:#75715e>#if __IPHONE_OS_VERSION_MAX_ALLOWED &gt; 80400
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) BHShortcutItem <span style=color:#f92672>*</span>touchShortcutItem;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>//OpenURL model
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) BHOpenURLItem <span style=color:#f92672>*</span>openURLItem;
+
+<span style=color:#75715e>//Notifications Remote or Local
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) BHNotificationsItem <span style=color:#f92672>*</span>notificationsItem;
+
+<span style=color:#75715e>//user Activity Model
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) BHUserActivityItem <span style=color:#f92672>*</span>userActivityItem;
+
+<span style=color:#66d9ef>@end</span>
+
+
+
+</code></pre></div><p>在application:didFinishLaunchingWithOptions:的时候，就可以初始化大量的上下文信息。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    [BHContext shareInstance].application <span style=color:#f92672>=</span> application;
+    [BHContext shareInstance].launchOptions <span style=color:#f92672>=</span> launchOptions;
+    [BHContext shareInstance].moduleConfigName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;BeeHive.bundle/BeeHive&#34;</span>;<span style=color:#75715e>//可选，默认为BeeHive.bundle/BeeHive.plist
+</span><span style=color:#75715e></span>    [BHContext shareInstance].serviceConfigName <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;BeeHive.bundle/BHService&#34;</span>;
+
+</code></pre></div><p>BHTimeProfiler就是用来进行计算时间性能方面的Profiler。</p><p>BHWatchDog是可以开一个线程，设置好handler，每隔一段时间就执行一个handler。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_10.png alt></p><h3 id=六-可能还在完善中的功能>六. 可能还在完善中的功能</h3><p>BeeHive通过处理Event编写各个业务模块可以实现插件化编程，各业务模块之间没有任何依赖，core与module之间通过event交互，实现了插件隔离。但有时候需要模块间的相互调用某些功能来协同完成功能。</p><h4 id=1-功能还有待完善>1. 功能还有待完善</h4><p>通常会有三种形式的接口访问形式：</p><ol><li>基于接口的实现Service访问方式（Java spring框架实现）</li><li>基于函数调用约定实现的Export Method(PHP的extension，ReactNative的扩展机制)</li><li>基于跨应用实现的URL Route模式(iPhone App之间的互访)</li></ol><p>BeeHive目前只实现了第一种方式，后两种方式还需要继续完善。</p><h4 id=2-解耦还不够彻底>2. 解耦还不够彻底</h4><p>基于接口Service访问的优点是可以编译时检查发现接口的变更，从而及时修正接口问题。缺点是需要依赖接口定义的头文件，通过模块增加得越多，维护接口定义的也有一定工作量。</p><h4 id=3-设计思路还可以继续改进和优化>3. 设计思路还可以继续改进和优化</h4><p>BHServiceManager内部维护了一个数组，数组中的一个个字典，Key为@&ldquo;service"的，Value为Protocol的名字，和Key为@“impl”的，Value为Class名字的两个键值对。与其这样设计，还不如直接使用NSMutableDictionary，Key使用Protocol，Value为Class呢？搜索的时候减少了手动循环过程。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/41_11.gif alt></p><h3 id=结尾>结尾</h3><p>BeeHive作为阿里开源的一套模块间的解耦方案，思路还是很值得我们学习的。目前版本是v1.2.0，相信在后面的版本迭代更新中，功能会更加的完善，做法会更加的优雅，值得期待！</p><h3 id=更新>更新：</h3><p>有些同学问，宏展开怎么有那么多双引号的问题：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define BeeHiveMod(name) \
+</span><span style=color:#75715e>class BeeHive; char * k##name##_mod BeeHiveDATA(BeehiveMods) = &#34;&#34;#name&#34;&#34;;
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define BeeHiveService(servicename,impl) \
+</span><span style=color:#75715e>class BeeHive; char * k##servicename##_service BeeHiveDATA(BeehiveServices) = &#34;{ \&#34;&#34;#servicename&#34;\&#34; : \&#34;&#34;#impl&#34;\&#34;}&#34;;
+</span><span style=color:#75715e></span>
+</code></pre></div><p>首先 #在宏里面代表的是把后面连接的转换为字符串。例如，#servicename 就是把 servicename 代替的转换成字符串。再外面一层双引号，是起到了类似占位符的作用，是为了分离开前面双引号。如果直接写 "#servicename" ，你会发现宏进行预编译的时候，并不会把 #servicename 整个当初替换量进行替换，而是把整个双引号括起来的当做一个整的字符串。那这样就达不到我们要替换的目的了。所以需要再加一层双引号，即 &ldquo;#servicename&rdquo; 。最后标准的 Json ，每个 key 和 value 都是带双引号的，所以我们外层再加上一层经过转义字符转义后的双引号。于是就得到了最终的样子—— ""#servicename&rdquo;" 。</p><p>于是乎，经过预编译的替换，就会产生下列的结果，很多个双引号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kShopModule_mod <span style=color:#a6e22e>__attribute</span>((used, section(<span style=color:#e6db74>&#34;__DATA,&#34;&#34;BeehiveMods&#34;&#34; &#34;</span>))) <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;&#34;ShopModule&#34;&#34;&#34;</span>;
+
+
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> kHomeServiceProtocol_service <span style=color:#a6e22e>__attribute</span>((used, section(<span style=color:#e6db74>&#34;__DATA,&#34;&#34;BeehiveServices&#34;&#34; &#34;</span>))) <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;</span>{ <span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>&#34;&#34;&#34;HomeServiceProtocol&#34;&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74> : </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;&#34;BHViewController&#34;&#34;</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>}&#34;</span>;
+
+</code></pre></div><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-beehive概述>一. BeeHive概述</a></li><li><a href=#二-beehive模块注册>二. BeeHive模块注册</a><ul><li><a href=#1-annotation方式注册>1. Annotation方式注册</a></li><li><a href=#2-读取本地pilst文件>2. 读取本地Pilst文件</a></li><li><a href=#3-load方法注册>3. Load方法注册</a></li></ul></li><li><a href=#三-beehive模块事件>三. BeeHive模块事件</a><ul><li><a href=#1-系统事件>1. 系统事件。</a></li><li><a href=#2-应用事件>2. 应用事件</a></li><li><a href=#3-业务自定义事件>3. 业务自定义事件</a></li></ul></li><li><a href=#四-beehive模块调用>四. BeeHive模块调用</a><ul><li><a href=#1-annotation方式注册-1>1. Annotation方式注册</a></li><li><a href=#2-读取本地pilst文件-1>2. 读取本地Pilst文件</a></li><li><a href=#3-load方法注册-1>3. Load方法注册</a></li></ul></li><li><a href=#五-其他的一些辅助类>五. 其他的一些辅助类</a></li><li><a href=#六-可能还在完善中的功能>六. 可能还在完善中的功能</a><ul><li><a href=#1-功能还有待完善>1. 功能还有待完善</a></li><li><a href=#2-解耦还不够彻底>2. 解耦还不够彻底</a></li><li><a href=#3-设计思路还可以继续改进和优化>3. 设计思路还可以继续改进和优化</a></li></ul></li><li><a href=#结尾>结尾</a></li><li><a href=#更新>更新：</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&text=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&is_video=false&description=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fbeehive%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&title=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&name=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6&description=%e5%89%8d%e8%a8%80%20BeeHive%e6%98%af%e9%98%bf%e9%87%8c%e5%b7%b4%e5%b7%b4%e5%85%ac%e5%8f%b8%e5%bc%80%e6%ba%90%e7%9a%84%e4%b8%80%e4%b8%aaiOS%e6%a1%86%e6%9e%b6%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%a1%86%e6%9e%b6%e6%98%afApp%e6%a8%a1%e5%9d%97%e5%8c%96%e7%bc%96%e7%a8%8b%e7%9a%84%e6%a1%86%e6%9e%b6%e4%b8%80%e7%a7%8d%e5%ae%9e%e7%8e%b0%e6%96%b9%e6%a1%88%ef%bc%8c%e5%90%b8%e6%94%b6%e4%ba%86Spring%e6%a1%86%e6%9e%b6Service%e7%9a%84%e7%90%86%e5%bf%b5%e6%9d%a5%e5%ae%9e%e7%8e%b0%e6%a8%a1%e5%9d%97%e9%97%b4%e7%9a%84API%e8%a7%a3%e8%80%a6%e3%80%82%0aBeeHive%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e7%81%b5%e6%84%9f%e6%9d%a5%e6%ba%90%e4%ba%8e%e8%9c%82%e7%aa%9d%e3%80%82%e8%9c%82%e7%aa%9d%e6%98%af%e4%b8%96%e7%95%8c%e4%b8%8a%e9%ab%98%e5%ba%a6%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e5%b7%a5%e7%a8%8b%e7%bb%93%e6%9e%84%ef%bc%8c%e5%85%ad%e8%be%b9%e5%bd%a2%e7%9a%84%e8%ae%be%e8%ae%a1%e8%83%bd%e5%b8%a6%e6%9d%a5%e6%97%a0%e9%99%90%e6%89%a9%e5%bc%a0%e7%9a%84%e5%8f%af%e8%83%bd%e3%80%82%e6%89%80%e4%bb%a5%e5%b0%b1%e7%94%a8%e4%ba%86%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e4%bd%9c%e4%b8%ba%e5%bc%80%e6%ba%90%e9%a1%b9%e7%9b%ae%e7%9a%84%e5%90%8d%e5%ad%97%e3%80%82%0a%e5%9c%a8%e5%89%8d%e4%b8%80%e7%af%87%e6%96%87%e7%ab%a0iOS%20%e7%bb%84%e4%bb%b6%e5%8c%96%20%e2%80%94%e2%80%94%20%e8%b7%af%e7%94%b1%e8%ae%be%e8%ae%a1%e6%80%9d%e8%b7%af%e5%88%86%e6%9e%90%e4%b8%ad%ef%bc%8c%e6%88%91%e4%bb%ac%e5%88%86%e6%9e%90%e4%ba%86App%e7%bb%84%e4%bb%b6%e4%b9%8b%e9%97%b4%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87%e8%b7%af%e7%94%b1%e6%9d%a5%e8%a7%a3%e9%99%a4%e8%80%a6%e5%90%88%e3%80%82%e9%82%a3%e4%b9%88%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%b0%b1%e6%9d%a5%e7%9c%8b%e7%9c%8b%e5%88%a9%e7%94%a8%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e6%80%9d%e6%83%b3%e5%a6%82%e4%bd%95%e8%a7%a3%e9%99%a4%e8%80%a6%e5%90%88%e7%9a%84%e3%80%82%0a%28%e7%9c%8b%e5%88%b0%e8%bf%99%e9%87%8c%e4%b8%80%e5%ae%9a%e4%bc%9a%e5%be%88%e5%a4%9a%e4%ba%ba%e6%9c%89%e7%96%91%e9%97%ae%ef%bc%8c%e9%82%a3%e5%b0%b1%e7%9c%8b%e7%9c%8b%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e7%bb%84%e4%bb%b6%e5%92%8c%e6%a8%a1%e5%9d%97%e7%9a%84%e5%8c%ba%e5%88%ab%29%0a%e8%af%b4%e6%98%8e%ef%bc%9a%e6%9c%ac%e6%96%87%e6%98%af%e5%9f%ba%e4%ba%8eBeeHive%20v1.2.0%e7%89%88%e6%9c%ac%e8%bf%9b%e8%a1%8c%e8%a7%a3%e6%9e%90%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.BeeHive%e6%a6%82%e8%bf%b0%202.BeeHive%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%203.BeeHive%e6%a8%a1%e5%9d%97%e4%ba%8b%e4%bb%b6%204.BeeHive%e6%a8%a1%e5%9d%97%e8%b0%83%e7%94%a8%205.%e5%85%b6%e4%bb%96%e7%9a%84%e4%b8%80%e4%ba%9b%e8%be%85%e5%8a%a9%e7%b1%bb%206.%e5%8f%af%e8%83%bd%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e5%8a%9f%e8%83%bd%20%20%e4%b8%80.%20BeeHive%e6%a6%82%e8%bf%b0%20%e7%94%b1%e4%ba%8eBeeHive%e6%98%af%e5%9f%ba%e4%ba%8eSpring%e7%9a%84Service%e7%90%86%e5%bf%b5%ef%bc%8c%e8%99%bd%e7%84%b6%e5%8f%af%e4%bb%a5%e4%bd%bf%e6%a8%a1%e5%9d%97%e9%97%b4%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e4%b8%8e%e6%8e%a5%e5%8f%a3%e8%a7%a3%e8%80%a6%ef%bc%8c%e4%bd%86%e6%97%a0%e6%b3%95%e9%81%bf%e5%85%8d%e6%a8%a1%e5%9d%97%e5%af%b9%e6%8e%a5%e5%8f%a3%e7%b1%bb%e7%9a%84%e4%be%9d%e8%b5%96%e5%85%b3%e7%b3%bb%e3%80%82%0a%e6%9a%82%e6%97%b6BeeHive%e6%b2%a1%e6%9c%89%e9%87%87%e7%94%a8invoke%e5%92%8cperformSelector%3aaction%20withObject%3a%20params%e7%9a%84%e6%96%b9%e6%b3%95%e3%80%82%e4%b8%bb%e8%a6%81%e5%8e%9f%e5%9b%a0%e8%bf%98%e6%98%af%e8%80%83%e8%99%91%e5%ad%a6%e4%b9%a0%e6%88%90%e6%9c%ac%e9%9a%be%e5%ba%a6%e4%bb%a5%e5%8f%8a%e5%8a%a8%e6%80%81%e8%b0%83%e7%94%a8%e5%ae%9e%e7%8e%b0%e6%97%a0%e6%b3%95%e5%9c%a8%e7%bc%96%e8%af%91%e6%a3%80%e6%9f%a5%e9%98%b6%e6%ae%b5%e6%a3%80%e6%b5%8b%e6%8e%a5%e5%8f%a3%e5%8f%82%e6%95%b0%e5%8f%98%e6%9b%b4%e7%ad%89%e9%97%ae%e9%a2%98%e3%80%82%0a%e7%9b%ae%e5%89%8dBeeHive%20v1.2.0%20%e5%85%a8%e9%83%a8%e6%98%af%e5%88%a9%e7%94%a8Protocol%e7%9a%84%e6%96%b9%e5%bc%8f%ef%bc%8c%e5%ae%9e%e7%8e%b0%e4%ba%86%e6%a8%a1%e5%9d%97%e9%97%b4%e8%a7%a3%e8%80%a6%e7%9a%84%e7%9b%ae%e7%9a%84%ef%bc%9a%0a1.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e4%bb%a5%e6%8f%92%e4%bb%b6%e7%9a%84%e5%bd%a2%e5%bc%8f%e5%ad%98%e5%9c%a8%e3%80%82%e6%af%8f%e4%b8%aa%e9%83%bd%e5%8f%af%e7%8b%ac%e7%ab%8b%ef%bc%8c%e7%9b%b8%e4%ba%92%e8%a7%a3%e8%80%a6%e3%80%82%202.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e4%b8%8e%e6%8e%a5%e5%8f%a3%e8%b0%83%e7%94%a8%e5%88%86%e7%a6%bb%203.%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e4%b9%9f%e6%9c%89%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%ef%bc%8c%e4%b9%9f%e5%8f%af%e4%bb%a5%e8%bf%9b%e8%a1%8c%e7%ae%a1%e7%90%86%e3%80%82%0a%e5%ae%98%e6%96%b9%e4%b9%9f%e7%bb%99%e5%87%ba%e4%ba%86%e4%b8%80%e4%b8%aa%e6%9e%b6%e6%9e%84%e5%9b%be%ef%bc%9a%0a%e6%8e%a5%e4%b8%8b%e6%9d%a5%e5%b0%b1%e4%be%9d%e6%ac%a1%e5%88%86%e6%9e%90%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%ef%bc%8c%e6%a8%a1%e5%9d%97%e4%ba%8b%e4%bb%b6%ef%bc%8c%e6%a8%a1%e5%9d%97%e8%b0%83%e7%94%a8%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e8%a7%a3%e8%80%a6%e7%9a%84%e3%80%82%0a%e4%ba%8c.%20BeeHive%e6%a8%a1%e5%9d%97%e6%b3%a8%e5%86%8c%20%e5%85%88%e4%bb%8e%e6%a8%a1%e5%9d%97%e7%9a%84%e6%b3%a8%e5%86%8c%e5%bc%80%e5%a7%8b%e5%88%86%e6%9e%90%ef%bc%8c%e6%9d%a5%e7%9c%8b%e7%9c%8bBeeHive%e6%98%af%e5%a6%82%e4%bd%95%e7%bb%99%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e8%bf%9b%e8%a1%8c%e6%b3%a8%e5%86%8c%e7%9a%84%e3%80%82%0a%e5%9c%a8BeeHive%e4%b8%ad%e6%98%af%e9%80%9a%e8%bf%87BHModuleManager%e6%9d%a5%e7%ae%a1%e7%90%86%e5%90%84%e4%b8%aa%e6%a8%a1%e5%9d%97%e7%9a%84%e3%80%82BHModuleManager%e4%b8%ad%e5%8f%aa%e4%bc%9a%e7%ae%a1%e7%90%86%e5%b7%b2%e7%bb%8f%e8%a2%ab%e6%b3%a8%e5%86%8c%e8%bf%87%e7%9a%84%e6%a8%a1%e5%9d%97%e3%80%82%0a%e6%b3%a8%e5%86%8cModule%e7%9a%84%e6%96%b9%e5%bc%8f%e6%80%bb%e5%85%b1%e6%9c%89%e4%b8%89%e7%a7%8d%ef%bc%9a%0a1.%20Annotation%e6%96%b9%e5%bc%8f%e6%b3%a8%e5%86%8c%20%e9%80%9a%e8%bf%87BeeHiveMod%e5%ae%8f%e8%bf%9b%e8%a1%8cAnnotation%e6%a0%87%e8%ae%b0%e3%80%82%0aBeeHiveMod%28ShopModule%29%20BeeHiveMod%e5%ae%8f%e5%ae%9a%e4%b9%89%e5%a6%82%e4%b8%8b%ef%bc%9a%0a%23define%20BeeHiveMod%28name%29%20%5c%20char%20%2a%20k%23%23name%23%23_mod%20BeeHiveDATA%28BeehiveMods%29%20%3d%20%26%2334%3b%26%2334%3b%23name%26%2334%3b%26%2334%3b%3b%20%20BeeHiveDATA%e5%8f%88%e6%98%af%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%9a%0a%23define%20BeeHiveDATA%28sectname%29%20__attribute%28%28used%2c%20section%28%26%2334%3b__DATA%2c%26%2334%3b%23sectname%26%2334%3b%20%26%2334%3b%29%29%29%20%20%e6%9c%80%e7%bb%88BeeHiveMod%e5%ae%8f%e4%bc%9a%e5%9c%a8%e9%a2%84%e7%bc%96%e8%af%91%e7%bb%93%e6%9d%9f%e4%bc%9a%e5%ae%8c%e5%85%a8%e5%b1%95%e5%bc%80%e6%88%90%e4%b8%8b%e9%9d%a2%e7%9a%84%e6%a0%b7%e5%ad%90%ef%bc%9a%0achar%20%2a%20kShopModule_mod%20__attribute%28%28used%2c%20section%28%26%2334%3b__DATA%2c%26%2334%3b%26%2334%3bBeehiveMods%26%2334%3b%26%2334%3b%20%26%2334%3b%29%29%29%20%3d%20%26%2334%3b%26%2334%3b%26%2334%3bShopModule%26%2334%3b%26%2334%3b%26%2334%3b%3b%20%e6%b3%a8%e6%84%8f%e5%8f%8c%e5%bc%95%e5%8f%b7%e7%9a%84%e6%80%bb%e5%af%b9%e6%95%b0%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fbeehive%2f&t=BeeHive%20%e2%80%94%e2%80%94%20%e4%b8%80%e4%b8%aa%e4%bc%98%e9%9b%85%e4%bd%86%e8%bf%98%e5%9c%a8%e5%ae%8c%e5%96%84%e4%b8%ad%e7%9a%84%e8%a7%a3%e8%80%a6%e6%a1%86%e6%9e%b6"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>JavaScript on prometheus</title><link>https://new.halfrost.com/tags/javascript/</link><description>Recent content in JavaScript on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 15 Jul 2017 09:25:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/javascript/index.xml" rel="self" type="application/rss+xml"/><item><title>JSConf China 2017 Day Two — End And Beginning</title><link>https://new.halfrost.com/jsconf_china_2017_final/</link><pubDate>Sat, 15 Jul 2017 09:25:00 +0000</pubDate><guid>https://new.halfrost.com/jsconf_china_2017_final/</guid><description>第二天的分享更加偏向 Web 后端。
+第一场：Node.js Microservices on Autopilot 开场简单介绍了一下什么是微服务。
+微服务有什么帮助 假想步骤：
+把 corn 服务分解成许多较小服务 每个微服务都可以独立部署 新的微服务都可以负载均衡 当微服务架构与他们所替代的服务相同时，它们也会面对相同的挑战。
+微服务的优势 容忍失败，尽管外部失败后仍可工作。
+快速迭代，一次性服务，可独立部署服务。
+微服务的反模式 微服务器之间需要负载平衡器
+启动顺序很重要
+负载平衡无处不在。
+Autopilot 模式 可以通过单击来部署和扩展的应用程序。
+应用和工作流在我们的笔记本电脑和在云（公有或者私有云）上同样工作
+应用和工作流不用强绑在任何特定的架构或者调度上。
+Autopilot 应用 Autopilot 模式的解决方案 可以通过 Container 获取服务 Autopilot 实践 应用程序由编写的 docker 容易组成 服务探索可以用过 consul 或者其他 catalog Container 本地健康和服务相应于服务依赖的变化 ContainerPilot 自动化一个 Container 的服务探索，生命周期管理和遥测报告 功能 Container-local 健康检查 PID 1初始化进程 服务探索和注册和观察 遥测报告给 Prometheus 免费以及开源https://github.</description></item><item><title>JSConf China 2017 Day One — Change The World</title><link>https://new.halfrost.com/jsconf_china_2017/</link><pubDate>Sat, 15 Jul 2017 06:21:00 +0000</pubDate><guid>https://new.halfrost.com/jsconf_china_2017/</guid><description>今天有幸参加了 JSConf China 2017 ，作为大会第一天，我来谈谈个人对大会的一些感谢。至于大会讲的更加详细的内容可以直接翻到本文末尾，我和另外一个位前端小伙伴一起写的非常详细的笔记，版权在掘金，感兴趣的可以点链接去看看。
+第一场 Programming the Universal Future with next.js 第一场是来自 ZEIT 的大神，讲的是 next.js。
+现场演示了 React 是如何利用 next.js 进行服务器端渲染的。
+next.js 支持 static projects、package.json(node 项目)、Dockerfile 项目配置一键部署。
+开发中常见的需求：自定义 URL，服务端渲染、实时日志，这些也都只需要一个 next 命令就可以搞定！
+现场演示了经过 next.js 改造之后的服务器端渲染的性能，页面首屏直接秒开，再也没有了 loading 半天的情况了。用户体验极佳。除了这个以后还演示了懒加载 React 组件。React 组件可以按需加载，再也不用一开始加载所有组件了，这样提高了很多性能。演示中还展示了 next.js 的热加载的功能，hot-reload ，极大的提高了开发效率。
+第二场 理解现代 Web 开发 这个演讲提到了太多的话题了。而且演讲过程中语速非常快，keynote 一页一页的。涉及的点实在是广，据说前端没有五到十年经验是无法领悟到其中的精髓的。
+这一讲讲师放出了PPT，很值得大家去学习，链接在这里《理解现代 Web 开发》
+关于讲师的 GitHub 上还有一个《现代 Web 开发者的魔法书 Spellbook of Modern Web Dev》 同样非常推荐阅读。
+1. 如何看待开发的变化 未来的开发形式走向(移动化 &amp;mdash;-&amp;gt; AI 时代 &amp;mdash;-&amp;gt; XXX时代的前夜) 这些问题都比较值得我们深思。</description></item><item><title>揭开 this &amp; that 之迷</title><link>https://new.halfrost.com/javascript_this/</link><pubDate>Sat, 24 Jun 2017 10:52:00 +0000</pubDate><guid>https://new.halfrost.com/javascript_this/</guid><description>新手在入门 JavaScript 的过程中，一定会踩很多关于 this 的坑，出现问题的本质就是 this 指针的指向和自己想的不一样。笔者在入门学习的过程中，也踩了很多坑，于是便写下本篇文章记录自己“踩坑”历程。
+一. this 在哪里？ 在上篇《从 JavaScript 作用域说开去》分析中，我们知道，在 Execution Context 中有一个属性是 this，这里的 this 就是我们所说的 this 。this 与上下文中可执行代码的类型有直接关系，this 的值在进入执行上下文时确定，并且在执行上下文运行期间永久不变。
+this 到底取何值？this 的取值是动态的，是在函数真正被调用执行的时候确定的，函数定义的时候确定不了。因为 this 的取值是执行上下文环境的一部分，每次调用函数，都会产生一个新的执行上下文环境。
+所以 this 的作用就是用来指明执行上下文是在哪个上下文中被触发的对象。令人迷惑的地方就在这里，同一个函数，当在不同的上下文进行调用的时候，this 的值就可能会不同。也就是说，this 的值就是函数调用表达式（也就是函数被调用的方式）的 caller。
+二. this &amp;amp; that 具体值得是谁？ 目前接触的有以下14种情况，笔者打算一一列举出来，以后如果遇到了更多的情况，还会继续增加。
+既然 this 是执行上下文确定的，那么从执行上下文的种类进行分类，可以分为3种：
+那么接下来我们就从 Global Execution Context 全局执行上下文，Function Execution Context 函数执行上下文，Eval Execution Context Eval执行上下文 这三类，具体谈谈 this 究竟指的是谁。
+（一）. 全局执行上下文 1. 非严格模式下的函数调用 这是函数的最通常用法，属于全局性调用，因此 this 就代表全局对象 Global。
+var name = &amp;#39;halfrost&amp;#39;; function test() { console.</description></item><item><title>从 JavaScript 作用域说开去</title><link>https://new.halfrost.com/javascript_scope/</link><pubDate>Thu, 25 May 2017 00:16:00 +0000</pubDate><guid>https://new.halfrost.com/javascript_scope/</guid><description>目录 1.静态作用域与动态作用域 2.变量的作用域 3.JavaScript 中变量的作用域 4.JavaScript 欺骗作用域 5.JavaScript 执行上下文 6.JavaScript 中的作用域链 7.JavaScript 中的闭包 8.JavaScript 中的模块 一. 静态作用域与动态作用域 在电脑程序设计中，作用域（scope，或译作有效范围）是名字（name）与实体（entity）的绑定（binding）保持有效的那部分计算机程序。不同的编程语言可能有不同的作用域和名字解析。而同一语言内也可能存在多种作用域，随实体的类型变化而不同。作用域类别影响变量的绑定方式，根据语言使用静态作用域还是动态作用域变量的取值可能会有不同的结果。
+包含标识符的宣告或定义； 包含语句和/或表达式，定义或部分关于可运行的算法； 嵌套嵌套或被嵌套嵌套。 名字空间是一种作用域，使用作用域的封装性质去逻辑上组群起关相的众识别子于单一识别子之下。因此，作用域可以影响这些内容的名字解析。 程序员常会缩进他们的源代码中的作用域，改善可读性。
+作用域又分为两种，静态作用域和动态作用域。
+静态作用域又叫做词法作用域，采用词法作用域的变量叫词法变量。词法变量有一个在编译时静态确定的作用域。词法变量的作用域可以是一个函数或一段代码，该变量在这段代码区域内可见（visibility）；在这段区域以外该变量不可见（或无法访问）。词法作用域里，取变量的值时，会检查函数定义时的文本环境，捕捉函数定义时对该变量的绑定。
+function f() { function g() { } } 静态(词法)作用域，就是可以无须执行程序而只从程序源码的角度，就可以看出程序是如何工作的。从上面的例子中可以肯定，函数 g 是被函数 f 包围在内部。
+大多数现在程序设计语言都是采用静态作用域规则，如C/C++、C#、Python、Java、JavaScript……
+相反，采用动态作用域的变量叫做动态变量。只要程序正在执行定义了动态变量的代码段，那么在这段时间内，该变量一直存在；代码段执行结束，该变量便消失。这意味着如果有个函数f，里面调用了函数g，那么在执行g的时候，f里的所有局部变量都会被g访问到。而在静态作用域的情况下，g不能访问f的变量。动态作用域里，取变量的值时，会由内向外逐层检查函数的调用链，并打印第一次遇到的那个绑定的值。显然，最外层的绑定即是全局状态下的那个值。
+function g() { } function f() { g()； } 当我们调用f()，它会调用g()。在执行期间，g被f调用代表了一种动态的关系。
+采用动态作用域的语言有Pascal、Emacs Lisp、Common Lisp（兼有静态作用域）、Perl（兼有静态作用域）。C/C++是静态作用域语言，但在宏中用到的名字，也是动态作用域。
+二. 变量的作用域 1. 变量的作用域 变量的作用域是指变量在何处可以被访问到。比如：
+function foo（）{ var bar; } 这里的 bar 的直接作用域是函数作用域foo()；</description></item><item><title>JavaScript 新手的踩坑日记</title><link>https://new.halfrost.com/lost_in_javascript/</link><pubDate>Fri, 12 May 2017 22:18:00 +0000</pubDate><guid>https://new.halfrost.com/lost_in_javascript/</guid><description>引语 在1995年5月，Eich 大神在10天内就写出了第一个脚本语言的版本，JavaScript 的第一个代号是 Mocha，Marc Andreesen 起的这个名字。由于商标问题以及很多产品已经使用了 Live 的前缀，网景市场部将它改名为 LiveScript。在1995年11月底，Navigator 2.0B3 发行，其中包含了该语言的原型，这个版本相比之前没有什么大的变化。在1995年12月初，Java 语言发展壮大，Sun 把 Java 的商标授权给了网景。这个语言被再次改名，变成了最终的名字——JavaScript。在之后的1997年1月，标准化以后，就成为现在的 ECMAScript。
+近一两年在客户端上用到 JS 的地方也越来越多了，笔者最近接触了一下 JS ，作为前端小白，记录一下近期自己“踩坑”的成长经历。
+一. 原始值和对象 在 JavaScript 中，对值的区分就两种：
+1.原始值：BOOL，Number，String，null，undefined。 2.对象：每个对象都有唯一的标识且只严格的等于( = = = ) 自己。
+null，undefined没有属性，连toString( )方法也没有。
+false，0，NaN，undefined，null，&amp;rsquo; ' ，都是false。
+typeof 运算符能区分原始值和对象，并检测出原始值的类型。 instanceof 运算符可以检测出一个对象是否是特定构造函数的一个实例或者是否为它的一个子类。
+引用类型： 对象、数组、函数
+剩下的类型都为 值类型
+null 返回的是一个 object，这个是一个不可修复的 bug，如果修改这个 bug，就会破坏现有代码体系。但是这不能表示 null 是一个对象。
+因为第一代 JavaScript 引擎中的 JavaScript 值表示为32位的字符。最低3位作为一种标识，表示值是对象，整数，浮点数或者布尔值。对象的标识是000，而为了表现 null ，引擎使用了机器语言 NULL 的指针，该字符的所有位都是0。而 typeof 就是检测值的标志位，这就是为什么它会认为 null 是一个对象了。
+所以判断 一个 value 是不是一个对象应该按照如下条件判断：</description></item></channel></rss>

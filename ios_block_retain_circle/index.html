@@ -1,0 +1,725 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>深入研究 Block 用 weakSelf、strongSelf、@weakify、@strongify 解决循环引用 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="深入研究 Block 用 weakSelf、strongSelf、@weakify、@strongify 解决循环引用"><meta property="og:description" content="前言 在上篇中，仔细分析了一下Block的实现原理以及__block捕获外部变量的原理。然而实际使用Block过程中，还是会遇到一些问题，比如Retain Circle的问题。
+####目录
+ 1.Retain Circle的由来 2.__weak、__strong的实现原理 3.weakSelf、strongSelf的用途 4.@weakify、@strongify实现原理  一. Retain Circle的由来 循环引用的问题相信大家都很理解了，这里还是简单的提一下。
+当A对象里面强引用了B对象，B对象又强引用了A对象，这样两者的retainCount值一直都无法为0，于是内存始终无法释放，导致内存泄露。所谓的内存泄露就是本应该释放的对象，在其生命周期结束之后依旧存在。
+这是2个对象之间的，相应的，这种循环还能存在于3，4……个对象之间，只要相互形成环，就会导致Retain Cicle的问题。
+当然也存在自身引用自身的，当一个对象内部的一个obj，强引用的自身，也会导致循环引用的问题出现。常见的就是block里面引用的问题。
+二.__weak、__strong的实现原理 在ARC环境下，id类型和对象类型和C语言其他类型不同，类型前必须加上所有权的修饰符。
+所有权修饰符总共有4种：
+1.__strong修饰符 2.__weak修饰符 3.__unsafe_unretained修饰符 4.__autoreleasing修饰符
+一般我们如果不写，默认的修饰符是__strong。
+要想弄清楚__strong，__weak的实现原理，我们就需要研究研究clang(LLVM编译器)和objc4 Objective-C runtime库了。
+关于clang有一份关于ARC详细的文档，有兴趣的可以仔细研究一下文档里面的说明和例子，很有帮助。
+以下的讲解，也会来自于上述文档中的函数说明。
+1.__strong的实现原理 (1)对象持有自己 首先我们先来看看生成的对象持有自己的情况，利用alloc/new/copy/mutableCopy生成对象。
+当我们声明了一个__strong对象
+{ id __strong obj = [[NSObject alloc] init]; } LLVM编译器会把上述代码转换成下面的样子
+id __attribute__((objc_ownership(strong))) obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass(&#34;NSObject&#34;), sel_registerName(&#34;alloc&#34;)), sel_registerName(&#34;init&#34;)); 相应的会调用
+id obj = objc_msgSend(NSObject, @selector(alloc)); objc_msgSend(obj,selector(init)); objc_release(obj); 上述这些方法都好理解。在ARC有效的时候就会自动插入release代码，在作用域结束的时候自动释放。
+(2)对象不持有自己 生成对象的时候不用alloc/new/copy/mutableCopy等方法。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/ios_block_retain_circle/"><meta property="article:published_time" content="2016-09-04T11:38:04+00:00"><meta property="article:modified_time" content="2016-09-04T11:38:04+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="深入研究 Block 用 weakSelf、strongSelf、@weakify、@strongify 解决循环引用"><meta name=twitter:description content="前言 在上篇中，仔细分析了一下Block的实现原理以及__block捕获外部变量的原理。然而实际使用Block过程中，还是会遇到一些问题，比如Retain Circle的问题。
+####目录
+ 1.Retain Circle的由来 2.__weak、__strong的实现原理 3.weakSelf、strongSelf的用途 4.@weakify、@strongify实现原理  一. Retain Circle的由来 循环引用的问题相信大家都很理解了，这里还是简单的提一下。
+当A对象里面强引用了B对象，B对象又强引用了A对象，这样两者的retainCount值一直都无法为0，于是内存始终无法释放，导致内存泄露。所谓的内存泄露就是本应该释放的对象，在其生命周期结束之后依旧存在。
+这是2个对象之间的，相应的，这种循环还能存在于3，4……个对象之间，只要相互形成环，就会导致Retain Cicle的问题。
+当然也存在自身引用自身的，当一个对象内部的一个obj，强引用的自身，也会导致循环引用的问题出现。常见的就是block里面引用的问题。
+二.__weak、__strong的实现原理 在ARC环境下，id类型和对象类型和C语言其他类型不同，类型前必须加上所有权的修饰符。
+所有权修饰符总共有4种：
+1.__strong修饰符 2.__weak修饰符 3.__unsafe_unretained修饰符 4.__autoreleasing修饰符
+一般我们如果不写，默认的修饰符是__strong。
+要想弄清楚__strong，__weak的实现原理，我们就需要研究研究clang(LLVM编译器)和objc4 Objective-C runtime库了。
+关于clang有一份关于ARC详细的文档，有兴趣的可以仔细研究一下文档里面的说明和例子，很有帮助。
+以下的讲解，也会来自于上述文档中的函数说明。
+1.__strong的实现原理 (1)对象持有自己 首先我们先来看看生成的对象持有自己的情况，利用alloc/new/copy/mutableCopy生成对象。
+当我们声明了一个__strong对象
+{ id __strong obj = [[NSObject alloc] init]; } LLVM编译器会把上述代码转换成下面的样子
+id __attribute__((objc_ownership(strong))) obj = ((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)((NSObject *(*)(id, SEL))(void *)objc_msgSend)((id)objc_getClass(&#34;NSObject&#34;), sel_registerName(&#34;alloc&#34;)), sel_registerName(&#34;init&#34;)); 相应的会调用
+id obj = objc_msgSend(NSObject, @selector(alloc)); objc_msgSend(obj,selector(init)); objc_release(obj); 上述这些方法都好理解。在ARC有效的时候就会自动插入release代码，在作用域结束的时候自动释放。
+(2)对象不持有自己 生成对象的时候不用alloc/new/copy/mutableCopy等方法。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/ios_block/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/objc_runtime_isa_class/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&text=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&is_video=false&description=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&name=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e4%b8%8a%e7%af%87%e4%b8%ad%ef%bc%8c%e4%bb%94%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86%e4%b8%80%e4%b8%8bBlock%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%e4%bb%a5%e5%8f%8a__block%e6%8d%95%e8%8e%b7%e5%a4%96%e9%83%a8%e5%8f%98%e9%87%8f%e7%9a%84%e5%8e%9f%e7%90%86%e3%80%82%e7%84%b6%e8%80%8c%e5%ae%9e%e9%99%85%e4%bd%bf%e7%94%a8Block%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e8%bf%98%e6%98%af%e4%bc%9a%e9%81%87%e5%88%b0%e4%b8%80%e4%ba%9b%e9%97%ae%e9%a2%98%ef%bc%8c%e6%af%94%e5%a6%82Retain%20Circle%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.Retain%20Circle%e7%9a%84%e7%94%b1%e6%9d%a5%202.__weak%e3%80%81__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%203.weakSelf%e3%80%81strongSelf%e7%9a%84%e7%94%a8%e9%80%94%204.%40weakify%e3%80%81%40strongify%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%20%e4%b8%80.%20Retain%20Circle%e7%9a%84%e7%94%b1%e6%9d%a5%20%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e7%9b%b8%e4%bf%a1%e5%a4%a7%e5%ae%b6%e9%83%bd%e5%be%88%e7%90%86%e8%a7%a3%e4%ba%86%ef%bc%8c%e8%bf%99%e9%87%8c%e8%bf%98%e6%98%af%e7%ae%80%e5%8d%95%e7%9a%84%e6%8f%90%e4%b8%80%e4%b8%8b%e3%80%82%0a%e5%bd%93A%e5%af%b9%e8%b1%a1%e9%87%8c%e9%9d%a2%e5%bc%ba%e5%bc%95%e7%94%a8%e4%ba%86B%e5%af%b9%e8%b1%a1%ef%bc%8cB%e5%af%b9%e8%b1%a1%e5%8f%88%e5%bc%ba%e5%bc%95%e7%94%a8%e4%ba%86A%e5%af%b9%e8%b1%a1%ef%bc%8c%e8%bf%99%e6%a0%b7%e4%b8%a4%e8%80%85%e7%9a%84retainCount%e5%80%bc%e4%b8%80%e7%9b%b4%e9%83%bd%e6%97%a0%e6%b3%95%e4%b8%ba0%ef%bc%8c%e4%ba%8e%e6%98%af%e5%86%85%e5%ad%98%e5%a7%8b%e7%bb%88%e6%97%a0%e6%b3%95%e9%87%8a%e6%94%be%ef%bc%8c%e5%af%bc%e8%87%b4%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e3%80%82%e6%89%80%e8%b0%93%e7%9a%84%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e5%b0%b1%e6%98%af%e6%9c%ac%e5%ba%94%e8%af%a5%e9%87%8a%e6%94%be%e7%9a%84%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%9c%a8%e5%85%b6%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%e7%bb%93%e6%9d%9f%e4%b9%8b%e5%90%8e%e4%be%9d%e6%97%a7%e5%ad%98%e5%9c%a8%e3%80%82%0a%e8%bf%99%e6%98%af2%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b9%8b%e9%97%b4%e7%9a%84%ef%bc%8c%e7%9b%b8%e5%ba%94%e7%9a%84%ef%bc%8c%e8%bf%99%e7%a7%8d%e5%be%aa%e7%8e%af%e8%bf%98%e8%83%bd%e5%ad%98%e5%9c%a8%e4%ba%8e3%ef%bc%8c4%e2%80%a6%e2%80%a6%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b9%8b%e9%97%b4%ef%bc%8c%e5%8f%aa%e8%a6%81%e7%9b%b8%e4%ba%92%e5%bd%a2%e6%88%90%e7%8e%af%ef%bc%8c%e5%b0%b1%e4%bc%9a%e5%af%bc%e8%87%b4Retain%20Cicle%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%e5%bd%93%e7%84%b6%e4%b9%9f%e5%ad%98%e5%9c%a8%e8%87%aa%e8%ba%ab%e5%bc%95%e7%94%a8%e8%87%aa%e8%ba%ab%e7%9a%84%ef%bc%8c%e5%bd%93%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%86%85%e9%83%a8%e7%9a%84%e4%b8%80%e4%b8%aaobj%ef%bc%8c%e5%bc%ba%e5%bc%95%e7%94%a8%e7%9a%84%e8%87%aa%e8%ba%ab%ef%bc%8c%e4%b9%9f%e4%bc%9a%e5%af%bc%e8%87%b4%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e5%87%ba%e7%8e%b0%e3%80%82%e5%b8%b8%e8%a7%81%e7%9a%84%e5%b0%b1%e6%98%afblock%e9%87%8c%e9%9d%a2%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%e4%ba%8c.__weak%e3%80%81__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%e5%9c%a8ARC%e7%8e%af%e5%a2%83%e4%b8%8b%ef%bc%8cid%e7%b1%bb%e5%9e%8b%e5%92%8c%e5%af%b9%e8%b1%a1%e7%b1%bb%e5%9e%8b%e5%92%8cC%e8%af%ad%e8%a8%80%e5%85%b6%e4%bb%96%e7%b1%bb%e5%9e%8b%e4%b8%8d%e5%90%8c%ef%bc%8c%e7%b1%bb%e5%9e%8b%e5%89%8d%e5%bf%85%e9%a1%bb%e5%8a%a0%e4%b8%8a%e6%89%80%e6%9c%89%e6%9d%83%e7%9a%84%e4%bf%ae%e9%a5%b0%e7%ac%a6%e3%80%82%0a%e6%89%80%e6%9c%89%e6%9d%83%e4%bf%ae%e9%a5%b0%e7%ac%a6%e6%80%bb%e5%85%b1%e6%9c%894%e7%a7%8d%ef%bc%9a%0a1.__strong%e4%bf%ae%e9%a5%b0%e7%ac%a6%202.__weak%e4%bf%ae%e9%a5%b0%e7%ac%a6%203.__unsafe_unretained%e4%bf%ae%e9%a5%b0%e7%ac%a6%204.__autoreleasing%e4%bf%ae%e9%a5%b0%e7%ac%a6%0a%e4%b8%80%e8%88%ac%e6%88%91%e4%bb%ac%e5%a6%82%e6%9e%9c%e4%b8%8d%e5%86%99%ef%bc%8c%e9%bb%98%e8%ae%a4%e7%9a%84%e4%bf%ae%e9%a5%b0%e7%ac%a6%e6%98%af__strong%e3%80%82%0a%e8%a6%81%e6%83%b3%e5%bc%84%e6%b8%85%e6%a5%9a__strong%ef%bc%8c__weak%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%ef%bc%8c%e6%88%91%e4%bb%ac%e5%b0%b1%e9%9c%80%e8%a6%81%e7%a0%94%e7%a9%b6%e7%a0%94%e7%a9%b6clang%28LLVM%e7%bc%96%e8%af%91%e5%99%a8%29%e5%92%8cobjc4%20Objective-C%20runtime%e5%ba%93%e4%ba%86%e3%80%82%0a%e5%85%b3%e4%ba%8eclang%e6%9c%89%e4%b8%80%e4%bb%bd%e5%85%b3%e4%ba%8eARC%e8%af%a6%e7%bb%86%e7%9a%84%e6%96%87%e6%a1%a3%ef%bc%8c%e6%9c%89%e5%85%b4%e8%b6%a3%e7%9a%84%e5%8f%af%e4%bb%a5%e4%bb%94%e7%bb%86%e7%a0%94%e7%a9%b6%e4%b8%80%e4%b8%8b%e6%96%87%e6%a1%a3%e9%87%8c%e9%9d%a2%e7%9a%84%e8%af%b4%e6%98%8e%e5%92%8c%e4%be%8b%e5%ad%90%ef%bc%8c%e5%be%88%e6%9c%89%e5%b8%ae%e5%8a%a9%e3%80%82%0a%e4%bb%a5%e4%b8%8b%e7%9a%84%e8%ae%b2%e8%a7%a3%ef%bc%8c%e4%b9%9f%e4%bc%9a%e6%9d%a5%e8%87%aa%e4%ba%8e%e4%b8%8a%e8%bf%b0%e6%96%87%e6%a1%a3%e4%b8%ad%e7%9a%84%e5%87%bd%e6%95%b0%e8%af%b4%e6%98%8e%e3%80%82%0a1.__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%281%29%e5%af%b9%e8%b1%a1%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%20%e9%a6%96%e5%85%88%e6%88%91%e4%bb%ac%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8b%e7%94%9f%e6%88%90%e7%9a%84%e5%af%b9%e8%b1%a1%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%e7%9a%84%e6%83%85%e5%86%b5%ef%bc%8c%e5%88%a9%e7%94%a8alloc%2fnew%2fcopy%2fmutableCopy%e7%94%9f%e6%88%90%e5%af%b9%e8%b1%a1%e3%80%82%0a%e5%bd%93%e6%88%91%e4%bb%ac%e5%a3%b0%e6%98%8e%e4%ba%86%e4%b8%80%e4%b8%aa__strong%e5%af%b9%e8%b1%a1%0a%7b%20id%20__strong%20obj%20%3d%20%5b%5bNSObject%20alloc%5d%20init%5d%3b%20%7d%20LLVM%e7%bc%96%e8%af%91%e5%99%a8%e4%bc%9a%e6%8a%8a%e4%b8%8a%e8%bf%b0%e4%bb%a3%e7%a0%81%e8%bd%ac%e6%8d%a2%e6%88%90%e4%b8%8b%e9%9d%a2%e7%9a%84%e6%a0%b7%e5%ad%90%0aid%20__attribute__%28%28objc_ownership%28strong%29%29%29%20obj%20%3d%20%28%28NSObject%20%2a%28%2a%29%28id%2c%20SEL%29%29%28void%20%2a%29objc_msgSend%29%28%28id%29%28%28NSObject%20%2a%28%2a%29%28id%2c%20SEL%29%29%28void%20%2a%29objc_msgSend%29%28%28id%29objc_getClass%28%26%2334%3bNSObject%26%2334%3b%29%2c%20sel_registerName%28%26%2334%3balloc%26%2334%3b%29%29%2c%20sel_registerName%28%26%2334%3binit%26%2334%3b%29%29%3b%20%e7%9b%b8%e5%ba%94%e7%9a%84%e4%bc%9a%e8%b0%83%e7%94%a8%0aid%20obj%20%3d%20objc_msgSend%28NSObject%2c%20%40selector%28alloc%29%29%3b%20objc_msgSend%28obj%2cselector%28init%29%29%3b%20objc_release%28obj%29%3b%20%e4%b8%8a%e8%bf%b0%e8%bf%99%e4%ba%9b%e6%96%b9%e6%b3%95%e9%83%bd%e5%a5%bd%e7%90%86%e8%a7%a3%e3%80%82%e5%9c%a8ARC%e6%9c%89%e6%95%88%e7%9a%84%e6%97%b6%e5%80%99%e5%b0%b1%e4%bc%9a%e8%87%aa%e5%8a%a8%e6%8f%92%e5%85%a5release%e4%bb%a3%e7%a0%81%ef%bc%8c%e5%9c%a8%e4%bd%9c%e7%94%a8%e5%9f%9f%e7%bb%93%e6%9d%9f%e7%9a%84%e6%97%b6%e5%80%99%e8%87%aa%e5%8a%a8%e9%87%8a%e6%94%be%e3%80%82%0a%282%29%e5%af%b9%e8%b1%a1%e4%b8%8d%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%20%e7%94%9f%e6%88%90%e5%af%b9%e8%b1%a1%e7%9a%84%e6%97%b6%e5%80%99%e4%b8%8d%e7%94%a8alloc%2fnew%2fcopy%2fmutableCopy%e7%ad%89%e6%96%b9%e6%b3%95%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&t=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一-retain-circle的由来>一. Retain Circle的由来</a></li><li><a href=#二__weak__strong的实现原理>二.__weak、__strong的实现原理</a></li><li><a href=#三weakselfstrongself的用途>三.weakSelf、strongSelf的用途</a></li><li><a href=#四weakifystrongify实现原理>四.@weakify、@strongify实现原理</a></li></ul></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">深入研究 Block 用 weakSelf、strongSelf、@weakify、@strongify 解决循环引用</h1><div class=meta><div class=postdate><time datetime="2016-09-04 11:38:04 +0000 UTC" itemprop=datePublished>Sep 04</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/block>Block</a>
+,
+<a class=category-link href=/categories/retain-circle>Retain Circle</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/block rel=tag>Block</a>
+,
+<a class=tag-link href=/tags/retain-circle rel=tag>Retain Circle</a></div></div></header><div class=content itemprop=articleBody><h4 id=前言>前言</h4><p>在上篇中，仔细分析了一下Block的实现原理以及__block捕获外部变量的原理。然而实际使用Block过程中，还是会遇到一些问题，比如Retain Circle的问题。</p><p>####目录</p><ul><li>1.Retain Circle的由来</li><li>2.__weak、__strong的实现原理</li><li>3.weakSelf、strongSelf的用途</li><li>4.@weakify、@strongify实现原理</li></ul><h4 id=一-retain-circle的由来>一. Retain Circle的由来</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_1.jpg alt></p><p>循环引用的问题相信大家都很理解了，这里还是简单的提一下。</p><p>当A对象里面强引用了B对象，B对象又强引用了A对象，这样两者的retainCount值一直都无法为0，于是内存始终无法释放，导致内存泄露。所谓的内存泄露就是本应该释放的对象，在其生命周期结束之后依旧存在。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_2.png alt></p><p>这是2个对象之间的，相应的，这种循环还能存在于3，4……个对象之间，只要相互形成环，就会导致Retain Cicle的问题。</p><p>当然也存在自身引用自身的，当一个对象内部的一个obj，强引用的自身，也会导致循环引用的问题出现。常见的就是block里面引用的问题。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_3.png alt></p><h4 id=二__weak__strong的实现原理>二.__weak、__strong的实现原理</h4><p>在ARC环境下，id类型和对象类型和C语言其他类型不同，类型前必须加上所有权的修饰符。</p><p>所有权修饰符总共有4种：</p><p>1.__strong修饰符
+2.__weak修饰符
+3.__unsafe_unretained修饰符
+4.__autoreleasing修饰符</p><p>一般我们如果不写，默认的修饰符是__strong。</p><p>要想弄清楚__strong，__weak的实现原理，我们就需要研究研究clang(LLVM编译器)和objc4 Objective-C runtime库了。</p><p>关于clang有一份<a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html>关于ARC详细的文档</a>，有兴趣的可以仔细研究一下文档里面的说明和例子，很有帮助。</p><p>以下的讲解，也会来自于上述文档中的函数说明。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_4.jpg alt></p><h5 id=1__strong的实现原理>1.__strong的实现原理</h5><h6 id=1对象持有自己>(1)对象持有自己</h6><p>首先我们先来看看生成的对象持有自己的情况，利用alloc/new/copy/mutableCopy生成对象。</p><p>当我们声明了一个__strong对象</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>{
+    <span style=color:#66d9ef>id</span> <span style=color:#66d9ef>__strong</span> obj <span style=color:#f92672>=</span> [[NSObject alloc] init];
+}
+</code></pre></div><p>LLVM编译器会把上述代码转换成下面的样子</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>__attribute__</span>((objc_ownership(<span style=color:#66d9ef>strong</span>))) obj <span style=color:#f92672>=</span> ((NSObject <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>))(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)objc_msgSend)((<span style=color:#66d9ef>id</span>)((NSObject <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>))(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)objc_msgSend)((<span style=color:#66d9ef>id</span>)objc_getClass(<span style=color:#e6db74>&#34;NSObject&#34;</span>), sel_registerName(<span style=color:#e6db74>&#34;alloc&#34;</span>)), sel_registerName(<span style=color:#e6db74>&#34;init&#34;</span>));
+</code></pre></div><p>相应的会调用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#66d9ef>id</span> obj <span style=color:#f92672>=</span> objc_msgSend(NSObject, <span style=color:#66d9ef>@selector</span>(alloc));
+objc_msgSend(obj,selector(init));
+objc_release(obj);
+</code></pre></div><p>上述这些方法都好理解。在ARC有效的时候就会自动插入release代码，在作用域结束的时候自动释放。</p><h6 id=2对象不持有自己>(2)对象不持有自己</h6><p>生成对象的时候不用alloc/new/copy/mutableCopy等方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>{
+    <span style=color:#66d9ef>id</span> <span style=color:#66d9ef>__strong</span> obj <span style=color:#f92672>=</span> [NSMutableArray array];
+}
+</code></pre></div><p>LLVM编译器会把上述代码转换成下面的样子</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>__attribute__</span>((objc_ownership(<span style=color:#66d9ef>strong</span>))) array <span style=color:#f92672>=</span> ((NSMutableArray <span style=color:#f92672>*</span>(<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>))(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)objc_msgSend)((<span style=color:#66d9ef>id</span>)objc_getClass(<span style=color:#e6db74>&#34;NSMutableArray&#34;</span>), sel_registerName(<span style=color:#e6db74>&#34;array&#34;</span>));
+
+</code></pre></div><p>查看LLVM文档，其实是下述的过程</p><p>相应的会调用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#66d9ef>id</span> obj <span style=color:#f92672>=</span> objc_msgSend(NSMutableArray, <span style=color:#66d9ef>@selector</span>(array));
+objc_retainAutoreleasedReturnValue(obj);
+objc_release(obj);
+</code></pre></div><p>与之前对象会持有自己的情况不同，这里多了一个objc_retainAutoreleasedReturnValue函数。</p><p>这里有3个函数需要说明：
+1.id objc_retainAutoreleaseReturnValue(id value)</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id69>id objc_retainAutoreleaseReturnValue(id value);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-retainautoreleasereturnvalue></a><br><em>Precondition:</em> value is null or a pointer to a valid object.</p></blockquote><blockquote><p>If value is null, this call has no effect. Otherwise, it performs a retain operation followed by the operation described in <a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-autoreleasereturnvalue>objc_autoreleaseReturnValue</a>.</p></blockquote><blockquote><p>Equivalent to the following code:
+id objc_retainAutoreleaseReturnValue(id value) {<br>return objc_autoreleaseReturnValue(objc_retain(value));
+}</p></blockquote><blockquote><p>Always returns value</p></blockquote><p>2.id objc_retainAutoreleasedReturnValue(id value)</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id70>id objc_retainAutoreleasedReturnValue(id value);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-retainautoreleasedreturnvalue></a><br><em>Precondition:</em> value is null or a pointer to a valid object.</p></blockquote><blockquote><p>If value is null, this call has no effect. Otherwise, it attempts to accept a hand off of a retain count from a call to <a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-autoreleasereturnvalue>objc_autoreleaseReturnValue</a> on value in a recently-called function or something it calls. If that fails, it performs a retain operation exactly like <a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-retain>objc_retain</a>.</p></blockquote><blockquote><p>Always returns value</p></blockquote><p>3.id objc_autoreleaseReturnValue(id value)</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id59>id objc_autoreleaseReturnValue(id value);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-autoreleasereturnvalue></a><br><em>Precondition:</em> value  is null or a pointer to a valid object.</p></blockquote><blockquote><p>If value  is null, this call has no effect. Otherwise, it makes a best effort to hand off ownership of a retain count on the object to a call to<a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-retainautoreleasedreturnvalue>objc_retainAutoreleasedReturnValue</a> for the same object in an enclosing call frame. If this is not possible, the object is autoreleased as above.</p></blockquote><blockquote><p>Always returns value</p></blockquote><p>这3个函数其实都是在描述一件事情。 it makes a best effort to hand off ownership of a retain count on the object to a call to objc_retainAutoreleasedReturnValue for the same object in an enclosing call frame。</p><p>这属于LLVM编译器的一个优化。objc_retainAutoreleasedReturnValue函数是用于自己持有(retain)对象的函数，它持有的对象应为返回注册在autoreleasepool中对象的方法或者是函数的返回值。</p><p>在ARC中原本对象生成之后是要注册到autoreleasepool中，但是调用了objc_autoreleasedReturnValue 之后，紧接着调用了 objc_retainAutoreleasedReturnValue，objc_autoreleasedReturnValue函数会去检查该函数方法或者函数调用方的执行命令列表，如果里面有objc_retainAutoreleasedReturnValue()方法，那么该对象就直接返回给方法或者函数的调用方。达到了即使对象不注册到autoreleasepool中，也可以返回拿到相应的对象。</p><h5 id=2__weak的实现原理>2.__weak的实现原理</h5><p>声明一个__weak对象</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>{
+    <span style=color:#66d9ef>id</span> <span style=color:#66d9ef>__weak</span> obj <span style=color:#f92672>=</span> strongObj;
+}
+</code></pre></div><p>假设这里的strongObj是一个已经声明好了的对象。</p><p>LLVM转换成对应的代码</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>__attribute__</span>((objc_ownership(none))) obj1 <span style=color:#f92672>=</span> strongObj;
+
+</code></pre></div><p>相应的会调用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#66d9ef>id</span> obj ;
+objc_initWeak(<span style=color:#f92672>&amp;</span>obj,strongObj);
+objc_destoryWeak(<span style=color:#f92672>&amp;</span>obj);
+
+</code></pre></div><p>看看文档描述</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id62>id objc_initWeak(id *object, id value);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-initweak></a><br><em>Precondition:</em> object is a valid pointer which has not been registered as a __weak object. </p></blockquote><blockquote><p>value  is null or a pointer to a valid object.
+If value is a null pointer or the object to which it points has begun deallocation, object is zero-initialized. Otherwise, object
+ is registered as a __weak object pointing to value</p></blockquote><blockquote><p>Equivalent to the following code:
+id objc_initWeak(id *object, id value) {<br>*object = nil;
+return objc_storeWeak(object, value);
+}</p></blockquote><blockquote><p>Returns the value of object after the call.
+Does not need to be atomic with respect to calls to objc_storeWeak on object</p></blockquote><p>objc_initWeak的实现其实是这样的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>objc_initWeak</span>(<span style=color:#66d9ef>id</span> <span style=color:#f92672>*</span>object, <span style=color:#66d9ef>id</span> value) {   
+    <span style=color:#f92672>*</span>object <span style=color:#f92672>=</span> nil; 
+    <span style=color:#66d9ef>return</span> objc_storeWeak(object, value);
+}
+</code></pre></div><p>会把传入的object变成0或者nil，然后执行objc_storeWeak函数。</p><p>那么objc_destoryWeak函数是干什么的呢？</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id61>void objc_destroyWeak(id *object);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#void-objc-destroyweak-id-object></a><br><em>Precondition:</em> object  is a valid pointer which either contains a null pointer or has been registered as a __weak object.</p></blockquote><blockquote><p>object  is unregistered as a weak object, if it ever was. The current value of object is left unspecified; otherwise, equivalent to the following code:</p></blockquote><blockquote><p>void objc_destroyWeak(id *object) {
+objc_storeWeak(object, nil);
+}</p></blockquote><blockquote><p>Does not need to be atomic with respect to calls to objc_storeWeak on object</p></blockquote><p>objc_destoryWeak函数的实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>objc_destroyWeak</span>(<span style=color:#66d9ef>id</span> <span style=color:#f92672>*</span>object) { 
+    objc_storeWeak(object, nil);
+}
+</code></pre></div><p>也是会去调用objc_storeWeak函数。objc_initWeak和objc_destroyWeak函数都会去调用objc_storeWeak函数，唯一不同的是调用的入参不同，一个是value，一个是nil。</p><p>那么重点就都落在objc_storeWeak函数上了。</p><blockquote><p><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#id73>id objc_storeWeak(id *object, id value);
+</a><a href=http://clang.llvm.org/docs/AutomaticReferenceCounting.html#arc-runtime-objc-storeweak></a><br><em>Precondition:</em> object is a valid pointer which either contains a null pointer or has been registered as a __weak object. value
+ is null or a pointer to a valid object.</p></blockquote><blockquote><p>If value is a null pointer or the object to which it points has begun deallocation, object  is assigned null and unregistered as a __weak object. Otherwise, object is registered as a __weak object or has its registration updated to point to value</p></blockquote><blockquote><p>Returns the value of object after the call.</p></blockquote><p>objc_storeWeak函数的用途就很明显了。由于weak表也是用Hash table实现的，所以objc_storeWeak函数就把第一个入参的变量地址注册到weak表中，然后根据第二个入参来决定是否移除。如果第二个参数为0，那么就把__weak变量从weak表中删除记录，并从引用计数表中删除对应的键值记录。</p><p>所以如果__weak引用的原对象如果被释放了，那么对应的__weak对象就会被指为nil。原来就是通过objc_storeWeak函数这些函数来实现的。</p><p>以上就是ARC中__strong和__weak的简单的实现原理，更加详细的还请大家去看看这一章开头提到的那个LLVM文档，里面说明的很详细。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_5.png alt></p><h4 id=三weakselfstrongself的用途>三.weakSelf、strongSelf的用途</h4><p>在提weakSelf、strongSelf之前，我们先引入一个 Retain Cycle 的例子。</p><p>假设自定义的一个student类</p><p>例子1：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e></span><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>void</span>(<span style=color:#f92672>^</span>Study)();
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>Student</span> : <span style=color:#a6e22e>NSObject</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>copy</span> , <span style=color:#66d9ef>nonatomic</span>) NSString <span style=color:#f92672>*</span>name;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>copy</span> , <span style=color:#66d9ef>nonatomic</span>) Study study;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+  
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,student.name);
+    };
+}
+
+</code></pre></div><p>到这里，大家应该看出来了，这里肯定出现了循环引用了。student的study的Block里面强引用了student自身。根据<a href=https://www.halfrost.com/ios_block/>上篇文章</a>的分析，可以知道，_NSConcreteMallocBlock捕获了外部的对象，会在内部持有它。retainCount值会加一。</p><p>我们用Instruments来观察一下。添加Leak观察器。</p><p>当程序运行起来之后，在<strong>Leak Checks</strong>观察器里面应该可以看到红色的❌，点击它就会看到内存leak了。有2个泄露的对象。Block和Student相互循环引用了。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_6.png alt></p><p>打开Cycles & Roots 观察一下循环的环。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_7.png alt></p><p>这里形成环的原因block里面持有student本身，student本身又持有block。</p><p>那再看一个例子2：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+    
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(NSString <span style=color:#f92672>*</span> name){
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,name);
+    };
+    student.study(student.name);
+}
+
+</code></pre></div><p>我把block新传入一个参数，传入的是student.name。这个时候会引起循环引用么？</p><p>答案肯定是不会。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_8.png alt></p><p>如上图，并不会出现内存泄露。原因是因为，student是作为形参传递进block的，block并不会捕获形参到block内部进行持有。所以肯定不会造成循环引用。</p><p>再改一下。看例子3：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>copy</span>,<span style=color:#66d9ef>nonatomic</span>) NSString <span style=color:#f92672>*</span>name;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>nonatomic</span>) Student <span style=color:#f92672>*</span>stu;
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+    
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    
+    self.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;halfrost&#34;</span>;
+    self.stu <span style=color:#f92672>=</span> student;
+    
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,self.name);
+    };
+    
+    student.study();
+}
+</code></pre></div><p>这样会形成循环引用么？</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_9.png alt></p><p>答案也是否定的。</p><p>ViewController虽然强引用着student，但是student里面的blcok强引用的是viewController的name属性，并没有形成环。如果把上述的self.name改成self，也依旧不会产生循环引用。因为他们都没有强引用这个block。</p><p>那遇到循环引用我们改如何处理呢？？类比平时我们经常写的delegate，可以知道，只要有一边是__weak就可以打破循环。</p><p>先说一种做法，利用__block解决循环的做法。例子4：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    
+    <span style=color:#66d9ef>__block</span> Student <span style=color:#f92672>*</span>stu <span style=color:#f92672>=</span> student;
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,stu.name);
+        stu <span style=color:#f92672>=</span> nil;
+    };
+}
+
+</code></pre></div><p>这样写会循环么？看上去应该不会。但是实际上却是会的。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_10.png alt></p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_11.png alt></p><p>由于没有执行study这个block，现在student持有该block，block持有__block变量，__block变量又持有student对象。3者形成了环，导致了循环引用了。
+想打破环就需要破坏掉其中一个引用。__block不持有student即可。</p><p>只需要执行一下block即可。例子5：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+    <span style=color:#66d9ef>__block</span> Student <span style=color:#f92672>*</span>stu <span style=color:#f92672>=</span> student;
+
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,stu.name);
+        stu <span style=color:#f92672>=</span> nil;
+    };
+
+    student.study();
+}
+
+</code></pre></div><p>这样就不会循环引用了。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_12.png alt></p><p>使用__block解决循环引用虽然可以控制对象持有时间，在block中还能动态的控制是__block变量的值，可以赋值nil，也可以赋值其他的值，但是有一个唯一的缺点就是需要执行一次block才行。否则还是会造成循环引用。</p><p>** 值得注意的是，在ARC下__block会导致对象被retain，有可能导致循环引用。而在MRC下，则不会retain这个对象，也不会导致循环引用。** <a href=http://www.jianshu.com/p/e03292674e60>这里可以详细看看来自kuailejim的实验</a></p><blockquote><p>在MRC环境下，__block根本不会对指针所指向的对象执行copy操作，而只是把指针进行的复制。而这一点往往是很多新手&老手所不知道的！</p></blockquote><blockquote><p>而在ARC环境下，对于声明为__block的外部对象，在block内部会进行retain，以至于在block环境内能安全的引用外部对象，所以要谨防循环引用的问题！</p></blockquote><p>接下来可以正式开始讲讲weakSelf 和 strongSelf的用法了。</p><h5 id=1weakself>1.weakSelf</h5><p>说道weakSelf，需要先来区分几种写法。
+__weak __typeof(self)weakSelf = self; 这是AFN里面的写法。。</p><p>#define WEAKSELF typeof(self) __weak weakSelf = self; 这是我们平时的写法。。</p><p>先区分__typeof() 和 typeof()
+由于笔者一直很崇拜AFNetWorking的作者，这个库里面的代码都很整洁，里面各方面的代码都可以当做代码范本来阅读。遇到不懂疑惑的，都要深究，肯定会有收获。这里就是一处，平时我们的写法是不带__的，AFN里面用这种写法有什么特殊的用途么？</p><p>在SOF上能找到相关的<a href=http://stackoverflow.com/questions/14877415/difference-between-typeof-typeof-and-typeof-objective-c>答案</a>：</p><blockquote><p>__typeof__() and __typeof() are compiler-specific extensions to the C language, because standard C does not include such an operator. Standard C requires compilers to prefix language extensions with a double-underscore (which is also why you should never do so for your own functions, variables, etc.)
+typeof() is exactly the same, but throws the underscores out the window with the understanding that every modern compiler supports it. (Actually, now that I think about it, Visual C++ might not. It does support decltype() though, which generally provides the same behaviour as typeof().)
+All three mean the same thing, but none are standard C so a conforming compiler may choose to make any mean something different.</p></blockquote><p>其实两者都是一样的东西，只不过是C里面不同的标准，兼容性不同罢了。</p><p>更加详细的<a href=http://gcc.gnu.org/onlinedocs/gcc/Alternate-Keywords.html#Alternate-Keywords>官方说明</a></p><p>那么抽象出来就是这2种写法。<br>#define WEAKSELF __weak typeof(self)weakSelf = self;<br>#define WEAKSELF typeof(self) __weak weakSelf = self;</p><p>这样子看就清楚了，两种写法就是完全一样的。</p><p>我们可以用WEAKSELF来解决循环引用的问题。例子6：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+    <span style=color:#66d9ef>__weak</span> <span style=color:#66d9ef>typeof</span>(student) weakSelf <span style=color:#f92672>=</span> student;
+    
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,weakSelf.name);
+    };
+
+    student.study();
+}
+</code></pre></div><p>这样就解决了循环引用的问题了。</p><p>解决循环应用的问题一定要分析清楚哪里出现了循环引用，只需要把其中一环加上weakSelf这类似的宏，就可以解决循环引用。如果分析不清楚，就只能无脑添加weakSelf、strongSelf，这样的做法不可取。</p><p>在上面的例子3中，就完全不存在循环引用，要是无脑加weakSelf、strongSelf是不对的。在例子6中，也只需要加一个weakSelf就可以了，也不需要加strongSelf。</p><p>曾经在segmentfault也看到过这样一个问题，问：<a href=https://segmentfault.com/q/1010000004343510>为什么iOS的Masonry中的self不会循环引用?</a></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+UIButton <span style=color:#f92672>*</span>testButton <span style=color:#f92672>=</span> [[UIButton alloc] init];
+[self.view addSubview:testButton];
+testButton.backgroundColor <span style=color:#f92672>=</span> [UIColor redColor];
+[testButton mas_makeConstraints:<span style=color:#f92672>^</span>(MASConstraintMaker <span style=color:#f92672>*</span>make) {
+    make.width.equalTo(<span style=color:#ae81ff>@100</span>);
+    make.height.equalTo(<span style=color:#ae81ff>@100</span>);
+    make.left.equalTo(self.view.mas_left);
+    make.top.equalTo(self.view.mas_top);
+}];
+[testButton bk_addEventHandler:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> sender) {
+    [self dismissViewControllerAnimated:YES completion:nil];
+} forControlEvents:UIControlEventTouchUpInside];
+
+</code></pre></div><blockquote><p>如果我用blocksKit的bk_addEventHandler
+方法, 其中使用strong self, 该viewController就无法dealloc, 我理解是因为,self retain self.view, retain testButton, retain self. 但是如果只用Mansonry的mas_makeConstraints
+方法, 同样使用strong self, 该viewController却能正常dealloc, 请问这是为什么, 为什么Masonry没有导致循环引用？</p></blockquote><p>看到这里，读者应该就应该能回答这个问题了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (NSArray <span style=color:#f92672>*</span>)<span style=color:#a6e22e>mas_makeConstraints:</span>(<span style=color:#66d9ef>void</span>(<span style=color:#f92672>^</span>)(MASConstraintMaker <span style=color:#f92672>*</span>))block {
+    self.translatesAutoresizingMaskIntoConstraints <span style=color:#f92672>=</span> NO;
+    MASConstraintMaker <span style=color:#f92672>*</span>constraintMaker <span style=color:#f92672>=</span> [[MASConstraintMaker alloc] initWithView:self];
+    block(constraintMaker);
+    <span style=color:#66d9ef>return</span> [constraintMaker install];
+}
+</code></pre></div><p><del>在Masonry这个block中，block仅仅捕获了self的translatesAutoresizingMaskIntoConstraints变量，但是并没有持有self。</del></p><p>上述描述有误，感谢@酷酷的哀殿 耐心指点</p><p>更正如下：</p><p>关于 Masonry ，它内部根本没有捕获变量 self，进入block的是testButton，所以执行完毕后，block会被销毁，没有形成环。所以，没有引起循环依赖。</p><h5 id=2strongself>2.strongSelf</h5><p>上面介绍完了weakSelf，既然weakSelf能完美解决Retain Circle的问题了，那为何还需要strongSelf呢？</p><p>还是先从AFN经典说起，以下是AFN其中的一段代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#pragma mark - NSOperation
+</span><span style=color:#75715e></span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setCompletionBlock:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    [self.lock lock];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>block) {
+        [super setCompletionBlock:nil];
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#66d9ef>__weak</span> __typeof(self)weakSelf <span style=color:#f92672>=</span> self;
+        [super setCompletionBlock:<span style=color:#f92672>^</span> {
+            <span style=color:#66d9ef>__strong</span> __typeof(weakSelf)strongSelf <span style=color:#f92672>=</span> weakSelf;
+
+<span style=color:#75715e>#pragma clang diagnostic push
+</span><span style=color:#75715e>#pragma clang diagnostic ignored &#34;-Wgnu&#34;
+</span><span style=color:#75715e></span>            dispatch_group_t group <span style=color:#f92672>=</span> strongSelf.completionGroup <span style=color:#f92672>?:</span> url_request_operation_completion_group();
+            dispatch_queue_t queue <span style=color:#f92672>=</span> strongSelf.completionQueue <span style=color:#f92672>?:</span> dispatch_get_main_queue();
+<span style=color:#75715e>#pragma clang diagnostic pop
+</span><span style=color:#75715e></span>
+            dispatch_group_async(group, queue, <span style=color:#f92672>^</span>{
+                block();
+            });
+
+            dispatch_group_notify(group, url_request_operation_completion_queue(), <span style=color:#f92672>^</span>{
+                [strongSelf setCompletionBlock:nil];
+            });
+        }];
+    }
+    [self.lock unlock];
+}
+
+</code></pre></div><p>如果block里面不加__strong __typeof(weakSelf)strongSelf = weakSelf会如何呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+    <span style=color:#66d9ef>__weak</span> <span style=color:#66d9ef>typeof</span>(student) weakSelf <span style=color:#f92672>=</span> student;
+    
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(<span style=color:#ae81ff>2.0</span> <span style=color:#f92672>*</span> NSEC_PER_SEC)), dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+            NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,weakSelf.name);
+        });
+    };
+
+    student.study();
+}
+</code></pre></div><p>输出：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#a6e22e>my</span> <span style=color:#a6e22e>name</span> <span style=color:#a6e22e>is</span> = (<span style=color:#a6e22e>null</span>)<span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>为什么输出是这样的呢？</p><p>重点就在dispatch_after这个函数里面。在study()的block结束之后，student被自动释放了。又由于dispatch_after里面捕获的__weak的student，根据第二章讲过的__weak的实现原理，在原对象释放之后，__weak对象就会变成null，防止野指针。所以就输出了null了。</p><p>那么我们怎么才能在weakSelf之后，block里面还能继续使用weakSelf之后的对象呢？</p><p>究其根本原因就是weakSelf之后，无法控制什么时候会被释放，为了保证在block内不会被释放，需要添加__strong。</p><p>在block里面使用的__strong修饰的weakSelf是为了在函数生命周期中防止self提前释放。strongSelf是一个自动变量当block执行完毕就会释放自动变量strongSelf不会对self进行一直进行强引用。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;Hello World&#34;</span>;
+    <span style=color:#66d9ef>__weak</span> <span style=color:#66d9ef>typeof</span>(student) weakSelf <span style=color:#f92672>=</span> student;
+    
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>__strong</span> <span style=color:#66d9ef>typeof</span>(student) strongSelf <span style=color:#f92672>=</span> weakSelf;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(<span style=color:#ae81ff>2.0</span> <span style=color:#f92672>*</span> NSEC_PER_SEC)), dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+            NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,strongSelf.name);
+        });
+        
+    };
+
+    student.study();
+}
+</code></pre></div><p>输出</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#a6e22e>my</span> <span style=color:#a6e22e>name</span> <span style=color:#a6e22e>is</span> = <span style=color:#a6e22e>Hello</span> <span style=color:#a6e22e>World</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>至此，我们就明白了weakSelf、strongSelf的用途了。</p><p>weakSelf 是为了block不持有self，避免Retain Circle循环引用。在 Block 内如果需要访问 self 的方法、变量，建议使用 weakSelf。</p><p>strongSelf的目的是因为一旦进入block执行，假设不允许self在这个执行过程中释放，就需要加入strongSelf。block执行完后这个strongSelf 会自动释放，没有不会存在循环引用问题。如果在 Block 内需要多次 访问 self，则需要使用 strongSelf。</p><p>关于Retain Circle最后总结一下，有3种方式可以解决循环引用。</p><p>结合《Effective Objective-C 2.0》(编写高质量iOS与OS X代码的52个有效方法)这本书的例子，来总结一下。</p><p>EOCNetworkFetcher.h</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#66d9ef>typedef</span> <span style=color:#a6e22e>void</span> (<span style=color:#f92672>^</span>EOCNetworkFetcherCompletionHandler)(NSData <span style=color:#f92672>*</span>data);
+
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>EOCNetworkFetcher</span> : <span style=color:#a6e22e>NSObject</span>
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readonly</span>) NSURL <span style=color:#f92672>*</span>url;
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithURL:</span>(NSURL <span style=color:#f92672>*</span>)url;
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>startWithCompletionHandler:</span>(EOCNetworkFetcherCompletionHandler)completion;
+
+<span style=color:#66d9ef>@end</span>
+</code></pre></div><p>EOCNetworkFetcher.m</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>EOCNetworkFetcher</span> ()
+
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>readwrite</span>) NSURL <span style=color:#f92672>*</span>url;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>copy</span>) EOCNetworkFetcherCompletionHandler completionHandler;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) NSData <span style=color:#f92672>*</span>downloadData;
+
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>EOCNetworkFetcher</span>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithURL:</span>(NSURL <span style=color:#f92672>*</span>)url {
+    <span style=color:#66d9ef>if</span>(self <span style=color:#f92672>=</span> [super init]) {
+        _url <span style=color:#f92672>=</span> url;
+    }
+    <span style=color:#66d9ef>return</span> self;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>startWithCompletionHandler:</span>(EOCNetworkFetcherCompletionHandler)completion {
+    self.completionHandler <span style=color:#f92672>=</span> completion;
+    <span style=color:#75715e>//开始网络请求
+</span><span style=color:#75715e></span>    dispatch_async(dispatch_get_global_queue(<span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>0</span>), <span style=color:#f92672>^</span>{
+        _downloadData <span style=color:#f92672>=</span> [[NSData alloc] initWithContentsOfURL:_url];
+        dispatch_async(dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+             <span style=color:#75715e>//网络请求完成
+</span><span style=color:#75715e></span>            [self p_requestCompleted];
+        });
+    });
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>p_requestCompleted</span> {
+    <span style=color:#66d9ef>if</span>(_completionHandler) {
+        _completionHandler(_downloadData);
+    }
+}
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>EOCClass.m</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>EOCClass</span> {
+    EOCNetworkFetcher <span style=color:#f92672>*</span>_networkFetcher;
+    NSData <span style=color:#f92672>*</span>_fetchedData;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>downloadData</span> {
+    NSURL <span style=color:#f92672>*</span>url <span style=color:#f92672>=</span> [NSURL URLWithString:<span style=color:#e6db74>@&#34;http://www.baidu.com&#34;</span>];
+    _networkFetcher <span style=color:#f92672>=</span> [[EOCNetworkFetcher alloc] initWithURL:url];
+    [_networkFetcher startWithCompletionHandler:<span style=color:#f92672>^</span>(NSData <span style=color:#f92672>*</span>data) {
+        _fetchedData <span style=color:#f92672>=</span> data;
+    }];
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>在这个例子中，存在3者之间形成环</p><p>1、completion handler的block因为要设置_fetchedData实例变量的值，所以它必须捕获self变量，也就是说handler块保留了EOCClass实例；</p><p>2、EOCClass实例通过strong实例变量保留了EOCNetworkFetcher，最后EOCNetworkFetcher实例对象也会保留了handler的block。</p><p>书上说的3种方法来打破循环。</p><p>方法一：手动释放EOCNetworkFetcher使用之后持有的_networkFetcher，这样可以打破循环引用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>downloadData</span> {
+    NSURL <span style=color:#f92672>*</span>url <span style=color:#f92672>=</span> [NSURL URLWithString:<span style=color:#e6db74>@&#34;http://www.baidu.com&#34;</span>];
+    _networkFetcher <span style=color:#f92672>=</span> [[EOCNetworkFetcher alloc] initWithURL:url];
+    [_networkFetcher startWithCompletionHandler:<span style=color:#f92672>^</span>(NSData <span style=color:#f92672>*</span>data) {
+        _fetchedData <span style=color:#f92672>=</span> data;
+        _networkFetcher <span style=color:#f92672>=</span> nil;<span style=color:#75715e>//加上此行，打破循环引用
+</span><span style=color:#75715e></span>    }];
+}
+</code></pre></div><p>方法二：直接释放block。因为在使用完对象之后需要人为手动释放，如果忘记释放就会造成循环引用了。如果使用完completion handler之后直接释放block即可。打破循环引用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>p_requestCompleted</span> {
+    <span style=color:#66d9ef>if</span>(_completionHandler) {
+        _completionHandler(_downloadData);
+    }
+    self.completionHandler <span style=color:#f92672>=</span> nil;<span style=color:#75715e>//加上此行，打破循环引用
+</span><span style=color:#75715e></span>}
+</code></pre></div><p>方法三：使用weakSelf、strongSelf</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>downloadData</span> {
+   <span style=color:#66d9ef>__weak</span> __typeof(self) weakSelf <span style=color:#f92672>=</span> self;
+   NSURL <span style=color:#f92672>*</span>url <span style=color:#f92672>=</span> [NSURL URLWithString:<span style=color:#e6db74>@&#34;http://www.baidu.com&#34;</span>];
+   _networkFetcher <span style=color:#f92672>=</span> [[EOCNetworkFetcher alloc] initWithURL:url];
+   [_networkFetcher startWithCompletionHandler:<span style=color:#f92672>^</span>(NSData <span style=color:#f92672>*</span>data) {
+        __typeof(<span style=color:#f92672>&amp;*</span>weakSelf) strongSelf <span style=color:#f92672>=</span> weakSelf;
+        <span style=color:#66d9ef>if</span> (strongSelf) {
+            strongSelf.fetchedData <span style=color:#f92672>=</span> data;
+        }
+   }];
+}
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_13.png alt></p><h4 id=四weakifystrongify实现原理>四.@weakify、@strongify实现原理</h4><p>上面讲完了weakSelf、strongSelf之后，接下来再讲讲@weakify、@strongify，这两个关键字是RAC中避免Block循环引用而开发的2个宏，这2个宏的实现过程很牛，值得我们学习。</p><p>@weakify、@strongify的作用和weakSelf、strongSelf对应的一样。这里我们具体看看大神是怎么实现这2个宏的。</p><p>直接从源码看起来。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#define weakify(...) \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    metamacro_foreach_cxt(rac_weakify_,, __weak, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+<span style=color:#75715e>#define strongify(...) \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic push&#34;) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic ignored \&#34;-Wshadow\&#34;&#34;) \
+</span><span style=color:#75715e>    metamacro_foreach(rac_strongify_,, __VA_ARGS__) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic pop&#34;)
+</span></code></pre></div><p>看到这种宏定义，咋一看什么都不知道。那就只能一层层的往下看。</p><h5 id=1-weakify>1. weakify</h5><p>先从weakify(&mldr;)开始。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#if DEBUG
+</span><span style=color:#75715e>#define rac_keywordify autoreleasepool {}
+</span><span style=color:#75715e>#else
+</span><span style=color:#75715e>#define rac_keywordify try {} @catch (...) {}
+</span><span style=color:#75715e>#endif
+</span></code></pre></div><p>这里在debug模式下使用@autoreleasepool是为了维持编译器的分析能力，而使用@try/@catch 是为了防止插入一些不必要的autoreleasepool。rac_keywordify 实际上就是autoreleasepool {}
+的宏替换。因为有了autoreleasepool {}的宏替换，所以weakify要加上@，形成@autoreleasepool {}。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt(MACRO, SEP, CONTEXT, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(__VA_ARGS__))(MACRO, SEP, CONTEXT, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>__VA_ARGS__：总体来说就是将左边宏中 &mldr; 的内容原样抄写在右边 __VA_ARGS__ 所在的位置。它是一个可变参数的宏，是新的C99规范中新增的，目前似乎只有gcc支持（VC从VC2005开始支持）。</p><p>那么我们使用@weakify(self)传入进去。__VA_ARGS__相当于self。此时我们可以把最新开始的weakify套下来。于是就变成了这样：</p><p>rac_weakify_,, __weak, __VA_ARGS__整体替换MACRO, SEP, CONTEXT, &mldr;</p><p>这里需要注意的是，源码中就是给的两个&rdquo;,&ldquo;逗号是连着的，所以我们也要等效替换参数，相当于SEP是空值。</p><p>替换完成之后就是下面这个样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>autoreleasepool {}
+metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(self))(rac_weakify_, , <span style=color:#66d9ef>__weak</span>, self)
+</code></pre></div><p>现在我们需要弄懂的就是metamacro_concat 和 metamacro_argcount是干什么用的。</p><p>继续看看metamacro_concat 的实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_concat(A, B) \
+</span><span style=color:#75715e>        metamacro_concat_(A, B)
+</span><span style=color:#75715e></span>
+
+<span style=color:#75715e>#define metamacro_concat_(A, B) A ## B
+</span><span style=color:#75715e></span>
+</code></pre></div><p>## 是宏连接符。举个例子：</p><p>假设宏定义为#define XNAME(n) x##n，代码为：XNAME(4)，则在预编译时，宏发现XNAME(4)与XNAME(n)匹配，则令 n 为 4，然后将右边的n的内容也变为4，然后将整个XNAME(4)替换为 x##n，亦即 x4，故 最终结果为 XNAME(4) 变为 x4。所以A##B就是AB。</p><p>metamacro_argcount 的实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#define metamacro_argcount(...) \
+</span><span style=color:#75715e>        metamacro_at(20, __VA_ARGS__, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+</span><span style=color:#75715e></span>
+
+<span style=color:#75715e>#define metamacro_at(N, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_at, N)(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_concat是上面讲过的连接符，那么metamacro_at, N = metamacro_atN，由于N = 20，于是metamacro_atN = metamacro_at20。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_at0(...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at1(_0, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at2(_0, _1, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at3(_0, _1, _2, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at4(_0, _1, _2, _3, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at5(_0, _1, _2, _3, _4, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at6(_0, _1, _2, _3, _4, _5, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at7(_0, _1, _2, _3, _4, _5, _6, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at8(_0, _1, _2, _3, _4, _5, _6, _7, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at9(_0, _1, _2, _3, _4, _5, _6, _7, _8, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at10(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at11(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at12(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at13(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at14(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at15(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at16(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at17(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at18(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at19(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at20(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_at20的作用就是截取前20个参数，剩下的参数传入metamacro_head。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_head(...) \
+</span><span style=color:#75715e>        metamacro_head_(__VA_ARGS__, 0)
+</span><span style=color:#75715e></span>
+
+<span style=color:#75715e>#define metamacro_head_(FIRST, ...) FIRST
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_head的作用返回第一个参数。返回到上一级metamacro_at20，如果我们从最源头的@weakify(self)，传递进来，那么metamacro_at20(self,20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)，截取前20个参数，最后一个留给metamacro_head_(1)，那么就应该返回1。</p><p>metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(self)) = metamacro_concat(metamacro_foreach_cxt, 1) 最终可以替换成metamacro_foreach_cxt1。</p><p>在源码中继续搜寻。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// metamacro_foreach_cxt expansions
+</span><span style=color:#75715e></span><span style=color:#75715e>#define metamacro_foreach_cxt0(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e>#define metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) MACRO(0, CONTEXT, _0)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(1, CONTEXT, _1)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(2, CONTEXT, _2)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(3, CONTEXT, _3)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(4, CONTEXT, _4)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(5, CONTEXT, _5)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(6, CONTEXT, _6)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(7, CONTEXT, _7)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(8, CONTEXT, _8)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(9, CONTEXT, _9)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(10, CONTEXT, _10)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(11, CONTEXT, _11)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(12, CONTEXT, _12)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(13, CONTEXT, _13)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(14, CONTEXT, _14)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(15, CONTEXT, _15)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(16, CONTEXT, _16)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(17, CONTEXT, _17)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(18, CONTEXT, _18)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt20(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(19, CONTEXT, _19)
+</span></code></pre></div><p>metamacro_foreach_cxt这个宏定义有点像递归，这里可以看到N 最大就是20，于是metamacro_foreach_cxt19就是最大，metamacro_foreach_cxt19会生成rac_weakify_(0,__weak,_18)，然后再把前18个数传入metamacro_foreach_cxt18，并生成rac_weakify_(0,__weak,_17)，依次类推，一直递推到metamacro_foreach_cxt0。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt0(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_foreach_cxt0就是终止条件，不做任何操作了。</p><p>于是最初的@weakify就被替换成</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>autoreleasepool {}
+metamacro_foreach_cxt1(rac_weakify_, , <span style=color:#66d9ef>__weak</span>, self)
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) MACRO(0, CONTEXT, _0)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>代入参数</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>autoreleasepool {}
+rac_weakify_<span style=color:#960050;background-color:#1e0010>（</span><span style=color:#ae81ff>0</span>,<span style=color:#66d9ef>__weak</span>,self<span style=color:#960050;background-color:#1e0010>）</span>
+
+</code></pre></div><p>最终需要解析的就是rac_weakify_</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define rac_weakify_(INDEX, CONTEXT, VAR) \
+</span><span style=color:#75715e>    CONTEXT __typeof__(VAR) metamacro_concat(VAR, _weak_) = (VAR);
+</span><span style=color:#75715e></span>
+</code></pre></div><p>把（0,__weak,self）的参数替换进来(INDEX, CONTEXT, VAR)。
+INDEX = 0， CONTEXT = __weak，VAR = self，</p><p>于是</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+CONTEXT <span style=color:#a6e22e>__typeof__</span>(VAR) metamacro_concat(VAR, _weak_) <span style=color:#f92672>=</span> (VAR);
+
+
+<span style=color:#960050;background-color:#1e0010>等效替换为</span>
+
+
+<span style=color:#66d9ef>__weak</span> <span style=color:#a6e22e>__typeof__</span>(self) self_weak_ <span style=color:#f92672>=</span> self;
+</code></pre></div><p>最终@weakify(self) = __weak __typeof__(self) self_weak_ = self;</p><p>这里的self_weak_ 就完全等价于我们之前写的weakSelf。</p><h5 id=2-strongify>2. strongify</h5><p>再继续分析strongify(&mldr;)</p><p>rac_keywordify还是和weakify一样，是autoreleasepool {}，只为了前面能加上@</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+_Pragma(<span style=color:#e6db74>&#34;clang diagnostic push&#34;</span>) \
+_Pragma(<span style=color:#e6db74>&#34;clang diagnostic ignored </span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>-Wshadow</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>) \
+_Pragma(<span style=color:#e6db74>&#34;clang diagnostic pop&#34;</span>)
+
+</code></pre></div><p>strongify比weakify多了这些_Pragma语句。</p><p>关键字_Pragma是C99里面引入的。_Pragma比#pragma（在设计上）更加合理，因而功能也有所增强。</p><p>上面的等效替换</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#pragma clang diagnostic push
+</span><span style=color:#75715e>#pragma clang diagnostic ignored &#34;-Wshadow&#34;
+</span><span style=color:#75715e>#pragma clang diagnostic pop
+</span><span style=color:#75715e></span>
+</code></pre></div><p>这里的clang语句的作用:忽略当一个局部变量或类型声明遮盖另一个变量的警告。</p><p>最初的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#define strongify(...) \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic push&#34;) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic ignored \&#34;-Wshadow\&#34;&#34;) \
+</span><span style=color:#75715e>    metamacro_foreach(rac_strongify_,, __VA_ARGS__) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic pop&#34;)
+</span></code></pre></div><p>strongify里面需要弄清楚的就是metamacro_foreach 和 rac_strongify_。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>#define metamacro_foreach(MACRO, SEP, ...) \
+</span><span style=color:#75715e>        metamacro_foreach_cxt(metamacro_foreach_iter, SEP, MACRO, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define rac_strongify_(INDEX, VAR) \
+</span><span style=color:#75715e>    __strong __typeof__(VAR) VAR = metamacro_concat(VAR, _weak_);
+</span><span style=color:#75715e></span>
+</code></pre></div><p>我们先替换一次，SEP = 空 ， MACRO = rac_strongify_ ， __VA_ARGS__ , 于是替换成这样。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_foreach_cxt(metamacro_foreach_iter,,rac_strongify_,self)
+
+</code></pre></div><p>根据之前分析，metamacro_foreach_cxt再次等效替换，metamacro_foreach_cxt##1(metamacro_foreach_iter,,rac_strongify_,self)</p><p>根据</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) MACRO(0, CONTEXT, _0)
+</span></code></pre></div><p>再次替换成metamacro_foreach_iter(0, rac_strongify_, self)</p><p>继续看看metamacro_foreach_iter的实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_foreach_iter(INDEX, MACRO, ARG) MACRO(INDEX, ARG)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>最终替换成rac_strongify_(0,self)</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define rac_strongify_(INDEX, VAR) \
+</span><span style=color:#75715e>    __strong __typeof__(VAR) VAR = metamacro_concat(VAR, _weak_);
+</span></code></pre></div><p>INDEX = 0, VAR = self,于是@strongify(self)就等价于</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+ <span style=color:#66d9ef>__strong</span> <span style=color:#a6e22e>__typeof__</span>(VAR) VAR <span style=color:#f92672>=</span> metamacro_concat(VAR, _weak_);
+
+<span style=color:#960050;background-color:#1e0010>等价于</span>
+
+<span style=color:#66d9ef>__strong</span> <span style=color:#a6e22e>__typeof__</span>(self) self <span style=color:#f92672>=</span> self_weak_;
+
+</code></pre></div><p>注意@strongify(self)只能使用在block中，如果用在block外面，会报错，因为这里会提示你Redefinition of &lsquo;self&rsquo;。</p><p>总结一下</p><p>@weakify(self) = @autoreleasepool{} __weak __typeof__ (self) self_weak_ = self;</p><p>@strongify(self) = @autoreleasepool{} __strong __typeof__(self) self = self_weak_;</p><p>经过分析以后，其实@weakify(self) 和 @strongify(self) 就是比我们日常写的weakSelf、strongSelf多了一个@autoreleasepool{}而已，至于为何要用这些复杂的宏定义来做，目前我还没有理解。如果有大神指导其中的原因，还请多多指点。</p><p><strong>更新</strong></p><p>针对文章中给的例子3，大家都提出了疑问，为何没有检测出循环引用？其实这个例子有点不好。因为这个ViewController的引用计数一出来就是6，因为它被其他很多对象引用着。当然它是强引用了student，因为student的retainCount值是2。ViewController释放的时候才会把student的值减一。针对这个例子3，我重新抽取出中间的模型，重新举一个例子。</p><p>既然ViewController特殊，那我们就新建一个类。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;Foundation/Foundation.h&gt;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>Teacher</span> : <span style=color:#a6e22e>NSObject</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>copy</span> , <span style=color:#66d9ef>nonatomic</span>) NSString <span style=color:#f92672>*</span>name;
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>strong</span>, <span style=color:#66d9ef>nonatomic</span>) Student <span style=color:#f92672>*</span>stu;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;ViewController.h&#34;
+</span><span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e>#import &#34;Teacher.h&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>ViewController</span> ()
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>ViewController</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidLoad</span> {
+    [super viewDidLoad];
+    
+    Student <span style=color:#f92672>*</span>student <span style=color:#f92672>=</span> [[Student alloc]init];
+    Teacher <span style=color:#f92672>*</span>teacher <span style=color:#f92672>=</span> [[Teacher alloc]init];
+    
+    teacher.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;i&#39;m teacher&#34;</span>;
+    teacher.stu <span style=color:#f92672>=</span> student;
+    
+    student.name <span style=color:#f92672>=</span> <span style=color:#e6db74>@&#34;halfrost&#34;</span>;
+   
+    student.study <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+        NSLog(<span style=color:#e6db74>@&#34;my name is = %@&#34;</span>,teacher.name);
+    };
+    
+    student.study();
+}
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_14.png alt></p><p><img src=https://img.halfrost.com/Blog/ArticleImage/22_15.png alt></p><p>如图所示，还是出现了循环引用，student的block强引用了teacher，teacher又强引用了student，导致两者都无法释放。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一-retain-circle的由来>一. Retain Circle的由来</a></li><li><a href=#二__weak__strong的实现原理>二.__weak、__strong的实现原理</a></li><li><a href=#三weakselfstrongself的用途>三.weakSelf、strongSelf的用途</a></li><li><a href=#四weakifystrongify实现原理>四.@weakify、@strongify实现原理</a></li></ul></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&text=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&is_video=false&description=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&title=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&name=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e4%b8%8a%e7%af%87%e4%b8%ad%ef%bc%8c%e4%bb%94%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86%e4%b8%80%e4%b8%8bBlock%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%e4%bb%a5%e5%8f%8a__block%e6%8d%95%e8%8e%b7%e5%a4%96%e9%83%a8%e5%8f%98%e9%87%8f%e7%9a%84%e5%8e%9f%e7%90%86%e3%80%82%e7%84%b6%e8%80%8c%e5%ae%9e%e9%99%85%e4%bd%bf%e7%94%a8Block%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8c%e8%bf%98%e6%98%af%e4%bc%9a%e9%81%87%e5%88%b0%e4%b8%80%e4%ba%9b%e9%97%ae%e9%a2%98%ef%bc%8c%e6%af%94%e5%a6%82Retain%20Circle%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.Retain%20Circle%e7%9a%84%e7%94%b1%e6%9d%a5%202.__weak%e3%80%81__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%203.weakSelf%e3%80%81strongSelf%e7%9a%84%e7%94%a8%e9%80%94%204.%40weakify%e3%80%81%40strongify%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%20%e4%b8%80.%20Retain%20Circle%e7%9a%84%e7%94%b1%e6%9d%a5%20%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e7%9b%b8%e4%bf%a1%e5%a4%a7%e5%ae%b6%e9%83%bd%e5%be%88%e7%90%86%e8%a7%a3%e4%ba%86%ef%bc%8c%e8%bf%99%e9%87%8c%e8%bf%98%e6%98%af%e7%ae%80%e5%8d%95%e7%9a%84%e6%8f%90%e4%b8%80%e4%b8%8b%e3%80%82%0a%e5%bd%93A%e5%af%b9%e8%b1%a1%e9%87%8c%e9%9d%a2%e5%bc%ba%e5%bc%95%e7%94%a8%e4%ba%86B%e5%af%b9%e8%b1%a1%ef%bc%8cB%e5%af%b9%e8%b1%a1%e5%8f%88%e5%bc%ba%e5%bc%95%e7%94%a8%e4%ba%86A%e5%af%b9%e8%b1%a1%ef%bc%8c%e8%bf%99%e6%a0%b7%e4%b8%a4%e8%80%85%e7%9a%84retainCount%e5%80%bc%e4%b8%80%e7%9b%b4%e9%83%bd%e6%97%a0%e6%b3%95%e4%b8%ba0%ef%bc%8c%e4%ba%8e%e6%98%af%e5%86%85%e5%ad%98%e5%a7%8b%e7%bb%88%e6%97%a0%e6%b3%95%e9%87%8a%e6%94%be%ef%bc%8c%e5%af%bc%e8%87%b4%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e3%80%82%e6%89%80%e8%b0%93%e7%9a%84%e5%86%85%e5%ad%98%e6%b3%84%e9%9c%b2%e5%b0%b1%e6%98%af%e6%9c%ac%e5%ba%94%e8%af%a5%e9%87%8a%e6%94%be%e7%9a%84%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%9c%a8%e5%85%b6%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%e7%bb%93%e6%9d%9f%e4%b9%8b%e5%90%8e%e4%be%9d%e6%97%a7%e5%ad%98%e5%9c%a8%e3%80%82%0a%e8%bf%99%e6%98%af2%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b9%8b%e9%97%b4%e7%9a%84%ef%bc%8c%e7%9b%b8%e5%ba%94%e7%9a%84%ef%bc%8c%e8%bf%99%e7%a7%8d%e5%be%aa%e7%8e%af%e8%bf%98%e8%83%bd%e5%ad%98%e5%9c%a8%e4%ba%8e3%ef%bc%8c4%e2%80%a6%e2%80%a6%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b9%8b%e9%97%b4%ef%bc%8c%e5%8f%aa%e8%a6%81%e7%9b%b8%e4%ba%92%e5%bd%a2%e6%88%90%e7%8e%af%ef%bc%8c%e5%b0%b1%e4%bc%9a%e5%af%bc%e8%87%b4Retain%20Cicle%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%e5%bd%93%e7%84%b6%e4%b9%9f%e5%ad%98%e5%9c%a8%e8%87%aa%e8%ba%ab%e5%bc%95%e7%94%a8%e8%87%aa%e8%ba%ab%e7%9a%84%ef%bc%8c%e5%bd%93%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%86%85%e9%83%a8%e7%9a%84%e4%b8%80%e4%b8%aaobj%ef%bc%8c%e5%bc%ba%e5%bc%95%e7%94%a8%e7%9a%84%e8%87%aa%e8%ba%ab%ef%bc%8c%e4%b9%9f%e4%bc%9a%e5%af%bc%e8%87%b4%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e5%87%ba%e7%8e%b0%e3%80%82%e5%b8%b8%e8%a7%81%e7%9a%84%e5%b0%b1%e6%98%afblock%e9%87%8c%e9%9d%a2%e5%bc%95%e7%94%a8%e7%9a%84%e9%97%ae%e9%a2%98%e3%80%82%0a%e4%ba%8c.__weak%e3%80%81__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%e5%9c%a8ARC%e7%8e%af%e5%a2%83%e4%b8%8b%ef%bc%8cid%e7%b1%bb%e5%9e%8b%e5%92%8c%e5%af%b9%e8%b1%a1%e7%b1%bb%e5%9e%8b%e5%92%8cC%e8%af%ad%e8%a8%80%e5%85%b6%e4%bb%96%e7%b1%bb%e5%9e%8b%e4%b8%8d%e5%90%8c%ef%bc%8c%e7%b1%bb%e5%9e%8b%e5%89%8d%e5%bf%85%e9%a1%bb%e5%8a%a0%e4%b8%8a%e6%89%80%e6%9c%89%e6%9d%83%e7%9a%84%e4%bf%ae%e9%a5%b0%e7%ac%a6%e3%80%82%0a%e6%89%80%e6%9c%89%e6%9d%83%e4%bf%ae%e9%a5%b0%e7%ac%a6%e6%80%bb%e5%85%b1%e6%9c%894%e7%a7%8d%ef%bc%9a%0a1.__strong%e4%bf%ae%e9%a5%b0%e7%ac%a6%202.__weak%e4%bf%ae%e9%a5%b0%e7%ac%a6%203.__unsafe_unretained%e4%bf%ae%e9%a5%b0%e7%ac%a6%204.__autoreleasing%e4%bf%ae%e9%a5%b0%e7%ac%a6%0a%e4%b8%80%e8%88%ac%e6%88%91%e4%bb%ac%e5%a6%82%e6%9e%9c%e4%b8%8d%e5%86%99%ef%bc%8c%e9%bb%98%e8%ae%a4%e7%9a%84%e4%bf%ae%e9%a5%b0%e7%ac%a6%e6%98%af__strong%e3%80%82%0a%e8%a6%81%e6%83%b3%e5%bc%84%e6%b8%85%e6%a5%9a__strong%ef%bc%8c__weak%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%ef%bc%8c%e6%88%91%e4%bb%ac%e5%b0%b1%e9%9c%80%e8%a6%81%e7%a0%94%e7%a9%b6%e7%a0%94%e7%a9%b6clang%28LLVM%e7%bc%96%e8%af%91%e5%99%a8%29%e5%92%8cobjc4%20Objective-C%20runtime%e5%ba%93%e4%ba%86%e3%80%82%0a%e5%85%b3%e4%ba%8eclang%e6%9c%89%e4%b8%80%e4%bb%bd%e5%85%b3%e4%ba%8eARC%e8%af%a6%e7%bb%86%e7%9a%84%e6%96%87%e6%a1%a3%ef%bc%8c%e6%9c%89%e5%85%b4%e8%b6%a3%e7%9a%84%e5%8f%af%e4%bb%a5%e4%bb%94%e7%bb%86%e7%a0%94%e7%a9%b6%e4%b8%80%e4%b8%8b%e6%96%87%e6%a1%a3%e9%87%8c%e9%9d%a2%e7%9a%84%e8%af%b4%e6%98%8e%e5%92%8c%e4%be%8b%e5%ad%90%ef%bc%8c%e5%be%88%e6%9c%89%e5%b8%ae%e5%8a%a9%e3%80%82%0a%e4%bb%a5%e4%b8%8b%e7%9a%84%e8%ae%b2%e8%a7%a3%ef%bc%8c%e4%b9%9f%e4%bc%9a%e6%9d%a5%e8%87%aa%e4%ba%8e%e4%b8%8a%e8%bf%b0%e6%96%87%e6%a1%a3%e4%b8%ad%e7%9a%84%e5%87%bd%e6%95%b0%e8%af%b4%e6%98%8e%e3%80%82%0a1.__strong%e7%9a%84%e5%ae%9e%e7%8e%b0%e5%8e%9f%e7%90%86%20%281%29%e5%af%b9%e8%b1%a1%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%20%e9%a6%96%e5%85%88%e6%88%91%e4%bb%ac%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8b%e7%94%9f%e6%88%90%e7%9a%84%e5%af%b9%e8%b1%a1%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%e7%9a%84%e6%83%85%e5%86%b5%ef%bc%8c%e5%88%a9%e7%94%a8alloc%2fnew%2fcopy%2fmutableCopy%e7%94%9f%e6%88%90%e5%af%b9%e8%b1%a1%e3%80%82%0a%e5%bd%93%e6%88%91%e4%bb%ac%e5%a3%b0%e6%98%8e%e4%ba%86%e4%b8%80%e4%b8%aa__strong%e5%af%b9%e8%b1%a1%0a%7b%20id%20__strong%20obj%20%3d%20%5b%5bNSObject%20alloc%5d%20init%5d%3b%20%7d%20LLVM%e7%bc%96%e8%af%91%e5%99%a8%e4%bc%9a%e6%8a%8a%e4%b8%8a%e8%bf%b0%e4%bb%a3%e7%a0%81%e8%bd%ac%e6%8d%a2%e6%88%90%e4%b8%8b%e9%9d%a2%e7%9a%84%e6%a0%b7%e5%ad%90%0aid%20__attribute__%28%28objc_ownership%28strong%29%29%29%20obj%20%3d%20%28%28NSObject%20%2a%28%2a%29%28id%2c%20SEL%29%29%28void%20%2a%29objc_msgSend%29%28%28id%29%28%28NSObject%20%2a%28%2a%29%28id%2c%20SEL%29%29%28void%20%2a%29objc_msgSend%29%28%28id%29objc_getClass%28%26%2334%3bNSObject%26%2334%3b%29%2c%20sel_registerName%28%26%2334%3balloc%26%2334%3b%29%29%2c%20sel_registerName%28%26%2334%3binit%26%2334%3b%29%29%3b%20%e7%9b%b8%e5%ba%94%e7%9a%84%e4%bc%9a%e8%b0%83%e7%94%a8%0aid%20obj%20%3d%20objc_msgSend%28NSObject%2c%20%40selector%28alloc%29%29%3b%20objc_msgSend%28obj%2cselector%28init%29%29%3b%20objc_release%28obj%29%3b%20%e4%b8%8a%e8%bf%b0%e8%bf%99%e4%ba%9b%e6%96%b9%e6%b3%95%e9%83%bd%e5%a5%bd%e7%90%86%e8%a7%a3%e3%80%82%e5%9c%a8ARC%e6%9c%89%e6%95%88%e7%9a%84%e6%97%b6%e5%80%99%e5%b0%b1%e4%bc%9a%e8%87%aa%e5%8a%a8%e6%8f%92%e5%85%a5release%e4%bb%a3%e7%a0%81%ef%bc%8c%e5%9c%a8%e4%bd%9c%e7%94%a8%e5%9f%9f%e7%bb%93%e6%9d%9f%e7%9a%84%e6%97%b6%e5%80%99%e8%87%aa%e5%8a%a8%e9%87%8a%e6%94%be%e3%80%82%0a%282%29%e5%af%b9%e8%b1%a1%e4%b8%8d%e6%8c%81%e6%9c%89%e8%87%aa%e5%b7%b1%20%e7%94%9f%e6%88%90%e5%af%b9%e8%b1%a1%e7%9a%84%e6%97%b6%e5%80%99%e4%b8%8d%e7%94%a8alloc%2fnew%2fcopy%2fmutableCopy%e7%ad%89%e6%96%b9%e6%b3%95%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_block_retain_circle%2f&t=%e6%b7%b1%e5%85%a5%e7%a0%94%e7%a9%b6%20Block%20%e7%94%a8%20weakSelf%e3%80%81strongSelf%e3%80%81%40weakify%e3%80%81%40strongify%20%e8%a7%a3%e5%86%b3%e5%be%aa%e7%8e%af%e5%bc%95%e7%94%a8"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

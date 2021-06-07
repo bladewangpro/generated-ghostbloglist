@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>msgSend on prometheus</title><link>https://new.halfrost.com/tags/msgsend/</link><description>Recent content in msgSend on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sat, 17 Sep 2016 01:47:58 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/msgsend/index.xml" rel="self" type="application/rss+xml"/><item><title>神经病院 Objective-C Runtime 住院第二天——消息发送与转发</title><link>https://new.halfrost.com/objc_runtime_objc_msgsend/</link><pubDate>Sat, 17 Sep 2016 01:47:58 +0000</pubDate><guid>https://new.halfrost.com/objc_runtime_objc_msgsend/</guid><description>前言 现在越来越多的app都使用了JSPatch实现app热修复，而JSPatch 能做到通过 JS 调用和改写 OC 方法最根本的原因是 Objective-C 是动态语言，OC 上所有方法的调用/类的生成都通过 Objective-C Runtime 在运行时进行，我们可以通过类名/方法名反射得到相应的类和方法，也可以替换某个类的方法为新的实现，理论上你可以在运行时通过类名/方法名调用到任何 OC 方法，替换任何类的实现以及新增任意类。今天就来详细解析一下OC中runtime最为吸引人的地方。
+####目录
+1.objc_msgSend函数简介 2.消息发送Messaging阶段—objc_msgSend源码解析 3.消息转发Message Forwarding阶段 4.forwardInvocation的例子 5.入院考试 6.Runtime中的优化 一.objc_msgSend函数简介 最初接触到OC Runtime，一定是从[receiver message]这里开始的。[receiver message]会被编译器转化为：
+id objc_msgSend ( id self, SEL op, ... ); 这是一个可变参数函数。第二个参数类型是SEL。SEL在OC中是selector方法选择器。
+typedef struct objc_selector *SEL; objc_selector是一个映射到方法的C字符串。需要注意的是@selector()选择子只与函数名有关。不同类中相同名字的方法所对应的方法选择器是相同的，即使方法名字相同而变量类型不同也会导致它们具有相同的方法选择器。由于这点特性，也导致了OC不支持函数重载。
+在receiver拿到对应的selector之后，如果自己无法执行这个方法，那么该条消息要被转发。或者临时动态的添加方法实现。如果转发到最后依旧没法处理，程序就会崩溃。
+所以编译期仅仅是确定了要发送消息，而消息如何处理是要运行期需要解决的事情。
+objc_msgSend函数究竟会干什么事情呢？从这篇「objc_msgSend() Tour」文章里面可以得到一个比较详细的结论。
+1. Check for ignored selectors (GC) and short-circuit. 2. Check for nil target. If nil &amp;amp; nil receiver handler configured, jump to handler If nil &amp;amp; no handler (default), cleanup and return.</description></item></channel></rss>

@@ -1,0 +1,758 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>神经病院 Objective-C Runtime 出院第三天——如何正确使用 Runtime | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="神经病院 Objective-C Runtime 出院第三天——如何正确使用 Runtime"><meta property="og:description" content="前言 到了今天终于要&#34;出院&#34;了，要总结一下住院几天的收获，谈谈Runtime到底能为我们开发带来些什么好处。当然它也是把双刃剑，使用不当的话，也会成为开发路上的一个大坑。
+####目录
+ 1.Runtime的优点  (1) 实现多继承Multiple Inheritance (2) Method Swizzling (3) Aspect Oriented Programming (4) Isa Swizzling (5) Associated Object关联对象 (6) 动态的增加方法 (7) NSCoding的自动归档和自动解档 (8) 字典和模型互相转换   2.Runtime的缺点  一. 实现多继承Multiple Inheritance 在上一篇文章里面讲到的forwardingTargetForSelector:方法就能知道，一个类可以做到继承多个类的效果，只需要在这一步将消息转发给正确的类对象就可以模拟多继承的效果。
+在官方文档上记录了这样一段例子。
+在OC程序中可以借用消息转发机制来实现多继承的功能。 在上图中，一个对象对一个消息做出回应，类似于另一个对象中的方法借过来或是“继承”过来一样。 在图中，warrior实例转发了一个negotiate消息到Diplomat实例中，执行Diplomat中的negotiate方法，结果看起来像是warrior实例执行了一个和Diplomat实例一样的negotiate方法，其实执行者还是Diplomat实例。
+这使得不同继承体系分支下的两个类可以“继承”对方的方法，这样一个类可以响应自己继承分支里面的方法，同时也能响应其他不相干类发过来的消息。在上图中Warrior和Diplomat没有继承关系，但是Warrior将negotiate消息转发给了Diplomat后，就好似Diplomat是Warrior的超类一样。
+消息转发提供了许多类似于多继承的特性，但是他们之间有一个很大的不同：
+多继承：合并了不同的行为特征在一个单独的对象中，会得到一个重量级多层面的对象。
+消息转发：将各个功能分散到不同的对象中，得到的一些轻量级的对象，这些对象通过消息通过消息转发联合起来。
+这里值得说明的一点是，即使我们利用转发消息来实现了“假”继承，但是NSObject类还是会将两者区分开。像respondsToSelector:和 isKindOfClass:这类方法只会考虑继承体系，不会考虑转发链。比如上图中一个Warrior对象如果被问到是否能响应negotiate消息：
+if ( [aWarrior respondsToSelector:@selector(negotiate)] ) 结果是NO，虽然它能够响应negotiate消息而不报错，但是它是靠转发消息给Diplomat类来响应消息的。
+如果非要制造假象，反应出这种“假”的继承关系，那么需要重新实现 respondsToSelector:和 isKindOfClass:来加入你的转发算法：
+- (BOOL)respondsToSelector:(SEL)aSelector { if ( [super respondsToSelector:aSelector] ) return YES; else { /* Here, test whether the aSelector message can * * be forwarded to another object and whether that * * object can respond to it."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/how_to_use_runtime/"><meta property="article:published_time" content="2016-09-30T05:00:00+00:00"><meta property="article:modified_time" content="2016-09-30T05:00:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="神经病院 Objective-C Runtime 出院第三天——如何正确使用 Runtime"><meta name=twitter:description content="前言 到了今天终于要&#34;出院&#34;了，要总结一下住院几天的收获，谈谈Runtime到底能为我们开发带来些什么好处。当然它也是把双刃剑，使用不当的话，也会成为开发路上的一个大坑。
+####目录
+ 1.Runtime的优点  (1) 实现多继承Multiple Inheritance (2) Method Swizzling (3) Aspect Oriented Programming (4) Isa Swizzling (5) Associated Object关联对象 (6) 动态的增加方法 (7) NSCoding的自动归档和自动解档 (8) 字典和模型互相转换   2.Runtime的缺点  一. 实现多继承Multiple Inheritance 在上一篇文章里面讲到的forwardingTargetForSelector:方法就能知道，一个类可以做到继承多个类的效果，只需要在这一步将消息转发给正确的类对象就可以模拟多继承的效果。
+在官方文档上记录了这样一段例子。
+在OC程序中可以借用消息转发机制来实现多继承的功能。 在上图中，一个对象对一个消息做出回应，类似于另一个对象中的方法借过来或是“继承”过来一样。 在图中，warrior实例转发了一个negotiate消息到Diplomat实例中，执行Diplomat中的negotiate方法，结果看起来像是warrior实例执行了一个和Diplomat实例一样的negotiate方法，其实执行者还是Diplomat实例。
+这使得不同继承体系分支下的两个类可以“继承”对方的方法，这样一个类可以响应自己继承分支里面的方法，同时也能响应其他不相干类发过来的消息。在上图中Warrior和Diplomat没有继承关系，但是Warrior将negotiate消息转发给了Diplomat后，就好似Diplomat是Warrior的超类一样。
+消息转发提供了许多类似于多继承的特性，但是他们之间有一个很大的不同：
+多继承：合并了不同的行为特征在一个单独的对象中，会得到一个重量级多层面的对象。
+消息转发：将各个功能分散到不同的对象中，得到的一些轻量级的对象，这些对象通过消息通过消息转发联合起来。
+这里值得说明的一点是，即使我们利用转发消息来实现了“假”继承，但是NSObject类还是会将两者区分开。像respondsToSelector:和 isKindOfClass:这类方法只会考虑继承体系，不会考虑转发链。比如上图中一个Warrior对象如果被问到是否能响应negotiate消息：
+if ( [aWarrior respondsToSelector:@selector(negotiate)] ) 结果是NO，虽然它能够响应negotiate消息而不报错，但是它是靠转发消息给Diplomat类来响应消息的。
+如果非要制造假象，反应出这种“假”的继承关系，那么需要重新实现 respondsToSelector:和 isKindOfClass:来加入你的转发算法：
+- (BOOL)respondsToSelector:(SEL)aSelector { if ( [super respondsToSelector:aSelector] ) return YES; else { /* Here, test whether the aSelector message can * * be forwarded to another object and whether that * * object can respond to it."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/objc_runtime_objc_msgsend/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/ghost_build/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&text=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&is_video=false&description=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&name=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime&description=%e5%89%8d%e8%a8%80%20%e5%88%b0%e4%ba%86%e4%bb%8a%e5%a4%a9%e7%bb%88%e4%ba%8e%e8%a6%81%26quot%3b%e5%87%ba%e9%99%a2%26quot%3b%e4%ba%86%ef%bc%8c%e8%a6%81%e6%80%bb%e7%bb%93%e4%b8%80%e4%b8%8b%e4%bd%8f%e9%99%a2%e5%87%a0%e5%a4%a9%e7%9a%84%e6%94%b6%e8%8e%b7%ef%bc%8c%e8%b0%88%e8%b0%88Runtime%e5%88%b0%e5%ba%95%e8%83%bd%e4%b8%ba%e6%88%91%e4%bb%ac%e5%bc%80%e5%8f%91%e5%b8%a6%e6%9d%a5%e4%ba%9b%e4%bb%80%e4%b9%88%e5%a5%bd%e5%a4%84%e3%80%82%e5%bd%93%e7%84%b6%e5%ae%83%e4%b9%9f%e6%98%af%e6%8a%8a%e5%8f%8c%e5%88%83%e5%89%91%ef%bc%8c%e4%bd%bf%e7%94%a8%e4%b8%8d%e5%bd%93%e7%9a%84%e8%af%9d%ef%bc%8c%e4%b9%9f%e4%bc%9a%e6%88%90%e4%b8%ba%e5%bc%80%e5%8f%91%e8%b7%af%e4%b8%8a%e7%9a%84%e4%b8%80%e4%b8%aa%e5%a4%a7%e5%9d%91%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.Runtime%e7%9a%84%e4%bc%98%e7%82%b9%20%20%281%29%20%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bfMultiple%20Inheritance%20%282%29%20Method%20Swizzling%20%283%29%20Aspect%20Oriented%20Programming%20%284%29%20Isa%20Swizzling%20%285%29%20Associated%20Object%e5%85%b3%e8%81%94%e5%af%b9%e8%b1%a1%20%286%29%20%e5%8a%a8%e6%80%81%e7%9a%84%e5%a2%9e%e5%8a%a0%e6%96%b9%e6%b3%95%20%287%29%20NSCoding%e7%9a%84%e8%87%aa%e5%8a%a8%e5%bd%92%e6%a1%a3%e5%92%8c%e8%87%aa%e5%8a%a8%e8%a7%a3%e6%a1%a3%20%288%29%20%e5%ad%97%e5%85%b8%e5%92%8c%e6%a8%a1%e5%9e%8b%e4%ba%92%e7%9b%b8%e8%bd%ac%e6%8d%a2%20%20%202.Runtime%e7%9a%84%e7%bc%ba%e7%82%b9%20%20%e4%b8%80.%20%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bfMultiple%20Inheritance%20%e5%9c%a8%e4%b8%8a%e4%b8%80%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e8%ae%b2%e5%88%b0%e7%9a%84forwardingTargetForSelector%3a%e6%96%b9%e6%b3%95%e5%b0%b1%e8%83%bd%e7%9f%a5%e9%81%93%ef%bc%8c%e4%b8%80%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e5%81%9a%e5%88%b0%e7%bb%a7%e6%89%bf%e5%a4%9a%e4%b8%aa%e7%b1%bb%e7%9a%84%e6%95%88%e6%9e%9c%ef%bc%8c%e5%8f%aa%e9%9c%80%e8%a6%81%e5%9c%a8%e8%bf%99%e4%b8%80%e6%ad%a5%e5%b0%86%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e7%bb%99%e6%ad%a3%e7%a1%ae%e7%9a%84%e7%b1%bb%e5%af%b9%e8%b1%a1%e5%b0%b1%e5%8f%af%e4%bb%a5%e6%a8%a1%e6%8b%9f%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e6%95%88%e6%9e%9c%e3%80%82%0a%e5%9c%a8%e5%ae%98%e6%96%b9%e6%96%87%e6%a1%a3%e4%b8%8a%e8%ae%b0%e5%bd%95%e4%ba%86%e8%bf%99%e6%a0%b7%e4%b8%80%e6%ae%b5%e4%be%8b%e5%ad%90%e3%80%82%0a%e5%9c%a8OC%e7%a8%8b%e5%ba%8f%e4%b8%ad%e5%8f%af%e4%bb%a5%e5%80%9f%e7%94%a8%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e6%9c%ba%e5%88%b6%e6%9d%a5%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e5%8a%9f%e8%83%bd%e3%80%82%20%e5%9c%a8%e4%b8%8a%e5%9b%be%e4%b8%ad%ef%bc%8c%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%af%b9%e4%b8%80%e4%b8%aa%e6%b6%88%e6%81%af%e5%81%9a%e5%87%ba%e5%9b%9e%e5%ba%94%ef%bc%8c%e7%b1%bb%e4%bc%bc%e4%ba%8e%e5%8f%a6%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b8%ad%e7%9a%84%e6%96%b9%e6%b3%95%e5%80%9f%e8%bf%87%e6%9d%a5%e6%88%96%e6%98%af%e2%80%9c%e7%bb%a7%e6%89%bf%e2%80%9d%e8%bf%87%e6%9d%a5%e4%b8%80%e6%a0%b7%e3%80%82%20%e5%9c%a8%e5%9b%be%e4%b8%ad%ef%bc%8cwarrior%e5%ae%9e%e4%be%8b%e8%bd%ac%e5%8f%91%e4%ba%86%e4%b8%80%e4%b8%aanegotiate%e6%b6%88%e6%81%af%e5%88%b0Diplomat%e5%ae%9e%e4%be%8b%e4%b8%ad%ef%bc%8c%e6%89%a7%e8%a1%8cDiplomat%e4%b8%ad%e7%9a%84negotiate%e6%96%b9%e6%b3%95%ef%bc%8c%e7%bb%93%e6%9e%9c%e7%9c%8b%e8%b5%b7%e6%9d%a5%e5%83%8f%e6%98%afwarrior%e5%ae%9e%e4%be%8b%e6%89%a7%e8%a1%8c%e4%ba%86%e4%b8%80%e4%b8%aa%e5%92%8cDiplomat%e5%ae%9e%e4%be%8b%e4%b8%80%e6%a0%b7%e7%9a%84negotiate%e6%96%b9%e6%b3%95%ef%bc%8c%e5%85%b6%e5%ae%9e%e6%89%a7%e8%a1%8c%e8%80%85%e8%bf%98%e6%98%afDiplomat%e5%ae%9e%e4%be%8b%e3%80%82%0a%e8%bf%99%e4%bd%bf%e5%be%97%e4%b8%8d%e5%90%8c%e7%bb%a7%e6%89%bf%e4%bd%93%e7%b3%bb%e5%88%86%e6%94%af%e4%b8%8b%e7%9a%84%e4%b8%a4%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e2%80%9c%e7%bb%a7%e6%89%bf%e2%80%9d%e5%af%b9%e6%96%b9%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e8%bf%99%e6%a0%b7%e4%b8%80%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e5%93%8d%e5%ba%94%e8%87%aa%e5%b7%b1%e7%bb%a7%e6%89%bf%e5%88%86%e6%94%af%e9%87%8c%e9%9d%a2%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e5%90%8c%e6%97%b6%e4%b9%9f%e8%83%bd%e5%93%8d%e5%ba%94%e5%85%b6%e4%bb%96%e4%b8%8d%e7%9b%b8%e5%b9%b2%e7%b1%bb%e5%8f%91%e8%bf%87%e6%9d%a5%e7%9a%84%e6%b6%88%e6%81%af%e3%80%82%e5%9c%a8%e4%b8%8a%e5%9b%be%e4%b8%adWarrior%e5%92%8cDiplomat%e6%b2%a1%e6%9c%89%e7%bb%a7%e6%89%bf%e5%85%b3%e7%b3%bb%ef%bc%8c%e4%bd%86%e6%98%afWarrior%e5%b0%86negotiate%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e7%bb%99%e4%ba%86Diplomat%e5%90%8e%ef%bc%8c%e5%b0%b1%e5%a5%bd%e4%bc%bcDiplomat%e6%98%afWarrior%e7%9a%84%e8%b6%85%e7%b1%bb%e4%b8%80%e6%a0%b7%e3%80%82%0a%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e6%8f%90%e4%be%9b%e4%ba%86%e8%ae%b8%e5%a4%9a%e7%b1%bb%e4%bc%bc%e4%ba%8e%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e7%89%b9%e6%80%a7%ef%bc%8c%e4%bd%86%e6%98%af%e4%bb%96%e4%bb%ac%e4%b9%8b%e9%97%b4%e6%9c%89%e4%b8%80%e4%b8%aa%e5%be%88%e5%a4%a7%e7%9a%84%e4%b8%8d%e5%90%8c%ef%bc%9a%0a%e5%a4%9a%e7%bb%a7%e6%89%bf%ef%bc%9a%e5%90%88%e5%b9%b6%e4%ba%86%e4%b8%8d%e5%90%8c%e7%9a%84%e8%a1%8c%e4%b8%ba%e7%89%b9%e5%be%81%e5%9c%a8%e4%b8%80%e4%b8%aa%e5%8d%95%e7%8b%ac%e7%9a%84%e5%af%b9%e8%b1%a1%e4%b8%ad%ef%bc%8c%e4%bc%9a%e5%be%97%e5%88%b0%e4%b8%80%e4%b8%aa%e9%87%8d%e9%87%8f%e7%ba%a7%e5%a4%9a%e5%b1%82%e9%9d%a2%e7%9a%84%e5%af%b9%e8%b1%a1%e3%80%82%0a%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%ef%bc%9a%e5%b0%86%e5%90%84%e4%b8%aa%e5%8a%9f%e8%83%bd%e5%88%86%e6%95%a3%e5%88%b0%e4%b8%8d%e5%90%8c%e7%9a%84%e5%af%b9%e8%b1%a1%e4%b8%ad%ef%bc%8c%e5%be%97%e5%88%b0%e7%9a%84%e4%b8%80%e4%ba%9b%e8%bd%bb%e9%87%8f%e7%ba%a7%e7%9a%84%e5%af%b9%e8%b1%a1%ef%bc%8c%e8%bf%99%e4%ba%9b%e5%af%b9%e8%b1%a1%e9%80%9a%e8%bf%87%e6%b6%88%e6%81%af%e9%80%9a%e8%bf%87%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e8%81%94%e5%90%88%e8%b5%b7%e6%9d%a5%e3%80%82%0a%e8%bf%99%e9%87%8c%e5%80%bc%e5%be%97%e8%af%b4%e6%98%8e%e7%9a%84%e4%b8%80%e7%82%b9%e6%98%af%ef%bc%8c%e5%8d%b3%e4%bd%bf%e6%88%91%e4%bb%ac%e5%88%a9%e7%94%a8%e8%bd%ac%e5%8f%91%e6%b6%88%e6%81%af%e6%9d%a5%e5%ae%9e%e7%8e%b0%e4%ba%86%e2%80%9c%e5%81%87%e2%80%9d%e7%bb%a7%e6%89%bf%ef%bc%8c%e4%bd%86%e6%98%afNSObject%e7%b1%bb%e8%bf%98%e6%98%af%e4%bc%9a%e5%b0%86%e4%b8%a4%e8%80%85%e5%8c%ba%e5%88%86%e5%bc%80%e3%80%82%e5%83%8frespondsToSelector%3a%e5%92%8c%c2%a0isKindOfClass%3a%e8%bf%99%e7%b1%bb%e6%96%b9%e6%b3%95%e5%8f%aa%e4%bc%9a%e8%80%83%e8%99%91%e7%bb%a7%e6%89%bf%e4%bd%93%e7%b3%bb%ef%bc%8c%e4%b8%8d%e4%bc%9a%e8%80%83%e8%99%91%e8%bd%ac%e5%8f%91%e9%93%be%e3%80%82%e6%af%94%e5%a6%82%e4%b8%8a%e5%9b%be%e4%b8%ad%e4%b8%80%e4%b8%aaWarrior%e5%af%b9%e8%b1%a1%e5%a6%82%e6%9e%9c%e8%a2%ab%e9%97%ae%e5%88%b0%e6%98%af%e5%90%a6%e8%83%bd%e5%93%8d%e5%ba%94negotiate%e6%b6%88%e6%81%af%ef%bc%9a%0aif%20%28%20%5baWarrior%20respondsToSelector%3a%40selector%28negotiate%29%5d%20%29%20%e7%bb%93%e6%9e%9c%e6%98%afNO%ef%bc%8c%e8%99%bd%e7%84%b6%e5%ae%83%e8%83%bd%e5%a4%9f%e5%93%8d%e5%ba%94negotiate%e6%b6%88%e6%81%af%e8%80%8c%e4%b8%8d%e6%8a%a5%e9%94%99%ef%bc%8c%e4%bd%86%e6%98%af%e5%ae%83%e6%98%af%e9%9d%a0%e8%bd%ac%e5%8f%91%e6%b6%88%e6%81%af%e7%bb%99Diplomat%e7%b1%bb%e6%9d%a5%e5%93%8d%e5%ba%94%e6%b6%88%e6%81%af%e7%9a%84%e3%80%82%0a%e5%a6%82%e6%9e%9c%e9%9d%9e%e8%a6%81%e5%88%b6%e9%80%a0%e5%81%87%e8%b1%a1%ef%bc%8c%e5%8f%8d%e5%ba%94%e5%87%ba%e8%bf%99%e7%a7%8d%e2%80%9c%e5%81%87%e2%80%9d%e7%9a%84%e7%bb%a7%e6%89%bf%e5%85%b3%e7%b3%bb%ef%bc%8c%e9%82%a3%e4%b9%88%e9%9c%80%e8%a6%81%e9%87%8d%e6%96%b0%e5%ae%9e%e7%8e%b0%c2%a0respondsToSelector%3a%e5%92%8c%c2%a0isKindOfClass%3a%e6%9d%a5%e5%8a%a0%e5%85%a5%e4%bd%a0%e7%9a%84%e8%bd%ac%e5%8f%91%e7%ae%97%e6%b3%95%ef%bc%9a%0a-%20%28BOOL%29respondsToSelector%3a%28SEL%29aSelector%20%7b%20if%20%28%20%5bsuper%20respondsToSelector%3aaSelector%5d%20%29%20return%20YES%3b%20else%20%7b%20%2f%2a%20Here%2c%20test%20whether%20the%20aSelector%20message%20can%20%2a%20%2a%20be%20forwarded%20to%20another%20object%20and%20whether%20that%c2%a0%2a%20%2a%20object%20can%20respond%20to%20it."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&t=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一-实现多继承multiple-inheritance>一. 实现多继承Multiple Inheritance</a></li><li><a href=#二method-swizzling>二.Method Swizzling</a></li><li><a href=#三-aspect-oriented-programming>三. Aspect Oriented Programming</a></li><li><a href=#四-isa-swizzling>四. Isa Swizzling</a></li><li><a href=#五-associated-object-关联对象>五. Associated Object 关联对象</a></li><li><a href=#六动态的增加方法>六.动态的增加方法</a></li><li><a href=#七nscoding的自动归档和自动解档>七.NSCoding的自动归档和自动解档</a></li><li><a href=#八字典和模型互相转换>八.字典和模型互相转换</a></li><li><a href=#九runtime缺点>九.Runtime缺点</a></li><li><a href=#最后>最后</a></li></ul></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">神经病院 Objective-C Runtime 出院第三天——如何正确使用 Runtime</h1><div class=meta><div class=postdate><time datetime="2016-09-30 05:00:00 +0000 UTC" itemprop=datePublished>Sep 30</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/runtime>Runtime</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/runtime rel=tag>Runtime</a></div></div></header><div class=content itemprop=articleBody><h4 id=前言>前言</h4><p>到了今天终于要"出院"了，要总结一下住院几天的收获，谈谈Runtime到底能为我们开发带来些什么好处。当然它也是把双刃剑，使用不当的话，也会成为开发路上的一个大坑。</p><p>####目录</p><ul><li>1.Runtime的优点<ul><li>(1) 实现多继承Multiple Inheritance</li><li>(2) Method Swizzling</li><li>(3) Aspect Oriented Programming</li><li>(4) Isa Swizzling</li><li>(5) Associated Object关联对象</li><li>(6) 动态的增加方法</li><li>(7) NSCoding的自动归档和自动解档</li><li>(8) 字典和模型互相转换</li></ul></li><li>2.Runtime的缺点</li></ul><h4 id=一-实现多继承multiple-inheritance>一. 实现多继承Multiple Inheritance</h4><p>在上一篇文章里面讲到的forwardingTargetForSelector:方法就能知道，一个类可以做到继承多个类的效果，只需要在这一步将消息转发给正确的类对象就可以模拟多继承的效果。</p><p>在<a href=https://developer.apple.com/library/content/documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Articles/ocrtForwarding.html#//apple_ref/doc/uid/TP40008048-CH105-SW11>官方文档</a>上记录了这样一段例子。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_1.png alt></p><p>在OC程序中可以借用消息转发机制来实现多继承的功能。 在上图中，一个对象对一个消息做出回应，类似于另一个对象中的方法借过来或是“继承”过来一样。 在图中，warrior实例转发了一个negotiate消息到Diplomat实例中，执行Diplomat中的negotiate方法，结果看起来像是warrior实例执行了一个和Diplomat实例一样的negotiate方法，其实执行者还是Diplomat实例。</p><p>这使得不同继承体系分支下的两个类可以“继承”对方的方法，这样一个类可以响应自己继承分支里面的方法，同时也能响应其他不相干类发过来的消息。在上图中Warrior和Diplomat没有继承关系，但是Warrior将negotiate消息转发给了Diplomat后，就好似Diplomat是Warrior的超类一样。</p><p>消息转发提供了许多类似于多继承的特性，但是他们之间有一个很大的不同：</p><p>多继承：合并了不同的行为特征在一个单独的对象中，会得到一个重量级多层面的对象。</p><p>消息转发：将各个功能分散到不同的对象中，得到的一些轻量级的对象，这些对象通过消息通过消息转发联合起来。</p><p>这里值得说明的一点是，即使我们利用转发消息来实现了“假”继承，但是NSObject类还是会将两者区分开。像respondsToSelector:和 isKindOfClass:这类方法只会考虑继承体系，不会考虑转发链。比如上图中一个Warrior对象如果被问到是否能响应negotiate消息：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>if</span> ( [aWarrior respondsToSelector:<span style=color:#66d9ef>@selector</span>(negotiate)] )
+
+</code></pre></div><p>结果是NO，虽然它能够响应negotiate消息而不报错，但是它是靠转发消息给Diplomat类来响应消息的。</p><p>如果非要制造假象，反应出这种“假”的继承关系，那么需要重新实现 respondsToSelector:和 isKindOfClass:来加入你的转发算法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>respondsToSelector:</span>(<span style=color:#66d9ef>SEL</span>)aSelector
+{
+    <span style=color:#66d9ef>if</span> ( [super respondsToSelector:aSelector] )
+        <span style=color:#66d9ef>return</span> YES;
+    <span style=color:#66d9ef>else</span> {
+        <span style=color:#75715e>/* Here, test whether the aSelector message can     *
+</span><span style=color:#75715e>         * be forwarded to another object and whether that  *
+</span><span style=color:#75715e>         * object can respond to it. Return YES if it can.  */</span>
+    }
+    <span style=color:#66d9ef>return</span> NO;
+}
+
+</code></pre></div><p>除了respondsToSelector:和 isKindOfClass:之外，instancesRespondToSelector:中也应该写一份转发算法。如果使用了协议，conformsToProtocol:也一样需要重写。类似地，如果一个对象转发它接受的任何远程消息，它得给出一个methodSignatureForSelector:来返回准确的方法描述，这个方法会最终响应被转发的消息。比如一个对象能给它的替代者对象转发消息，它需要像下面这样实现methodSignatureForSelector:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (NSMethodSignature<span style=color:#f92672>*</span>)<span style=color:#a6e22e>methodSignatureForSelector:</span>(<span style=color:#66d9ef>SEL</span>)selector
+{
+    NSMethodSignature<span style=color:#f92672>*</span> signature <span style=color:#f92672>=</span> [super methodSignatureForSelector:selector];
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>signature) {
+        signature <span style=color:#f92672>=</span> [surrogate methodSignatureForSelector:selector];
+    }
+    <span style=color:#66d9ef>return</span> signature;
+}
+
+</code></pre></div><blockquote><p><strong>Note:</strong>  This is an advanced technique, suitable only for situations where no other solution is possible. It is not intended as a replacement for inheritance. If you must make use of this technique, make sure you fully understand the behavior of the class doing the forwarding and the class you’re forwarding to.</p></blockquote><p>需要引起注意的一点，实现methodSignatureForSelector方法是一种先进的技术，只适用于没有其他解决方案的情况下。它不会作为继承的替代。如果您必须使用这种技术，请确保您完全理解类做的转发和您转发的类的行为。请勿滥用！</p><h4 id=二method-swizzling>二.Method Swizzling</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_2.png alt></p><p>提到Objective-C 中的 Runtime，大多数人第一个想到的可能就是黑魔法Method Swizzling。毕竟这是Runtime里面很强大的一部分，它可以通过Runtime的API实现更改任意的方法，理论上可以在运行时通过类名/方法名hook到任何 OC 方法，替换任何类的实现以及新增任意类。</p><p>举的最多的例子应该就是埋点统计用户信息的例子。</p><p>假设我们需要在页面上不同的地方统计用户信息，常见做法有两种：</p><ol><li>傻瓜式的在所有需要统计的页面都加上代码。这样做简单，但是重复的代码太多。</li><li>把统计的代码写入基类中，比如说BaseViewController。这样虽然代码只需要写一次，但是UITableViewController，UICollectionViewcontroller都需要写一遍，这样重复的代码依旧不少。</li></ol><p>基于这两点，我们这时候选用Method Swizzling来解决这个事情最优雅。</p><h5 id=1-method-swizzling原理>1. Method Swizzling原理</h5><p>Method Swizzing是发生在运行时的，主要用于在运行时将两个Method进行交换，我们可以将Method Swizzling代码写到任何地方，但是只有在这段Method Swilzzling代码执行完毕之后互换才起作用。而且Method Swizzling也是iOS中AOP(面相切面编程)的一种实现方式，我们可以利用苹果这一特性来实现AOP编程。</p><p>Method Swizzling本质上就是对IMP和SEL进行交换。</p><h5 id=2method-swizzling使用>2.Method Swizzling使用</h5><p>一般我们使用都是新建一个分类，在分类中进行Method Swizzling方法的交换。交换的代码模板如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &lt;objc/runtime.h&gt;
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>UIViewController</span> (Swizzling)
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span> {
+    <span style=color:#66d9ef>static</span> dispatch_once_t onceToken;
+    dispatch_once(<span style=color:#f92672>&amp;</span>onceToken, <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> [self <span style=color:#66d9ef>class</span>];
+        <span style=color:#75715e>// When swizzling a class method, use the following:
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// Class class = object_getClass((id)self);
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>SEL</span> originalSelector <span style=color:#f92672>=</span> <span style=color:#66d9ef>@selector</span>(viewWillAppear:);
+        <span style=color:#66d9ef>SEL</span> swizzledSelector <span style=color:#f92672>=</span> <span style=color:#66d9ef>@selector</span>(xxx_viewWillAppear:);
+        Method originalMethod <span style=color:#f92672>=</span> class_getInstanceMethod(<span style=color:#66d9ef>class</span>, originalSelector);
+        Method swizzledMethod <span style=color:#f92672>=</span> class_getInstanceMethod(<span style=color:#66d9ef>class</span>, swizzledSelector);
+        <span style=color:#66d9ef>BOOL</span> didAddMethod <span style=color:#f92672>=</span> class_addMethod(<span style=color:#66d9ef>class</span>,
+                                            originalSelector,
+                                            method_getImplementation(swizzledMethod),
+                                            method_getTypeEncoding(swizzledMethod));
+        <span style=color:#66d9ef>if</span> (didAddMethod) {
+            class_replaceMethod(<span style=color:#66d9ef>class</span>,
+                                swizzledSelector,
+                                method_getImplementation(originalMethod),
+                                method_getTypeEncoding(originalMethod));
+        } <span style=color:#66d9ef>else</span> {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+        }
+    });
+}
+<span style=color:#75715e>#pragma mark - Method Swizzling
+</span><span style=color:#75715e></span>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>xxx_viewWillAppear:</span>(<span style=color:#66d9ef>BOOL</span>)animated {
+    [self xxx_viewWillAppear:animated];
+    NSLog(<span style=color:#e6db74>@&#34;viewWillAppear: %@&#34;</span>, self);
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>Method Swizzling可以在运行时通过修改类的方法列表中selector对应的函数或者设置交换方法实现，来动态修改方法。可以重写某个方法而不用继承，同时还可以调用原先的实现。所以通常应用于在category中添加一个方法。</p><h5 id=3method-swizzling注意点>3.Method Swizzling注意点</h5><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_3.png alt></p><p>1.Swizzling应该总在+load中执行</p><p>Objective-C在运行时会自动调用类的两个方法+load和+initialize。+load会在类初始加载时调用， +initialize方法是以懒加载的方式被调用的，如果程序一直没有给某个类或它的子类发送消息，那么这个类的 +initialize方法是永远不会被调用的。所以Swizzling要是写在+initialize方法中，是有可能永远都不被执行。</p><p>和+initialize比较+load能保证在类的初始化过程中被加载。</p><p>关于+load和+initialize的比较可以参看这篇文章<a href=http://blog.leichunfeng.com/blog/2015/05/02/objective-c-plus-load-vs-plus-initialize/>《Objective-C +load vs +initialize》</a></p><p>2.Swizzling应该总是在dispatch_once中执行</p><p>Swizzling会改变全局状态，所以在运行时采取一些预防措施，使用dispatch_once就能够确保代码不管有多少线程都只被执行一次。这将成为Method Swizzling的最佳实践。</p><p>这里有一个很容易犯的错误，那就是继承中用了Swizzling。如果不写dispatch_once就会导致Swizzling失效！</p><p>举个例子，比如同时对NSArray和NSMutableArray中的objectAtIndex:方法都进行了Swizzling，这样可能会导致NSArray中的Swizzling失效的。</p><p>可是为什么会这样呢？
+原因是，我们没有用dispatch_once控制Swizzling只执行一次。如果这段Swizzling被执行多次，经过多次的交换IMP和SEL之后，结果可能就是未交换之前的状态。</p><p>比如说父类A的B方法和子类C的D方法进行交换，交换一次后，父类A持有D方法的IMP，子类C持有B方法的IMP，但是再次交换一次，就又还原了。父类A还是持有B方法的IMP，子类C还是持有D方法的IMP，这样就相当于咩有交换。可以看出，如果不写dispatch_once，偶数次交换以后，相当于没有交换，Swizzling失效！</p><p>3.Swizzling在+load中执行时，不要调用[super load]</p><p>原因同注意点二，如果是多继承，并且对同一个方法都进行了Swizzling，那么调用[super load]以后，父类的Swizzling就失效了。</p><p>4.上述模板中没有错误</p><p>有些人怀疑我上述给的模板可能有错误。在这里需要讲解一下。</p><p>在进行Swizzling的时候，我们需要用class_addMethod先进行判断一下原有类中是否有要替换的方法的实现。</p><p>如果class_addMethod返回NO，说明当前类中有要替换方法的实现，所以可以直接进行替换，调用method_exchangeImplementations即可实现Swizzling。</p><p>如果class_addMethod返回YES，说明当前类中没有要替换方法的实现，我们需要在父类中去寻找。这个时候就需要用到method_getImplementation去获取class_getInstanceMethod里面的方法实现。然后再进行class_replaceMethod来实现Swizzling。</p><p>这是Swizzling需要判断的一点。</p><p>还有一点需要注意的是，在我们替换的方法- (void)xxx_viewWillAppear:(BOOL)animated中，调用了[self xxx_viewWillAppear:animated];这不是死循环了么？</p><p>其实这里并不会死循环。
+由于我们进行了Swizzling，所以其实在原来的- (void)viewWillAppear:(BOOL)animated方法中，调用的是- (void)xxx_viewWillAppear:(BOOL)animated方法的实现。所以不会造成死循环。相反的，如果这里把[self xxx_viewWillAppear:animated];改成[self viewWillAppear:animated];就会造成死循环。因为外面调用[self viewWillAppear:animated];的时候，会交换方法走到[self xxx_viewWillAppear:animated];这个方法实现中来，然后这里又去调用[self viewWillAppear:animated]，就会造成死循环了。</p><p>所以按照上述Swizzling的模板来写，就不会遇到这4点需要注意的问题啦。</p><h5 id=4method-swizzling使用场景>4.Method Swizzling使用场景</h5><p>Method Swizzling使用场景其实有很多很多，在一些特殊的开发需求中适时的使用黑魔法，可以做法神来之笔的效果。这里就举3种常见的场景。</p><p>1.实现AOP</p><p>AOP的例子在上一篇文章中举了一个例子，在下一章中也打算详细分析一下其实现原理，这里就一笔带过。</p><p>2.实现埋点统计</p><p>如果app有埋点需求，并且要自己实现一套埋点逻辑，那么这里用到Swizzling是很合适的选择。优点在开头已经分析了，这里不再赘述。看到一篇分析的挺精彩的埋点的文章，推荐大家阅读。
+<a href=http://www.jianshu.com/p/0497afdad36d>iOS动态性(二)可复用而且高度解耦的用户统计埋点实现</a></p><p>3.实现异常保护</p><p>日常开发我们经常会遇到NSArray数组越界的情况，苹果的API也没有对异常保护，所以需要我们开发者开发时候多多留意。关于Index有好多方法，objectAtIndex，removeObjectAtIndex，replaceObjectAtIndex，exchangeObjectAtIndex等等，这些设计到Index都需要判断是否越界。</p><p>常见做法是给NSArray，NSMutableArray增加分类，增加这些异常保护的方法，不过如果原有工程里面已经写了大量的AtIndex系列的方法，去替换成新的分类的方法，效率会比较低。这里可以考虑用Swizzling做。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#import &#34;NSArray+ Swizzling.h&#34;
+</span><span style=color:#75715e>#import &#34;objc/runtime.h&#34;
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSArray</span> (Swizzling)
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span> {
+    Method fromMethod <span style=color:#f92672>=</span> class_getInstanceMethod(objc_getClass(<span style=color:#e6db74>&#34;__NSArrayI&#34;</span>), <span style=color:#66d9ef>@selector</span>(objectAtIndex:));
+    Method toMethod <span style=color:#f92672>=</span> class_getInstanceMethod(objc_getClass(<span style=color:#e6db74>&#34;__NSArrayI&#34;</span>), <span style=color:#66d9ef>@selector</span>(swizzling_objectAtIndex:));
+    method_exchangeImplementations(fromMethod, toMethod);
+}
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>swizzling_objectAtIndex:</span>(NSUInteger)index {
+    <span style=color:#66d9ef>if</span> (self.count<span style=color:#f92672>-</span><span style=color:#ae81ff>1</span> <span style=color:#f92672>&lt;</span> index) {
+        <span style=color:#75715e>// 异常处理
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>@try</span> {
+            <span style=color:#66d9ef>return</span> [self swizzling_objectAtIndex:index];
+        }
+        <span style=color:#66d9ef>@catch</span> (NSException <span style=color:#f92672>*</span>exception) {
+            <span style=color:#75715e>// 打印崩溃信息
+</span><span style=color:#75715e></span>            NSLog(<span style=color:#e6db74>@&#34;---------- %s Crash Because Method %s  ----------</span><span style=color:#ae81ff>\n</span><span style=color:#e6db74>&#34;</span>, class_getName(self.<span style=color:#66d9ef>class</span>), __func__);
+            NSLog(<span style=color:#e6db74>@&#34;%@&#34;</span>, [exception callStackSymbols]);
+            <span style=color:#66d9ef>return</span> nil;
+        }
+        <span style=color:#66d9ef>@finally</span> {}
+    } <span style=color:#66d9ef>else</span> {
+        <span style=color:#66d9ef>return</span> [self swizzling_objectAtIndex:index];
+    }
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>注意，调用这个objc_getClass方法的时候，要先知道类对应的真实的类名才行，NSArray其实在Runtime中对应着__NSArrayI，NSMutableArray对应着__NSArrayM，NSDictionary对应着__NSDictionaryI，NSMutableDictionary对应着__NSDictionaryM。</p><h4 id=三-aspect-oriented-programming>三. Aspect Oriented Programming</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_4.png alt></p><p>Wikipedia 里对 AOP 是这么介绍的:</p><blockquote><p>An aspect can alter the behavior of the base code by applying advice (additional behavior) at various join points (points in a program) specified in a quantification or query called a pointcut (that detects whether a given join point matches).</p></blockquote><p>类似记录日志、身份验证、缓存等事务非常琐碎，与业务逻辑无关，很多地方都有，又很难抽象出一个模块，这种程序设计问题，业界给它们起了一个名字叫横向关注点(Cross-cutting concern)，<a href=https://en.wikipedia.org/wiki/Aspect-oriented_programming>AOP</a>作用就是分离横向关注点(Cross-cutting concern)来提高模块复用性，它可以在既有的代码添加一些额外的行为(记录日志、身份验证、缓存)而无需修改代码。</p><p>接下来分析分析AOP的工作原理。</p><p>在上一篇中我们分析过了，在objc_msgSend函数查找IMP的过程中，如果在父类也没有找到相应的IMP，那么就会开始执行_class_resolveMethod方法，如果不是元类，就执行_class_resolveInstanceMethod，如果是元类，执行_class_resolveClassMethod。在这个方法中，允许开发者动态增加方法实现。这个阶段一般是给@dynamic属性变量提供动态方法的。</p><p>如果_class_resolveMethod无法处理，会开始选择备援接受者接受消息，这个时候就到了forwardingTargetForSelector方法。如果该方法返回非nil的对象，则使用该对象作为新的消息接收者。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>forwardingTargetForSelector:</span>(<span style=color:#66d9ef>SEL</span>)aSelector
+{
+    <span style=color:#66d9ef>if</span>(aSelector <span style=color:#f92672>==</span> <span style=color:#66d9ef>@selector</span>(Method:)){
+        <span style=color:#66d9ef>return</span> otherObject;
+    }
+    <span style=color:#66d9ef>return</span> [super forwardingTargetForSelector:aSelector];
+}
+
+</code></pre></div><p>同样也可以替换类方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>forwardingTargetForSelector:</span>(<span style=color:#66d9ef>SEL</span>)aSelector {
+    <span style=color:#66d9ef>if</span>(aSelector <span style=color:#f92672>==</span> <span style=color:#66d9ef>@selector</span>(xxx)) {
+        <span style=color:#66d9ef>return</span> NSClassFromString(<span style=color:#e6db74>@&#34;Class name&#34;</span>);
+    }
+    <span style=color:#66d9ef>return</span> [super forwardingTargetForSelector:aSelector];
+}
+
+</code></pre></div><p>替换类方法返回值就是一个类对象。</p><p>forwardingTargetForSelector这种方法属于单纯的转发，无法对消息的参数和返回值进行处理。</p><p>最后到了完整转发阶段。</p><p>Runtime系统会向对象发送methodSignatureForSelector:消息，并取到返回的方法签名用于生成NSInvocation对象。为接下来的完整的消息转发生成一个 NSMethodSignature对象。NSMethodSignature 对象会被包装成 NSInvocation 对象，forwardInvocation: 方法里就可以对 NSInvocation 进行处理了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 为目标对象中被调用的方法返回一个NSMethodSignature实例
+</span><span style=color:#75715e></span><span style=color:#75715e>#warning 运行时系统要求在执行标准转发时实现这个方法
+</span><span style=color:#75715e></span>- (NSMethodSignature <span style=color:#f92672>*</span>)<span style=color:#a6e22e>methodSignatureForSelector:</span>(<span style=color:#66d9ef>SEL</span>)sel{
+    <span style=color:#66d9ef>return</span> [self.proxyTarget methodSignatureForSelector:sel];
+}
+
+</code></pre></div><p>对象需要创建一个NSInvocation对象，把消息调用的全部细节封装进去，包括selector, target, arguments 等参数，还能够对返回结果进行处理。</p><p>AOP的多数操作就是在forwardInvocation中完成的。一般会分为2个阶段，一个是Intercepter注册阶段，一个是Intercepter执行阶段。</p><h5 id=1-intercepter注册>1. Intercepter注册</h5><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_5.png alt></p><p>首先会把类里面的某个要切片的方法的IMP加入到Aspect中，类方法里面如果有forwardingTargetForSelector:的IMP，也要加入到Aspect中。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_6.png alt></p><p>然后对类的切片方法和forwardingTargetForSelector:的IMP进行替换。两者的IMP相应的替换为objc_msgForward()方法和hook过的forwardingTargetForSelector:。这样主要的Intercepter注册就完成了。</p><h5 id=2-intercepter执行>2. Intercepter执行</h5><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_7.png alt></p><p>当执行func()方法的时候，会去查找它的IMP，现在它的IMP已经被我们替换为了objc_msgForward()方法，于是开始查找备援转发对象。</p><p>查找备援接受者调用forwardingTargetForSelector:这个方法，由于这里是被我们hook过的，所以IMP指向的是hook过的forwardingTargetForSelector:方法。这里我们会返回Aspect的target，即选取Aspect作为备援接受者。</p><p>有了备援接受者之后，就会重新objc_msgSend，从消息发送阶段重头开始。</p><p>objc_msgSend找不到指定的IMP，再进行_class_resolveMethod，这里也没有找到，forwardingTargetForSelector:这里也不做处理，接着就会methodSignatureForSelector。在methodSignatureForSelector方法中创建一个NSInvocation对象，传递给最终的forwardInvocation方法。</p><p>Aspect里面的forwardInvocation方法会干所有切面的事情。这里转发逻辑就完全由我们自定义了。Intercepter注册的时候我们也加入了原来方法中的method()和forwardingTargetForSelector:方法的IMP，这里我们可以在forwardInvocation方法中去执行这些IMP。在执行这些IMP的前后都可以任意的插入任何IMP以达到切面的目的。</p><p>以上就是AOP的原理。</p><h4 id=四-isa-swizzling>四. Isa Swizzling</h4><p>前面第二点谈到了黑魔法Method Swizzling，本质上就是对IMP和SEL进行交换。其实接下来要说的Isa Swizzling，和它类似，本质上也是交换，不过交换的是Isa。</p><p>在苹果的官方库里面有一个很有名的技术就用到了这个Isa Swizzling，那就是KVO——Key-Value Observing。</p><p><a href=https://developer.apple.com/library/content/documentation/Cocoa/Conceptual/KeyValueObserving/Articles/KVOImplementation.html>官方文档</a>上对于KVO的定义是这样的:</p><blockquote><p>Automatic key-value observing is implemented using a technique called <em>isa-swizzling</em>.
+The isa pointer, as the name suggests, points to the object&rsquo;s class which maintains a dispatch table. This dispatch table essentially contains pointers to the methods the class implements, among other data.
+When an observer is registered for an attribute of an object the isa pointer of the observed object is modified, pointing to an intermediate class rather than at the true class. As a result the value of the isa pointer does not necessarily reflect the actual class of the instance.
+You should never rely on the isa pointer to determine class membership. Instead, you should use the <a href=https://developer.apple.com/reference/objectivec/1418956-nsobject/1571949-class>class</a> method to determine the class of an object instance.</p></blockquote><p>官方给的就这么多，具体实现也没有说的很清楚。那只能我们自己来实验一下。</p><p>KVO是为了监听一个对象的某个属性值是否发生变化。在属性值发生变化的时候，肯定会调用其setter方法。所以KVO的本质就是监听对象有没有调用被监听属性对应的setter方法。具体实现应该是重写其setter方法即可。</p><p>官方是如何优雅的实现重写监听类的setter方法的呢？实验代码如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    Student <span style=color:#f92672>*</span>stu <span style=color:#f92672>=</span> [[Student alloc]init];
+    
+    [stu addObserver:self forKeyPath:<span style=color:#e6db74>@&#34;name&#34;</span> options:NSKeyValueObservingOptionNew context:nil];
+
+</code></pre></div><p>我们可以打印观察isa指针的指向</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Printing</span> <span style=color:#a6e22e>description</span> <span style=color:#a6e22e>of</span> <span style=color:#a6e22e>stu</span>-&gt;<span style=color:#a6e22e>isa</span>:<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>Printing</span> <span style=color:#a6e22e>description</span> <span style=color:#a6e22e>of</span> <span style=color:#a6e22e>stu</span>-&gt;<span style=color:#a6e22e>isa</span>:<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>NSKVONotifying_Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>通过打印，我们可以很明显的看到，被观察的对象的isa变了，变成了NSKVONotifying_Student这个类了。</p><p>在@interface NSObject(NSKeyValueObserverRegistration) 这个分类里面，苹果定义了KVO的方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>addObserver:</span>(NSObject <span style=color:#f92672>*</span>)observer <span style=color:#a6e22e>forKeyPath:</span>(NSString <span style=color:#f92672>*</span>)keyPath <span style=color:#a6e22e>options:</span>(NSKeyValueObservingOptions)options <span style=color:#a6e22e>context:</span>(nullable <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)context;
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>removeObserver:</span>(NSObject <span style=color:#f92672>*</span>)observer <span style=color:#a6e22e>forKeyPath:</span>(NSString <span style=color:#f92672>*</span>)keyPath <span style=color:#a6e22e>context:</span>(nullable <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)context NS_AVAILABLE(<span style=color:#ae81ff>10</span>_7, <span style=color:#ae81ff>5</span>_0);
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>removeObserver:</span>(NSObject <span style=color:#f92672>*</span>)observer <span style=color:#a6e22e>forKeyPath:</span>(NSString <span style=color:#f92672>*</span>)keyPath;
+
+</code></pre></div><p>KVO在调用addObserver方法之后，苹果的做法是在执行完addObserver: forKeyPath: options: context: 方法之后，把isa指向到另外一个类去。</p><p>在这个新类里面重写被观察的对象四个方法。class，setter，dealloc，_isKVOA。</p><h5 id=1-重写class方法>1. 重写class方法</h5><p>重写class方法是为了我们调用它的时候返回跟重写继承类之前同样的内容。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> NSArray <span style=color:#f92672>*</span> <span style=color:#a6e22e>ClassMethodNames</span>(<span style=color:#66d9ef>Class</span> c)
+{
+    NSMutableArray <span style=color:#f92672>*</span> array <span style=color:#f92672>=</span> [NSMutableArray array];
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> methodCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    Method <span style=color:#f92672>*</span> methodList <span style=color:#f92672>=</span> class_copyMethodList(c, <span style=color:#f92672>&amp;</span>methodCount);
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> i;
+    <span style=color:#66d9ef>for</span>(i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> methodCount; i<span style=color:#f92672>++</span>) {
+        [array addObject: NSStringFromSelector(method_getName(methodList[i]))];
+    }
+    
+    free(methodList);
+    <span style=color:#66d9ef>return</span> array;
+}
+
+<span style=color:#66d9ef>int</span> <span style=color:#a6e22e>main</span>(<span style=color:#66d9ef>int</span> argc, <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> argv[]) {
+    
+    Student <span style=color:#f92672>*</span>stu <span style=color:#f92672>=</span> [[Student alloc]init];
+    
+    NSLog(<span style=color:#e6db74>@&#34;self-&gt;isa:%@&#34;</span>,object_getClass(stu));
+    NSLog(<span style=color:#e6db74>@&#34;self class:%@&#34;</span>,[stu <span style=color:#66d9ef>class</span>]);
+    NSLog(<span style=color:#e6db74>@&#34;ClassMethodNames = %@&#34;</span>,ClassMethodNames(object_getClass(stu)));
+    [stu addObserver:self forKeyPath:<span style=color:#e6db74>@&#34;name&#34;</span> options:NSKeyValueObservingOptionNew context:nil];
+    
+    NSLog(<span style=color:#e6db74>@&#34;self-&gt;isa:%@&#34;</span>,object_getClass(stu));
+    NSLog(<span style=color:#e6db74>@&#34;self class:%@&#34;</span>,[stu <span style=color:#66d9ef>class</span>]);
+    NSLog(<span style=color:#e6db74>@&#34;ClassMethodNames = %@&#34;</span>,ClassMethodNames(object_getClass(stu)));
+}
+
+</code></pre></div><p>打印结果</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>self</span>-&gt;<span style=color:#a6e22e>isa</span>:<span style=color:#a6e22e>Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>self</span> <span style=color:#a6e22e>class</span>:<span style=color:#a6e22e>Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>ClassMethodNames</span> = (<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>&#34;.cxx_destruct&#34;,</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>name</span>,<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>&#34;setName:&#34;</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>)<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>self</span>-&gt;<span style=color:#a6e22e>isa</span>:<span style=color:#a6e22e>NSKVONotifying_Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>self</span> <span style=color:#a6e22e>class</span>:<span style=color:#a6e22e>Student</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>ClassMethodNames</span> = (<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>&#34;setName:&#34;,</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>class</span>,<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>dealloc</span>,<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#75715e>&#34;_isKVOA&#34;</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>)<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>这里也可以看出，这是object_getClass方法和class方法的区别。</p><p>这里要特别说明一下，为何打印object_getClass方法和class方法打印出来结果不同。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>Class</span>)<span style=color:#a6e22e>class</span> {
+    <span style=color:#66d9ef>return</span> object_getClass(self);
+}
+
+<span style=color:#66d9ef>Class</span> <span style=color:#a6e22e>object_getClass</span>(<span style=color:#66d9ef>id</span> obj)  
+{
+    <span style=color:#66d9ef>if</span> (obj) <span style=color:#66d9ef>return</span> obj<span style=color:#f92672>-&gt;</span>getIsa();
+    <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>return</span> Nil;
+}
+
+</code></pre></div><p>从实现上看，两个方法的实现都一样的，按道理来说，打印结果应该相同，可是为何在加了 KVO 以后会出现打印结果不同呢？</p><p><strong>根本原因：对于KVO，底层交换了 NSKVONotifying_Student 的 class 方法，让其返回 Student。</strong></p><p>打印这句话 object_getClass(stu) 的时候，isa 当然是 NSKVONotifying_Student。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>respondsToSelector:</span>(<span style=color:#66d9ef>SEL</span>)sel {
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>sel) <span style=color:#66d9ef>return</span> NO;
+    <span style=color:#66d9ef>return</span> class_respondsToSelector_inst(object_getClass(self), sel, self);
+}
+
+
+</code></pre></div><p>当我们执行 NSLog 的时候，会执行上面这个方法，这个方法的 sel 是<code>encodeWithOSLogCoder:options:maxLength:</code>，这个时候，self 是 NSKVONotifying_Student，上面那个respondsToSelector 方法里面 return 的<code>object_getClass(self)</code>结果还是NSKVONotifying_Student。</p><p>打印 [stu class] 的时候，isa 当然还是NSKVONotifying_Student。当执行到 NSLog 的时候，<code>+ (BOOL)respondsToSelector:(SEL)sel</code>，又会执行到这个方法，这个时候的 self 变成了 Student，这个时候 respondsToSelector 方法里面的
+object_getClass(self) 输出当然就是 Student 了。</p><h5 id=2-重写setter方法>2. 重写setter方法</h5><p>在新的类中会重写对应的set方法，是为了在set方法中增加另外两个方法的调用：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>willChangeValueForKey:</span>(NSString <span style=color:#f92672>*</span>)key
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>didChangeValueForKey:</span>(NSString <span style=color:#f92672>*</span>)key
+
+</code></pre></div><p>在didChangeValueForKey:方法再调用</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>observeValueForKeyPath:</span>(NSString <span style=color:#f92672>*</span>)keyPath
+                      <span style=color:#a6e22e>ofObject:</span>(<span style=color:#66d9ef>id</span>)object
+                        <span style=color:#a6e22e>change:</span>(NSDictionary <span style=color:#f92672>*</span>)change
+                       <span style=color:#a6e22e>context:</span>(<span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)context
+
+</code></pre></div><p>这里有几种情况需要说明一下：</p><p>1)如果使用了KVC
+如果有访问器方法，则运行时会在setter方法中调用will/didChangeValueForKey:方法；</p><p>如果没用访问器方法，运行时会在setValue:forKey方法中调用will/didChangeValueForKey:方法。</p><p>所以这种情况下，KVO是奏效的。</p><p>2)有访问器方法
+运行时会重写访问器方法调用will/didChangeValueForKey:方法。
+因此，直接调用访问器方法改变属性值时，KVO也能监听到。</p><p>3)直接调用will/didChangeValueForKey:方法。</p><p>综上所述，只要setter中重写will/didChangeValueForKey:方法就可以使用KVO了。</p><h5 id=3-重写dealloc方法>3. 重写dealloc方法</h5><p>销毁新生成的NSKVONotifying_类。</p><h5 id=4-重写_iskvoa方法>4. 重写_isKVOA方法</h5><p>这个私有方法估计可能是用来标示该类是一个 KVO 机制声称的类。</p><p>Foundation 到底为我们提供了哪些用于 KVO 的辅助函数。打开 terminal，使用 nm -a 命令查看 Foundation 中的信息：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>nm</span> -<span style=color:#a6e22e>a</span> <span style=color:#e6db74>/System/</span><span style=color:#a6e22e>Library</span><span style=color:#e6db74>/Frameworks/</span><span style=color:#a6e22e>Foundation</span>.<span style=color:#a6e22e>framework</span><span style=color:#e6db74>/Versions/</span><span style=color:#a6e22e>C</span>/<span style=color:#a6e22e>Foundation</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>里面包含了以下这些KVO中可能用到的函数：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000233</span>e<span style=color:#ae81ff>7</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetDoubleValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>32</span>ba <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetFloatValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>0000000000025025</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetIntValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>000000000007</span>fbb<span style=color:#ae81ff>5</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetLongLongValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>33</span>e<span style=color:#ae81ff>8</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetLongValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>000000000002</span>d<span style=color:#ae81ff>36</span>c <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetObjectValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>0000000000024</span>dc<span style=color:#ae81ff>5</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetPointValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>39</span>ba <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetRangeValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3</span>aeb <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetRectValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3512</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetShortValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3</span>c<span style=color:#ae81ff>2</span>f <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetSizeValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>363</span>b <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetUnsignedCharValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>000000000006</span>e<span style=color:#ae81ff>91</span>f <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetUnsignedIntValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>0000000000034</span>b<span style=color:#ae81ff>5</span>b <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetUnsignedLongLongValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3766</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetUnsignedLongValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3890</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetUnsignedShortValueAndNotify</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>3060</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetValueAndNotifyForKeyInIvar</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>00000000000</span>f<span style=color:#ae81ff>30</span>d<span style=color:#ae81ff>7</span> <span style=color:#a6e22e>t</span> <span style=color:#a6e22e>__NSSetValueAndNotifyForUndefinedKey</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>Foundation 提供了大部分基础数据类型的辅助函数（Objective C中的 Boolean 只是 unsigned char 的 typedef，所以包括了，但没有 C++中的 bool），此外还包括一些常见的结构体如 Point, Range, Rect, Size，这表明这些结构体也可以用于自动键值观察，但要注意除此之外的结构体就不能用于自动键值观察了。对于所有 Objective C 对象对应的是 __NSSetObjectValueAndNotify 方法。</p><p>KVO即使是苹果官方的实现，也是有缺陷的，这里有一篇文章详细了分析了<a href=http://www.mikeash.com/pyblog/key-value-observing-done-right.html>KVO中的缺陷</a>，主要问题在KVO的回调机制，不能传一个selector或者block作为回调，而必须重写-addObserver:forKeyPath:options:context:方法所引发的一系列问题。而且只监听一两个属性值还好，如果监听的属性多了, 或者监听了多个对象的属性, 那有点麻烦，需要在方法里面写很多的if-else的判断。</p><p>最后，官方文档上对于KVO的实现的最后，给出了需要我们注意的一点是，<strong>永远不要用用isa来判断一个类的继承关系，而是应该用class方法来判断类的实例。</strong></p><h4 id=五-associated-object-关联对象>五. Associated Object 关联对象</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_8.png alt></p><p>Associated Objects是Objective-C 2.0中Runtime的特性之一。众所周知，在 Category 中，我们无法添加@property，因为添加了@property之后并不会自动帮我们生成实例变量以及存取方法。那么，我们现在就可以通过关联对象来实现在 Category 中添加属性的功能了。</p><h5 id=1-用法>1. 用法</h5><p>借用这篇经典文章<a href=http://nshipster.com/associated-objects/>Associated Objects</a>里面的例子来说明一下用法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// NSObject+AssociatedObject.h
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSObject</span> (AssociatedObject)
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>strong</span>) <span style=color:#66d9ef>id</span> associatedObject;
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#75715e>// NSObject+AssociatedObject.m
+</span><span style=color:#75715e></span><span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSObject</span> (AssociatedObject)
+<span style=color:#66d9ef>@dynamic</span> associatedObject;
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setAssociatedObject:</span>(<span style=color:#66d9ef>id</span>)object {
+    objc_setAssociatedObject(self, <span style=color:#66d9ef>@selector</span>(associatedObject), object, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>associatedObject</span> {
+    <span style=color:#66d9ef>return</span> objc_getAssociatedObject(self, <span style=color:#66d9ef>@selector</span>(associatedObject));
+}
+
+</code></pre></div><p>这里涉及到了3个函数：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+OBJC_EXPORT <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>objc_setAssociatedObject</span>(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key, <span style=color:#66d9ef>id</span> value, objc_AssociationPolicy policy)
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_1);
+
+OBJC_EXPORT <span style=color:#66d9ef>id</span> <span style=color:#a6e22e>objc_getAssociatedObject</span>(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key)
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_1);
+
+OBJC_EXPORT <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>objc_removeAssociatedObjects</span>(<span style=color:#66d9ef>id</span> object)
+    __OSX_AVAILABLE_STARTING(__MAC_10_6, __IPHONE_3_1);
+
+</code></pre></div><p>来说明一下这些参数的意义：</p><p>1.id object 设置关联对象的实例对象</p><p>2.const void *key 区分不同的关联对象的 key。这里会有3种写法。</p><p>使用 &AssociatedObjectKey 作为key值</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>char</span> AssociatedObjectKey <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;AssociatedKey&#34;</span>;
+
+</code></pre></div><p>使用AssociatedKey 作为key值</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>AssociatedKey <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;AssociatedKey&#34;</span>;
+
+</code></pre></div><p>使用@selector</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@selector</span>(associatedKey)
+
+</code></pre></div><p>3种方法都可以，不过推荐使用更加简洁的第三种方式。</p><p>3.id value 关联的对象</p><p>4.objc_AssociationPolicy policy 关联对象的存储策略，它是一个枚举，与property的attribute 相对应。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_13.png alt></p><p>这里需要注意的是标记成OBJC_ASSOCIATION_ASSIGN的关联对象和
+@property (weak) 是不一样的，上面表格中等价定义写的是 @property (unsafe_unretained)，对象被销毁时，属性值仍然还在。如果之后再次使用该对象就会导致程序闪退。所以我们在使用OBJC_ASSOCIATION_ASSIGN时，要格外注意。</p><blockquote><p>According to the Deallocation Timeline described in <a href=https://developer.apple.com/videos/wwdc/2011/#322-video>WWDC 2011, Session 322</a>(~36:00), associated objects are erased surprisingly late in the object lifecycle, inobject_dispose(), which is invoked by NSObject -dealloc.</p></blockquote><p>关于关联对象还有一点需要说明的是objc_removeAssociatedObjects。这个方法是移除源对象中所有的关联对象，并不是其中之一。所以其方法参数中也没有传入指定的key。要删除指定的关联对象，使用 objc_setAssociatedObject 方法将对应的 key 设置成 nil 即可。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+objc_setAssociatedObject(self, associatedKey, nil, OBJC_ASSOCIATION_COPY_NONATOMIC);
+
+</code></pre></div><p>关联对象3种使用场景</p><p>1.为现有的类添加私有变量
+2.为现有的类添加公有属性
+3.为KVO创建一个关联的观察者。</p><h5 id=2源码分析>2.源码分析</h5><h6 id=一-objc_setassociatedobject方法>(一) objc_setAssociatedObject方法</h6><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>_object_set_associative_reference</span>(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key, <span style=color:#66d9ef>id</span> value, uintptr_t policy) {
+    <span style=color:#75715e>// retain the new value (if any) outside the lock.
+</span><span style=color:#75715e></span>    ObjcAssociation old_association(<span style=color:#ae81ff>0</span>, nil);
+    <span style=color:#66d9ef>id</span> new_value <span style=color:#f92672>=</span> value <span style=color:#f92672>?</span> acquireValue(value, policy) <span style=color:#f92672>:</span> nil;
+    {
+        AssociationsManager manager;
+        AssociationsHashMap <span style=color:#f92672>&amp;</span>associations(manager.associations());
+        disguised_ptr_t disguised_object <span style=color:#f92672>=</span> DISGUISE(object);
+        <span style=color:#66d9ef>if</span> (new_value) {
+            <span style=color:#75715e>// break any existing association.
+</span><span style=color:#75715e></span>            AssociationsHashMap<span style=color:#f92672>::</span>iterator i <span style=color:#f92672>=</span> associations.find(disguised_object);
+            <span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span> associations.end()) {
+                <span style=color:#75715e>// secondary table exists
+</span><span style=color:#75715e></span>                ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+                ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>find(key);
+                <span style=color:#66d9ef>if</span> (j <span style=color:#f92672>!=</span> refs<span style=color:#f92672>-&gt;</span>end()) {
+                    old_association <span style=color:#f92672>=</span> j<span style=color:#f92672>-&gt;</span>second;
+                    j<span style=color:#f92672>-&gt;</span>second <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+                } <span style=color:#66d9ef>else</span> {
+                    (<span style=color:#f92672>*</span>refs)[key] <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+                }
+            } <span style=color:#66d9ef>else</span> {
+                <span style=color:#75715e>// create the new association (first time).
+</span><span style=color:#75715e></span>                ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> new ObjectAssociationMap;
+                associations[disguised_object] <span style=color:#f92672>=</span> refs;
+                (<span style=color:#f92672>*</span>refs)[key] <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+                object<span style=color:#f92672>-&gt;</span>setHasAssociatedObjects();
+            }
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#75715e>// setting the association to nil breaks the association.
+</span><span style=color:#75715e></span>            AssociationsHashMap<span style=color:#f92672>::</span>iterator i <span style=color:#f92672>=</span> associations.find(disguised_object);
+            <span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span>  associations.end()) {
+                ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+                ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>find(key);
+                <span style=color:#66d9ef>if</span> (j <span style=color:#f92672>!=</span> refs<span style=color:#f92672>-&gt;</span>end()) {
+                    old_association <span style=color:#f92672>=</span> j<span style=color:#f92672>-&gt;</span>second;
+                    refs<span style=color:#f92672>-&gt;</span>erase(j);
+                }
+            }
+        }
+    }
+    <span style=color:#75715e>// release the old value (outside of the lock).
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (old_association.hasValue()) ReleaseValue()(old_association);
+}
+
+</code></pre></div><p>这个函数里面主要分为2部分，一部分是if里面对应的new_value不为nil的时候，另一部分是else里面对应的new_value为nil的情况。</p><p>当new_value不为nil的时候，查找时候，流程如下：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_9.png alt></p><p>首先在AssociationsManager的结构如下</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>class</span> AssociationsManager {
+    <span style=color:#66d9ef>static</span> spinlock_t _lock;
+    <span style=color:#66d9ef>static</span> AssociationsHashMap <span style=color:#f92672>*</span>_map;
+public:
+    AssociationsManager()   { _lock.lock(); }
+    <span style=color:#f92672>~</span>AssociationsManager()  { _lock.unlock(); }
+    
+    AssociationsHashMap <span style=color:#f92672>&amp;</span>associations() {
+        <span style=color:#66d9ef>if</span> (_map <span style=color:#f92672>==</span> NULL)
+            _map <span style=color:#f92672>=</span> new AssociationsHashMap();
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>*</span>_map;
+    }
+};
+</code></pre></div><p>在AssociationsManager中有一个spinlock类型的<a href=https://en.wikipedia.org/wiki/Spinlock>自旋锁</a>lock。保证每次只有一个线程对AssociationsManager进行操作，保证线程安全。AssociationsHashMap对应的是一张哈希表。</p><p>AssociationsHashMap哈希表里面key是disguised_ptr_t。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+disguised_ptr_t disguised_object <span style=color:#f92672>=</span> DISGUISE(object);
+
+</code></pre></div><p>通过调用DISGUISE( )方法获取object地址的指针。拿到disguised_object后，通过这个key值，在AssociationsHashMap哈希表里面找到对应的value值。而这个value值ObjcAssociationMap表的首地址。</p><p>在ObjcAssociationMap表中，key值是set方法里面传过来的形参const void *key，value值是ObjcAssociation对象。</p><p>ObjcAssociation对象中存储了set方法最后两个参数，policy和value。</p><p>所以objc_setAssociatedObject方法中传的4个形参在上图中已经标出。</p><p>现在弄清楚结构之后再来看源码，就很容易了。objc_setAssociatedObject方法的目的就是在这2张哈希表中存储对应的键值对。</p><p>先初始化一个 AssociationsManager，获取唯一的保存关联对象的哈希表 AssociationsHashMap，然后在AssociationsHashMap里面去查找object地址的指针。</p><p>如果找到，就找到了第二张表ObjectAssociationMap。在这张表里继续查找object的key。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span> associations.end()) {
+    <span style=color:#75715e>// secondary table exists
+</span><span style=color:#75715e></span>    ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+    ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>find(key);
+    <span style=color:#66d9ef>if</span> (j <span style=color:#f92672>!=</span> refs<span style=color:#f92672>-&gt;</span>end()) {
+        old_association <span style=color:#f92672>=</span> j<span style=color:#f92672>-&gt;</span>second;
+        j<span style=color:#f92672>-&gt;</span>second <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+    } <span style=color:#66d9ef>else</span> {
+        (<span style=color:#f92672>*</span>refs)[key] <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+    }
+}
+
+</code></pre></div><p>如果在第二张表ObjectAssociationMap找到对应的ObjcAssociation对象，那就更新它的值。如果没有找到，就新建一个ObjcAssociation对象，放入第二张表ObjectAssociationMap中。</p><p>再回到第一张表AssociationsHashMap中，如果没有找到对应的键值</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> new ObjectAssociationMap;
+associations[disguised_object] <span style=color:#f92672>=</span> refs;
+(<span style=color:#f92672>*</span>refs)[key] <span style=color:#f92672>=</span> ObjcAssociation(policy, new_value);
+object<span style=color:#f92672>-&gt;</span>setHasAssociatedObjects();
+
+</code></pre></div><p>此时就不存在第二张表ObjectAssociationMap了，这时就需要新建第二张ObjectAssociationMap表，来维护对象的所有新增属性。新建完第二张ObjectAssociationMap表之后，还需要再实例化 ObjcAssociation对象添加到 Map 中，调用setHasAssociatedObjects方法，表明当前对象含有关联对象。这里的setHasAssociatedObjects方法，改变的是isa_t结构体中的第二个标志位has_assoc的值。(关于isa_t结构体的结构，详情请看第一天的解析)</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// release the old value (outside of the lock).
+</span><span style=color:#75715e></span> <span style=color:#66d9ef>if</span> (old_association.hasValue()) ReleaseValue()(old_association);
+
+</code></pre></div><p>最后如果老的association对象有值，此时还会释放它。</p><p>以上是new_value不为nil的情况。其实只要记住上面那2张表的结构，这个objc_setAssociatedObject的过程就是更新 / 新建 表中键值对的过程。</p><p>再来看看new_value为nil的情况</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// setting the association to nil breaks the association.
+</span><span style=color:#75715e></span>AssociationsHashMap<span style=color:#f92672>::</span>iterator i <span style=color:#f92672>=</span> associations.find(disguised_object);
+<span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span>  associations.end()) {
+    ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+    ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>find(key);
+    <span style=color:#66d9ef>if</span> (j <span style=color:#f92672>!=</span> refs<span style=color:#f92672>-&gt;</span>end()) {
+        old_association <span style=color:#f92672>=</span> j<span style=color:#f92672>-&gt;</span>second;
+        refs<span style=color:#f92672>-&gt;</span>erase(j);
+    }
+}
+
+</code></pre></div><p>当new_value为nil的时候，就是我们要移除关联对象的时候。这个时候就是在两张表中找到对应的键值，并调用erase( )方法，即可删除对应的关联对象。</p><h6 id=二-objc_getassociatedobject方法>(二) objc_getAssociatedObject方法</h6><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> <span style=color:#a6e22e>_object_get_associative_reference</span>(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key) {
+    <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> nil;
+    uintptr_t policy <span style=color:#f92672>=</span> OBJC_ASSOCIATION_ASSIGN;
+    {
+        AssociationsManager manager;
+        AssociationsHashMap <span style=color:#f92672>&amp;</span>associations(manager.associations());
+        disguised_ptr_t disguised_object <span style=color:#f92672>=</span> DISGUISE(object);
+        AssociationsHashMap<span style=color:#f92672>::</span>iterator i <span style=color:#f92672>=</span> associations.find(disguised_object);
+        <span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span> associations.end()) {
+            ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+            ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>find(key);
+            <span style=color:#66d9ef>if</span> (j <span style=color:#f92672>!=</span> refs<span style=color:#f92672>-&gt;</span>end()) {
+                ObjcAssociation <span style=color:#f92672>&amp;</span>entry <span style=color:#f92672>=</span> j<span style=color:#f92672>-&gt;</span>second;
+                value <span style=color:#f92672>=</span> entry.value();
+                policy <span style=color:#f92672>=</span> entry.policy();
+                <span style=color:#66d9ef>if</span> (policy <span style=color:#f92672>&amp;</span> OBJC_ASSOCIATION_GETTER_RETAIN) ((<span style=color:#66d9ef>id</span>(<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>))objc_msgSend)(value, SEL_retain);
+            }
+        }
+    }
+    <span style=color:#66d9ef>if</span> (value <span style=color:#f92672>&amp;&amp;</span> (policy <span style=color:#f92672>&amp;</span> OBJC_ASSOCIATION_GETTER_AUTORELEASE)) {
+        ((<span style=color:#66d9ef>id</span>(<span style=color:#f92672>*</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>SEL</span>))objc_msgSend)(value, SEL_autorelease);
+    }
+    <span style=color:#66d9ef>return</span> value;
+}
+
+
+</code></pre></div><p>objc_getAssociatedObject方法 很简单。就是通过遍历AssociationsHashMap哈希表 和 ObjcAssociationMap表的所有键值找到对应的ObjcAssociation对象，找到了就返回ObjcAssociation对象，没有找到就返回nil。</p><h6 id=三-objc_removeassociatedobjects方法>(三) objc_removeAssociatedObjects方法</h6><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>objc_removeAssociatedObjects</span>(<span style=color:#66d9ef>id</span> object) {
+    <span style=color:#66d9ef>if</span> (object <span style=color:#f92672>&amp;&amp;</span> object<span style=color:#f92672>-&gt;</span>hasAssociatedObjects()) {
+        _object_remove_assocations(object);
+    }
+}
+
+<span style=color:#66d9ef>void</span> <span style=color:#a6e22e>_object_remove_assocations</span>(<span style=color:#66d9ef>id</span> object) {
+    vector<span style=color:#f92672>&lt;</span> ObjcAssociation,ObjcAllocator<span style=color:#f92672>&lt;</span>ObjcAssociation<span style=color:#f92672>&gt;</span> <span style=color:#f92672>&gt;</span> elements;
+    {
+        AssociationsManager manager;
+        AssociationsHashMap <span style=color:#f92672>&amp;</span>associations(manager.associations());
+        <span style=color:#66d9ef>if</span> (associations.size() <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) <span style=color:#66d9ef>return</span>;
+        disguised_ptr_t disguised_object <span style=color:#f92672>=</span> DISGUISE(object);
+        AssociationsHashMap<span style=color:#f92672>::</span>iterator i <span style=color:#f92672>=</span> associations.find(disguised_object);
+        <span style=color:#66d9ef>if</span> (i <span style=color:#f92672>!=</span> associations.end()) {
+            <span style=color:#75715e>// copy all of the associations that need to be removed.
+</span><span style=color:#75715e></span>            ObjectAssociationMap <span style=color:#f92672>*</span>refs <span style=color:#f92672>=</span> i<span style=color:#f92672>-&gt;</span>second;
+            <span style=color:#66d9ef>for</span> (ObjectAssociationMap<span style=color:#f92672>::</span>iterator j <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>begin(), end <span style=color:#f92672>=</span> refs<span style=color:#f92672>-&gt;</span>end(); j <span style=color:#f92672>!=</span> end; <span style=color:#f92672>++</span>j) {
+                elements.push_back(j<span style=color:#f92672>-&gt;</span>second);
+            }
+            <span style=color:#75715e>// remove the secondary table.
+</span><span style=color:#75715e></span>            delete refs;
+            associations.erase(i);
+        }
+    }
+    <span style=color:#75715e>// the calls to releaseValue() happen outside of the lock.
+</span><span style=color:#75715e></span>    for_each(elements.begin(), elements.end(), ReleaseValue());
+}
+
+
+</code></pre></div><p>在移除关联对象object的时候，会先去判断object的isa_t中的第二位has_assoc的值，当object 存在并且object->hasAssociatedObjects( )值为1的时候，才会去调用_object_remove_assocations方法。</p><p>_object_remove_assocations方法的目的是删除第二张ObjcAssociationMap表，即删除所有的关联对象。删除第二张表，就需要在第一张AssociationsHashMap表中遍历查找。这里会把第二张ObjcAssociationMap表中所有的ObjcAssociation对象都存到一个数组elements里面，然后调用associations.erase( )删除第二张表。最后再遍历elements数组，把ObjcAssociation对象依次释放。</p><p>以上就是Associated Object关联对象3个函数的源码分析。</p><h4 id=六动态的增加方法>六.动态的增加方法</h4><p>在消息发送阶段，如果在父类中也没有找到相应的IMP，就会执行resolveInstanceMethod方法。在这个方法里面，我们可以动态的给类对象或者实例对象动态的增加方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>resolveInstanceMethod:</span>(<span style=color:#66d9ef>SEL</span>)sel {
+    
+    NSString <span style=color:#f92672>*</span>selectorString <span style=color:#f92672>=</span> NSStringFromSelector(sel);
+    <span style=color:#66d9ef>if</span> ([selectorString isEqualToString:<span style=color:#e6db74>@&#34;method1&#34;</span>]) {
+        class_addMethod(self.<span style=color:#66d9ef>class</span>, <span style=color:#66d9ef>@selector</span>(method1), (<span style=color:#66d9ef>IMP</span>)functionForMethod1, <span style=color:#e6db74>&#34;@:&#34;</span>);
+    }
+    
+    <span style=color:#66d9ef>return</span> [super resolveInstanceMethod:sel];
+}
+
+</code></pre></div><p>关于方法操作方面的函数还有以下这些</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 调用指定方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>id</span> <span style=color:#a6e22e>method_invoke</span> ( <span style=color:#66d9ef>id</span> receiver, Method m, ... );
+<span style=color:#75715e>// 调用返回一个数据结构的方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>method_invoke_stret</span> ( <span style=color:#66d9ef>id</span> receiver, Method m, ... );
+<span style=color:#75715e>// 获取方法名
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SEL</span> <span style=color:#a6e22e>method_getName</span> ( Method m );
+<span style=color:#75715e>// 返回方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> <span style=color:#a6e22e>method_getImplementation</span> ( Method m );
+<span style=color:#75715e>// 获取描述方法参数和返回值类型的字符串
+</span><span style=color:#75715e></span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>method_getTypeEncoding</span> ( Method m );
+<span style=color:#75715e>// 获取方法的返回值类型的字符串
+</span><span style=color:#75715e></span><span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>method_copyReturnType</span> ( Method m );
+<span style=color:#75715e>// 获取方法的指定位置参数的类型字符串
+</span><span style=color:#75715e></span><span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>method_copyArgumentType</span> ( Method m, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> index );
+<span style=color:#75715e>// 通过引用返回方法的返回值类型字符串
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>method_getReturnType</span> ( Method m, <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>dst, size_t dst_len );
+<span style=color:#75715e>// 返回方法的参数的个数
+</span><span style=color:#75715e></span><span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> <span style=color:#a6e22e>method_getNumberOfArguments</span> ( Method m );
+<span style=color:#75715e>// 通过引用返回方法指定位置参数的类型字符串
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>method_getArgumentType</span> ( Method m, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> index, <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>dst, size_t dst_len );
+<span style=color:#75715e>// 返回指定方法的方法描述结构体
+</span><span style=color:#75715e></span><span style=color:#66d9ef>struct</span> objc_method_description <span style=color:#f92672>*</span> <span style=color:#a6e22e>method_getDescription</span> ( Method m );
+<span style=color:#75715e>// 设置方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> <span style=color:#a6e22e>method_setImplementation</span> ( Method m, <span style=color:#66d9ef>IMP</span> imp );
+<span style=color:#75715e>// 交换两个方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> <span style=color:#a6e22e>method_exchangeImplementations</span> ( Method m1, Method m2 );
+
+</code></pre></div><p>这些方法其实平时不需要死记硬背，使用的时候只要先打出method开头，后面就会有补全信息，找到相应的方法，传入对应的方法即可。</p><h4 id=七nscoding的自动归档和自动解档>七.NSCoding的自动归档和自动解档</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_10.png alt></p><p>现在虽然手写归档和解档的时候不多了，但是自动操作还是用Runtime来实现的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>encodeWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)aCoder{
+    [aCoder encodeObject:self.name forKey:<span style=color:#e6db74>@&#34;name&#34;</span>];
+}
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>initWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)aDecoder{
+    <span style=color:#66d9ef>if</span> (self <span style=color:#f92672>=</span> [super init]) {
+        self.name <span style=color:#f92672>=</span> [aDecoder decodeObjectForKey:<span style=color:#e6db74>@&#34;name&#34;</span>];
+    }
+    <span style=color:#66d9ef>return</span> self;
+}
+
+</code></pre></div><p>手动的有一个缺陷，如果属性多起来，要写好多行相似的代码，虽然功能是可以完美实现，但是看上去不是很优雅。</p><p>用runtime实现的思路就比较简单，我们循环依次找到每个成员变量的名称，然后利用KVC读取和赋值就可以完成encodeWithCoder和initWithCoder了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#import &#34;Student.h&#34;
+</span><span style=color:#75715e>#import &lt;objc/runtime.h&gt;
+</span><span style=color:#75715e>#import &lt;objc/message.h&gt;
+</span><span style=color:#75715e></span>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>Student</span>
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>encodeWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)aCoder{
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> outCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    Ivar <span style=color:#f92672>*</span>vars <span style=color:#f92672>=</span> class_copyIvarList([self <span style=color:#66d9ef>class</span>], <span style=color:#f92672>&amp;</span>outCount);
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>int</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> outCount; i <span style=color:#f92672>++</span>) {
+        Ivar var <span style=color:#f92672>=</span> vars[i];
+        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name <span style=color:#f92672>=</span> ivar_getName(var);
+        NSString <span style=color:#f92672>*</span>key <span style=color:#f92672>=</span> [NSString stringWithUTF8String:name];
+
+        <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> [self valueForKey:key];
+        [aCoder encodeObject:value forKey:key];
+    }
+}
+
+- (nullable __kindof)<span style=color:#a6e22e>initWithCoder:</span>(NSCoder <span style=color:#f92672>*</span>)aDecoder{
+    <span style=color:#66d9ef>if</span> (self <span style=color:#f92672>=</span> [super init]) {
+        <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> outCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+        Ivar <span style=color:#f92672>*</span>vars <span style=color:#f92672>=</span> class_copyIvarList([self <span style=color:#66d9ef>class</span>], <span style=color:#f92672>&amp;</span>outCount);
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>int</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> outCount; i <span style=color:#f92672>++</span>) {
+            Ivar var <span style=color:#f92672>=</span> vars[i];
+            <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name <span style=color:#f92672>=</span> ivar_getName(var);
+            NSString <span style=color:#f92672>*</span>key <span style=color:#f92672>=</span> [NSString stringWithUTF8String:name];
+            <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> [aDecoder decodeObjectForKey:key];
+            [self setValue:value forKey:key];
+        }
+    }
+    <span style=color:#66d9ef>return</span> self;
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>class_copyIvarList方法用来获取当前 Model 的所有成员变量，ivar_getName方法用来获取每个成员变量的名称。</p><h4 id=八字典和模型互相转换>八.字典和模型互相转换</h4><h5 id=1字典转模型>1.字典转模型</h5><p>1.调用 class_getProperty 方法获取当前 Model 的所有属性。
+2.调用 property_copyAttributeList 获取属性列表。
+3.根据属性名称生成 setter 方法。
+4.使用 objc_msgSend 调用 setter 方法为 Model 的属性赋值（或者 KVC）</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++(<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>objectWithKeyValues:</span>(NSDictionary <span style=color:#f92672>*</span>)aDictionary{
+    <span style=color:#66d9ef>id</span> objc <span style=color:#f92672>=</span> [[self alloc] init];
+    <span style=color:#66d9ef>for</span> (NSString <span style=color:#f92672>*</span>key <span style=color:#66d9ef>in</span> aDictionary.allKeys) {
+        <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> aDictionary[key];
+        
+        <span style=color:#75715e>/*判断当前属性是不是Model*/</span>
+        objc_property_t property <span style=color:#f92672>=</span> class_getProperty(self, key.UTF8String);
+        <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> outCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+        objc_property_attribute_t <span style=color:#f92672>*</span>attributeList <span style=color:#f92672>=</span> property_copyAttributeList(property, <span style=color:#f92672>&amp;</span>outCount);
+        objc_property_attribute_t attribute <span style=color:#f92672>=</span> attributeList[<span style=color:#ae81ff>0</span>];
+        NSString <span style=color:#f92672>*</span>typeString <span style=color:#f92672>=</span> [NSString stringWithUTF8String:attribute.value];
+
+        <span style=color:#66d9ef>if</span> ([typeString isEqualToString:<span style=color:#e6db74>@&#34;@</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>Student</span><span style=color:#ae81ff>\&#34;</span><span style=color:#e6db74>&#34;</span>]) {
+            value <span style=color:#f92672>=</span> [self objectWithKeyValues:value];
+        }
+        
+        <span style=color:#75715e>//生成setter方法，并用objc_msgSend调用
+</span><span style=color:#75715e></span>        NSString <span style=color:#f92672>*</span>methodName <span style=color:#f92672>=</span> [NSString stringWithFormat:<span style=color:#e6db74>@&#34;set%@%@:&#34;</span>,[key substringToIndex:<span style=color:#ae81ff>1</span>].uppercaseString,[key substringFromIndex:<span style=color:#ae81ff>1</span>]];
+        <span style=color:#66d9ef>SEL</span> <span style=color:#66d9ef>setter</span> <span style=color:#f92672>=</span> sel_registerName(methodName.UTF8String);
+        <span style=color:#66d9ef>if</span> ([objc respondsToSelector:<span style=color:#66d9ef>setter</span>]) {
+            ((<span style=color:#66d9ef>void</span> (<span style=color:#f92672>*</span>) (<span style=color:#66d9ef>id</span>,<span style=color:#66d9ef>SEL</span>,<span style=color:#66d9ef>id</span>)) objc_msgSend) (objc,<span style=color:#66d9ef>setter</span>,value);
+        }
+        free(attributeList);
+    }
+    <span style=color:#66d9ef>return</span> objc;
+}
+
+</code></pre></div><p>这段代码里面有一处判断typeString的，这里判断是防止model嵌套，比如说Student里面还有一层Student，那么这里就需要再次转换一次，当然这里有几层就需要转换几次。</p><p>几个出名的开源库JSONModel、MJExtension等都是通过这种方式实现的(利用runtime的class_copyIvarList获取属性数组，遍历模型对象的所有成员属性，根据属性名找到字典中key值进行赋值，当然这种方法只能解决NSString、NSNumber等，如果含有NSArray或NSDictionary，还要进行第二步转换，如果是字典数组，需要遍历数组中的字典，利用objectWithDict方法将字典转化为模型，在将模型放到数组中，最后把这个模型数组赋值给之前的字典数组)</p><h5 id=2模型转字典>2.模型转字典</h5><p>这里是上一部分字典转模型的逆步骤：</p><p>1.调用 class_copyPropertyList 方法获取当前 Model 的所有属性。
+2.调用 property_getName 获取属性名称。
+3.根据属性名称生成 getter 方法。
+4.使用 objc_msgSend 调用 getter 方法获取属性值（或者 KVC）</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>//模型转字典
+</span><span style=color:#75715e></span>-(NSDictionary <span style=color:#f92672>*</span>)<span style=color:#a6e22e>keyValuesWithObject</span>{
+    <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> outCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+    objc_property_t <span style=color:#f92672>*</span>propertyList <span style=color:#f92672>=</span> class_copyPropertyList([self <span style=color:#66d9ef>class</span>], <span style=color:#f92672>&amp;</span>outCount);
+    NSMutableDictionary <span style=color:#f92672>*</span>dict <span style=color:#f92672>=</span> [NSMutableDictionary dictionary];
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>int</span> i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> outCount; i <span style=color:#f92672>++</span>) {
+        objc_property_t property <span style=color:#f92672>=</span> propertyList[i];
+        
+        <span style=color:#75715e>//生成getter方法，并用objc_msgSend调用
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>propertyName <span style=color:#f92672>=</span> property_getName(property);
+        <span style=color:#66d9ef>SEL</span> <span style=color:#66d9ef>getter</span> <span style=color:#f92672>=</span> sel_registerName(propertyName);
+        <span style=color:#66d9ef>if</span> ([self respondsToSelector:<span style=color:#66d9ef>getter</span>]) {
+            <span style=color:#66d9ef>id</span> value <span style=color:#f92672>=</span> ((<span style=color:#66d9ef>id</span> (<span style=color:#f92672>*</span>) (<span style=color:#66d9ef>id</span>,<span style=color:#66d9ef>SEL</span>)) objc_msgSend) (self,<span style=color:#66d9ef>getter</span>);
+            
+            <span style=color:#75715e>/*判断当前属性是不是Model*/</span>
+            <span style=color:#66d9ef>if</span> ([value isKindOfClass:[self <span style=color:#66d9ef>class</span>]] <span style=color:#f92672>&amp;&amp;</span> value) {
+                value <span style=color:#f92672>=</span> [value keyValuesWithObject];
+            }
+
+            <span style=color:#66d9ef>if</span> (value) {
+                NSString <span style=color:#f92672>*</span>key <span style=color:#f92672>=</span> [NSString stringWithUTF8String:propertyName];
+                [dict setObject:value forKey:key];
+            }
+        }
+        
+    }
+    free(propertyList);
+    <span style=color:#66d9ef>return</span> dict;
+}
+
+</code></pre></div><p>中间注释那里的判断也是防止model嵌套，如果model里面还有一层model，那么model转字典的时候还需要再次转换，同样，有几层就需要转换几次。</p><p>不过上述的做法是假设字典里面不再包含二级字典，如果还包含数组，数组里面再包含字典，那还需要多级转换。这里有一个关于字典里面包含数组的<a href=https://github.com/XHTeng/XHRuntimeDemo>demo</a>.</p><h4 id=九runtime缺点>九.Runtime缺点</h4><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_11.png alt></p><p>看了上面八大点之后，是不是感觉Runtime很神奇，可以迅速解决很多问题，然而，Runtime就像一把瑞士小刀，如果使用得当，它会有效地解决问题。但使用不当，将带来很多麻烦。在stackoverflow上有人已经提出这样一个问题：<a href=http://stackoverflow.com/questions/5339276/what-are-the-dangers-of-method-swizzling-in-objective-c>What are the Dangers of Method Swizzling in Objective C?</a>，它的危险性主要体现以下几个方面：</p><ul><li>Method swizzling is not atomic</li></ul><p>Method swizzling不是原子性操作。如果在+load方法里面写，是没有问题的，但是如果写在+initialize方法中就会出现一些奇怪的问题。</p><ul><li>Changes behavior of un-owned code</li></ul><p>如果你在一个类中重写一个方法，并且不调用super方法，你可能会导致一些问题出现。在大多数情况下，super方法是期望被调用的（除非有特殊说明）。如果你使用同样的思想来进行Swizzling，可能就会引起很多问题。如果你不调用原始的方法实现，那么你Swizzling改变的太多了，而导致整个程序变得不安全。</p><ul><li>Possible naming conflicts</li></ul><p>命名冲突是程序开发中经常遇到的一个问题。我们经常在类别中的前缀类名称和方法名称。不幸的是，命名冲突是在我们程序中的像一种瘟疫。一般我们会这样写Method Swizzling</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>NSView</span> : <span style=color:#a6e22e>NSObject</span>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>setFrame:</span>(NSRect)frame;
+<span style=color:#66d9ef>@end</span>
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSView</span> (MyViewAdditions)
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>my_setFrame:</span>(NSRect)frame {
+    <span style=color:#75715e>// do custom work
+</span><span style=color:#75715e></span>    [self my_setFrame:frame];
+}
+
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span> {
+    [self swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_setFrame:)];
+}
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>这样写看上去是没有问题的。但是如果在整个大型程序中还有另外一处定义了my_setFrame:方法呢？那又会造成命名冲突的问题。我们应该把上面的Swizzling改成以下这种样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSView</span> (MyViewAdditions)
+
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>MySetFrame</span>(<span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> _cmd, NSRect frame);
+<span style=color:#66d9ef>static</span> <span style=color:#a6e22e>void</span> (<span style=color:#f92672>*</span>SetFrameIMP)(<span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> _cmd, NSRect frame);
+
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>MySetFrame</span>(<span style=color:#66d9ef>id</span> self, <span style=color:#66d9ef>SEL</span> _cmd, NSRect frame) {
+    <span style=color:#75715e>// do custom work
+</span><span style=color:#75715e></span>    SetFrameIMP(self, _cmd, frame);
+}
+
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>load</span> {
+    [self swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:(<span style=color:#66d9ef>IMP</span>)MySetFrame store:(<span style=color:#66d9ef>IMP</span> <span style=color:#f92672>*</span>)<span style=color:#f92672>&amp;</span>SetFrameIMP];
+}
+
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>虽然上面的代码看上去不是OC(因为使用了函数指针)，但是这种做法确实有效的防止了命名冲突的问题。原则上来说，其实上述做法更加符合标准化的Swizzling。这种做法可能和人们使用方法不同，但是这种做法更好。Swizzling Method 标准定义应该是如下的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>typedef</span> <span style=color:#66d9ef>IMP</span> <span style=color:#f92672>*</span>IMPPointer;
+
+<span style=color:#66d9ef>BOOL</span> <span style=color:#a6e22e>class_swizzleMethodAndStore</span>(<span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span>, <span style=color:#66d9ef>SEL</span> original, <span style=color:#66d9ef>IMP</span> replacement, IMPPointer store) {
+    <span style=color:#66d9ef>IMP</span> imp <span style=color:#f92672>=</span> NULL;
+    Method method <span style=color:#f92672>=</span> class_getInstanceMethod(<span style=color:#66d9ef>class</span>, original);
+    <span style=color:#66d9ef>if</span> (method) {
+        <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>type <span style=color:#f92672>=</span> method_getTypeEncoding(method);
+        imp <span style=color:#f92672>=</span> class_replaceMethod(<span style=color:#66d9ef>class</span>, original, replacement, type);
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>imp) {
+            imp <span style=color:#f92672>=</span> method_getImplementation(method);
+        }
+    }
+    <span style=color:#66d9ef>if</span> (imp <span style=color:#f92672>&amp;&amp;</span> store) { <span style=color:#f92672>*</span>store <span style=color:#f92672>=</span> imp; }
+    <span style=color:#66d9ef>return</span> (imp <span style=color:#f92672>!=</span> NULL);
+}
+
+<span style=color:#66d9ef>@implementation</span> <span style=color:#a6e22e>NSObject</span> (FRRuntimeAdditions)
++ (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>swizzle:</span>(<span style=color:#66d9ef>SEL</span>)original <span style=color:#a6e22e>with:</span>(<span style=color:#66d9ef>IMP</span>)replacement <span style=color:#a6e22e>store:</span>(IMPPointer)store {
+    <span style=color:#66d9ef>return</span> class_swizzleMethodAndStore(self, original, replacement, store);
+}
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><ul><li>Swizzling changes the method&rsquo;s arguments</li></ul><p>这一点是这些问题中最大的一个。标准的Method Swizzling是不会改变方法参数的。使用Swizzling中，会改变传递给原来的一个函数实现的参数，例如：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[self my_setFrame:frame];
+
+</code></pre></div><p>会变转换成</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+objc_msgSend(self, <span style=color:#66d9ef>@selector</span>(my_setFrame:), frame);
+
+</code></pre></div><p>objc_msgSend会去查找my_setFrame对应的IMP。一旦IMP找到，会把相同的参数传递进去。这里会找到最原始的setFrame:方法，调用执行它。但是这里的_cmd参数并不是setFrame:，现在是my_setFrame:。原始的方法就被一个它不期待的接收参数调用了。这样并不好。</p><p>这里有一个简单的解决办法，上一条里面所说的，用函数指针去实现。参数就不会变了。</p><ul><li>The order of swizzles matters</li></ul><p>调用顺序对于Swizzling来说，很重要。假设setFrame:方法仅仅被定义在NSView类里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[NSButton swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_buttonSetFrame:)];
+[NSControl swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_controlSetFrame:)];
+[NSView swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_viewSetFrame:)];
+
+</code></pre></div><p>当NSButton被swizzled之后会发生什么呢？大多数的swizzling应该保证不会替换setFrame:方法。因为一旦改了这个方法，会影响下面所有的View。所以它会去拉取实例方法。NSButton会使用已经存在的方法去重新定义setFrame:方法。以至于改变了IMP实现不会影响所有的View。相同的事情也会发生在对NSControl进行swizzling的时候，同样，IMP也是定义在NSView类里面，把NSControl 和 NSButton这上下两行swizzle顺序替换，结果也是相同的。</p><p>当调用NSButton的setFrame:方法，会去调用swizzled method，然后会跳入NSView类里面定义的setFrame:方法。NSControl 和 NSView对应的swizzled method不会被调用。</p><p>NSButton 和 NSControl各自调用各自的 swizzling方法，相互不会影响。</p><p>但是我们改变一下调用顺序，把NSView放在第一位调用。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[NSView swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_viewSetFrame:)];
+[NSControl swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_controlSetFrame:)];
+[NSButton swizzle:<span style=color:#66d9ef>@selector</span>(setFrame:) with:<span style=color:#66d9ef>@selector</span>(my_buttonSetFrame:)];
+
+</code></pre></div><p>一旦这里的NSView先进行了swizzling了以后，情况就和上面大不相同了。NSControl的swizzling会去拉取NSView替换后的方法。相应的，NSControl在NSButton前面，NSButton也会去拉取到NSControl替换后的方法。这样就十分混乱了。但是顺序就是这样排列的。我们开发中如何能保证不出现这种混乱呢？</p><p>再者，在load方法中加载swizzle。如果仅仅是在已经加载完成的class中做了swizzle，那么这样做是安全的。load方法能保证父类会在其任何子类加载方法之前，加载相应的方法。这就保证了我们调用顺序的正确性。</p><ul><li>Difficult to understand (looks recursive)</li></ul><p>看着传统定义的swizzled method，我认为很难去预测会发生什么。但是对比上面标准的swizzling，还是很容易明白。这一点已经被解决了。</p><ul><li>Difficult to debug</li></ul><p>在调试中，会出现奇怪的堆栈调用信息，尤其是swizzled的命名很混乱，一切方法调用都是混乱的。对比标准的swizzled方式，你会在堆栈中看到清晰的命名方法。swizzling还有一个比较难调试的一点， 在于你很难记住当前确切的哪个方法已经被swizzling了。</p><p>在代码里面写好文档注释，即使你认为这段代码只有你一个人会看。遵循这个方式去实践，你的代码都会没问题。它的调试也没有多线程的调试困难。</p><h4 id=最后>最后</h4><p>经过在“神经病院”3天的修炼之后，对OC 的Runtime理解更深了。</p><p>关于黑魔法Method swizzling，我个人觉得如果使用得当，还是很安全的。一个简单而安全的措施是你仅仅只在load方法中去swizzle。和编程中很多事情一样，不了解它的时候会很危险可怕，但是一旦明白了它的原理之后，使用它又会变得非常正确高效。</p><p>对于多人开发，尤其是改动过Runtime的地方，文档记录一定要完整。如果某人不知道某个方法被Swizzling了，出现问题调试起来，十分蛋疼。</p><p>如果是SDK开发，某些Swizzling会改变全局的一些方法的时候，一定要在文档里面标注清楚，否则使用SDK的人不知道，出现各种奇怪的问题，又要被坑好久。</p><p>在合理使用 + 文档完整齐全 的情况下，解决特定问题，使用Runtime还是非常简洁安全的。</p><p>日常可能用的比较多的Runtime函数可能就是下面这些</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>//获取cls类对象所有成员ivar结构体
+</span><span style=color:#75715e></span>Ivar <span style=color:#f92672>*</span>class_copyIvarList(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>outCount)
+<span style=color:#75715e>//获取cls类对象name对应的实例方法结构体
+</span><span style=color:#75715e></span>Method class_getInstanceMethod(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> name)
+<span style=color:#75715e>//获取cls类对象name对应类方法结构体
+</span><span style=color:#75715e></span>Method class_getClassMethod(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> name)
+<span style=color:#75715e>//获取cls类对象name对应方法imp实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> class_getMethodImplementation(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> name)
+<span style=color:#75715e>//测试cls对应的实例是否响应sel对应的方法
+</span><span style=color:#75715e></span><span style=color:#66d9ef>BOOL</span> class_respondsToSelector(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> sel)
+<span style=color:#75715e>//获取cls对应方法列表
+</span><span style=color:#75715e></span>Method <span style=color:#f92672>*</span>class_copyMethodList(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> <span style=color:#f92672>*</span>outCount)
+<span style=color:#75715e>//测试cls是否遵守protocol协议
+</span><span style=color:#75715e></span><span style=color:#66d9ef>BOOL</span> class_conformsToProtocol(<span style=color:#66d9ef>Class</span> cls, Protocol <span style=color:#f92672>*</span>protocol)
+<span style=color:#75715e>//为cls类对象添加新方法
+</span><span style=color:#75715e></span><span style=color:#66d9ef>BOOL</span> class_addMethod(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> name, <span style=color:#66d9ef>IMP</span> imp, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>types)
+<span style=color:#75715e>//替换cls类对象中name对应方法的实现
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> class_replaceMethod(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>SEL</span> name, <span style=color:#66d9ef>IMP</span> imp, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>types)
+<span style=color:#75715e>//为cls添加新成员
+</span><span style=color:#75715e></span><span style=color:#66d9ef>BOOL</span> class_addIvar(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, size_t size, uint8_t alignment, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>types)
+<span style=color:#75715e>//为cls添加新属性
+</span><span style=color:#75715e></span><span style=color:#66d9ef>BOOL</span> class_addProperty(<span style=color:#66d9ef>Class</span> cls, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>name, <span style=color:#66d9ef>const</span> objc_property_attribute_t <span style=color:#f92672>*</span>attributes, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> attributeCount)
+<span style=color:#75715e>//获取m对应的选择器
+</span><span style=color:#75715e></span><span style=color:#66d9ef>SEL</span> method_getName(Method m)
+<span style=color:#75715e>//获取m对应的方法实现的imp指针
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> method_getImplementation(Method m)
+<span style=color:#75715e>//获取m方法的对应编码
+</span><span style=color:#75715e></span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>method_getTypeEncoding(Method m)
+<span style=color:#75715e>//获取m方法参数的个数
+</span><span style=color:#75715e></span><span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> method_getNumberOfArguments(Method m)
+<span style=color:#75715e>//copy方法返回值类型
+</span><span style=color:#75715e></span><span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>method_copyReturnType(Method m)
+<span style=color:#75715e>//获取m方法index索引参数的类型
+</span><span style=color:#75715e></span><span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>method_copyArgumentType(Method m, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> index)
+<span style=color:#75715e>//获取m方法返回值类型
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> method_getReturnType(Method m, <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>dst, size_t dst_len)
+<span style=color:#75715e>//获取方法的参数类型
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> method_getArgumentType(Method m, <span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>int</span> index, <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>dst, size_t dst_len)
+<span style=color:#75715e>//设置m方法的具体实现指针
+</span><span style=color:#75715e></span><span style=color:#66d9ef>IMP</span> method_setImplementation(Method m, <span style=color:#66d9ef>IMP</span> imp)
+<span style=color:#75715e>//交换m1，m2方法对应具体实现的函数指针
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> method_exchangeImplementations(Method m1, Method m2)
+<span style=color:#75715e>//获取v的名称
+</span><span style=color:#75715e></span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>ivar_getName(Ivar v)
+<span style=color:#75715e>//获取v的类型编码
+</span><span style=color:#75715e></span><span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>ivar_getTypeEncoding(Ivar v)
+<span style=color:#75715e>//设置object对象关联的对象
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> objc_setAssociatedObject(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key, <span style=color:#66d9ef>id</span> value, objc_AssociationPolicy policy)
+<span style=color:#75715e>//获取object关联的对象
+</span><span style=color:#75715e></span><span style=color:#66d9ef>id</span> objc_getAssociatedObject(<span style=color:#66d9ef>id</span> object, <span style=color:#66d9ef>const</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>key)
+<span style=color:#75715e>//移除object关联的对象
+</span><span style=color:#75715e></span><span style=color:#66d9ef>void</span> objc_removeAssociatedObjects(<span style=color:#66d9ef>id</span> object)
+
+</code></pre></div><p>这些API看上去不好记，其实使用的时候不难，关于方法操作的，一般都是method开头，关于类的，一般都是class开头的，其他的基本都是objc开头的，剩下的就看代码补全的提示，看方法名基本就能找到想要的方法了。当然很熟悉的话，可以直接打出指定方法，也不会依赖代码补全。</p><p>还有一些关于协议相关的API以及其他一些不常用，但是也可能用到的，就需要查看<a href="https://developer.apple.com/reference/objectivec/1657527-objective_c_runtime?language=objc">Objective-C Runtime官方API文档</a>，这个官方文档里面详细说明，平时不懂的多看看文档。</p><p>最后请大家多多指教。</p><p>Ps.这篇干货有点多，简书提示文章字数快到上限了，还好都写完了。顺利出院了！</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/25_12.png alt></p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#一-实现多继承multiple-inheritance>一. 实现多继承Multiple Inheritance</a></li><li><a href=#二method-swizzling>二.Method Swizzling</a></li><li><a href=#三-aspect-oriented-programming>三. Aspect Oriented Programming</a></li><li><a href=#四-isa-swizzling>四. Isa Swizzling</a></li><li><a href=#五-associated-object-关联对象>五. Associated Object 关联对象</a></li><li><a href=#六动态的增加方法>六.动态的增加方法</a></li><li><a href=#七nscoding的自动归档和自动解档>七.NSCoding的自动归档和自动解档</a></li><li><a href=#八字典和模型互相转换>八.字典和模型互相转换</a></li><li><a href=#九runtime缺点>九.Runtime缺点</a></li><li><a href=#最后>最后</a></li></ul></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&text=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&is_video=false&description=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&title=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&name=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime&description=%e5%89%8d%e8%a8%80%20%e5%88%b0%e4%ba%86%e4%bb%8a%e5%a4%a9%e7%bb%88%e4%ba%8e%e8%a6%81%26quot%3b%e5%87%ba%e9%99%a2%26quot%3b%e4%ba%86%ef%bc%8c%e8%a6%81%e6%80%bb%e7%bb%93%e4%b8%80%e4%b8%8b%e4%bd%8f%e9%99%a2%e5%87%a0%e5%a4%a9%e7%9a%84%e6%94%b6%e8%8e%b7%ef%bc%8c%e8%b0%88%e8%b0%88Runtime%e5%88%b0%e5%ba%95%e8%83%bd%e4%b8%ba%e6%88%91%e4%bb%ac%e5%bc%80%e5%8f%91%e5%b8%a6%e6%9d%a5%e4%ba%9b%e4%bb%80%e4%b9%88%e5%a5%bd%e5%a4%84%e3%80%82%e5%bd%93%e7%84%b6%e5%ae%83%e4%b9%9f%e6%98%af%e6%8a%8a%e5%8f%8c%e5%88%83%e5%89%91%ef%bc%8c%e4%bd%bf%e7%94%a8%e4%b8%8d%e5%bd%93%e7%9a%84%e8%af%9d%ef%bc%8c%e4%b9%9f%e4%bc%9a%e6%88%90%e4%b8%ba%e5%bc%80%e5%8f%91%e8%b7%af%e4%b8%8a%e7%9a%84%e4%b8%80%e4%b8%aa%e5%a4%a7%e5%9d%91%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.Runtime%e7%9a%84%e4%bc%98%e7%82%b9%20%20%281%29%20%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bfMultiple%20Inheritance%20%282%29%20Method%20Swizzling%20%283%29%20Aspect%20Oriented%20Programming%20%284%29%20Isa%20Swizzling%20%285%29%20Associated%20Object%e5%85%b3%e8%81%94%e5%af%b9%e8%b1%a1%20%286%29%20%e5%8a%a8%e6%80%81%e7%9a%84%e5%a2%9e%e5%8a%a0%e6%96%b9%e6%b3%95%20%287%29%20NSCoding%e7%9a%84%e8%87%aa%e5%8a%a8%e5%bd%92%e6%a1%a3%e5%92%8c%e8%87%aa%e5%8a%a8%e8%a7%a3%e6%a1%a3%20%288%29%20%e5%ad%97%e5%85%b8%e5%92%8c%e6%a8%a1%e5%9e%8b%e4%ba%92%e7%9b%b8%e8%bd%ac%e6%8d%a2%20%20%202.Runtime%e7%9a%84%e7%bc%ba%e7%82%b9%20%20%e4%b8%80.%20%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bfMultiple%20Inheritance%20%e5%9c%a8%e4%b8%8a%e4%b8%80%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e8%ae%b2%e5%88%b0%e7%9a%84forwardingTargetForSelector%3a%e6%96%b9%e6%b3%95%e5%b0%b1%e8%83%bd%e7%9f%a5%e9%81%93%ef%bc%8c%e4%b8%80%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e5%81%9a%e5%88%b0%e7%bb%a7%e6%89%bf%e5%a4%9a%e4%b8%aa%e7%b1%bb%e7%9a%84%e6%95%88%e6%9e%9c%ef%bc%8c%e5%8f%aa%e9%9c%80%e8%a6%81%e5%9c%a8%e8%bf%99%e4%b8%80%e6%ad%a5%e5%b0%86%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e7%bb%99%e6%ad%a3%e7%a1%ae%e7%9a%84%e7%b1%bb%e5%af%b9%e8%b1%a1%e5%b0%b1%e5%8f%af%e4%bb%a5%e6%a8%a1%e6%8b%9f%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e6%95%88%e6%9e%9c%e3%80%82%0a%e5%9c%a8%e5%ae%98%e6%96%b9%e6%96%87%e6%a1%a3%e4%b8%8a%e8%ae%b0%e5%bd%95%e4%ba%86%e8%bf%99%e6%a0%b7%e4%b8%80%e6%ae%b5%e4%be%8b%e5%ad%90%e3%80%82%0a%e5%9c%a8OC%e7%a8%8b%e5%ba%8f%e4%b8%ad%e5%8f%af%e4%bb%a5%e5%80%9f%e7%94%a8%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e6%9c%ba%e5%88%b6%e6%9d%a5%e5%ae%9e%e7%8e%b0%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e5%8a%9f%e8%83%bd%e3%80%82%20%e5%9c%a8%e4%b8%8a%e5%9b%be%e4%b8%ad%ef%bc%8c%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%af%b9%e4%b8%80%e4%b8%aa%e6%b6%88%e6%81%af%e5%81%9a%e5%87%ba%e5%9b%9e%e5%ba%94%ef%bc%8c%e7%b1%bb%e4%bc%bc%e4%ba%8e%e5%8f%a6%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%b8%ad%e7%9a%84%e6%96%b9%e6%b3%95%e5%80%9f%e8%bf%87%e6%9d%a5%e6%88%96%e6%98%af%e2%80%9c%e7%bb%a7%e6%89%bf%e2%80%9d%e8%bf%87%e6%9d%a5%e4%b8%80%e6%a0%b7%e3%80%82%20%e5%9c%a8%e5%9b%be%e4%b8%ad%ef%bc%8cwarrior%e5%ae%9e%e4%be%8b%e8%bd%ac%e5%8f%91%e4%ba%86%e4%b8%80%e4%b8%aanegotiate%e6%b6%88%e6%81%af%e5%88%b0Diplomat%e5%ae%9e%e4%be%8b%e4%b8%ad%ef%bc%8c%e6%89%a7%e8%a1%8cDiplomat%e4%b8%ad%e7%9a%84negotiate%e6%96%b9%e6%b3%95%ef%bc%8c%e7%bb%93%e6%9e%9c%e7%9c%8b%e8%b5%b7%e6%9d%a5%e5%83%8f%e6%98%afwarrior%e5%ae%9e%e4%be%8b%e6%89%a7%e8%a1%8c%e4%ba%86%e4%b8%80%e4%b8%aa%e5%92%8cDiplomat%e5%ae%9e%e4%be%8b%e4%b8%80%e6%a0%b7%e7%9a%84negotiate%e6%96%b9%e6%b3%95%ef%bc%8c%e5%85%b6%e5%ae%9e%e6%89%a7%e8%a1%8c%e8%80%85%e8%bf%98%e6%98%afDiplomat%e5%ae%9e%e4%be%8b%e3%80%82%0a%e8%bf%99%e4%bd%bf%e5%be%97%e4%b8%8d%e5%90%8c%e7%bb%a7%e6%89%bf%e4%bd%93%e7%b3%bb%e5%88%86%e6%94%af%e4%b8%8b%e7%9a%84%e4%b8%a4%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e2%80%9c%e7%bb%a7%e6%89%bf%e2%80%9d%e5%af%b9%e6%96%b9%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e8%bf%99%e6%a0%b7%e4%b8%80%e4%b8%aa%e7%b1%bb%e5%8f%af%e4%bb%a5%e5%93%8d%e5%ba%94%e8%87%aa%e5%b7%b1%e7%bb%a7%e6%89%bf%e5%88%86%e6%94%af%e9%87%8c%e9%9d%a2%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e5%90%8c%e6%97%b6%e4%b9%9f%e8%83%bd%e5%93%8d%e5%ba%94%e5%85%b6%e4%bb%96%e4%b8%8d%e7%9b%b8%e5%b9%b2%e7%b1%bb%e5%8f%91%e8%bf%87%e6%9d%a5%e7%9a%84%e6%b6%88%e6%81%af%e3%80%82%e5%9c%a8%e4%b8%8a%e5%9b%be%e4%b8%adWarrior%e5%92%8cDiplomat%e6%b2%a1%e6%9c%89%e7%bb%a7%e6%89%bf%e5%85%b3%e7%b3%bb%ef%bc%8c%e4%bd%86%e6%98%afWarrior%e5%b0%86negotiate%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e7%bb%99%e4%ba%86Diplomat%e5%90%8e%ef%bc%8c%e5%b0%b1%e5%a5%bd%e4%bc%bcDiplomat%e6%98%afWarrior%e7%9a%84%e8%b6%85%e7%b1%bb%e4%b8%80%e6%a0%b7%e3%80%82%0a%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e6%8f%90%e4%be%9b%e4%ba%86%e8%ae%b8%e5%a4%9a%e7%b1%bb%e4%bc%bc%e4%ba%8e%e5%a4%9a%e7%bb%a7%e6%89%bf%e7%9a%84%e7%89%b9%e6%80%a7%ef%bc%8c%e4%bd%86%e6%98%af%e4%bb%96%e4%bb%ac%e4%b9%8b%e9%97%b4%e6%9c%89%e4%b8%80%e4%b8%aa%e5%be%88%e5%a4%a7%e7%9a%84%e4%b8%8d%e5%90%8c%ef%bc%9a%0a%e5%a4%9a%e7%bb%a7%e6%89%bf%ef%bc%9a%e5%90%88%e5%b9%b6%e4%ba%86%e4%b8%8d%e5%90%8c%e7%9a%84%e8%a1%8c%e4%b8%ba%e7%89%b9%e5%be%81%e5%9c%a8%e4%b8%80%e4%b8%aa%e5%8d%95%e7%8b%ac%e7%9a%84%e5%af%b9%e8%b1%a1%e4%b8%ad%ef%bc%8c%e4%bc%9a%e5%be%97%e5%88%b0%e4%b8%80%e4%b8%aa%e9%87%8d%e9%87%8f%e7%ba%a7%e5%a4%9a%e5%b1%82%e9%9d%a2%e7%9a%84%e5%af%b9%e8%b1%a1%e3%80%82%0a%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%ef%bc%9a%e5%b0%86%e5%90%84%e4%b8%aa%e5%8a%9f%e8%83%bd%e5%88%86%e6%95%a3%e5%88%b0%e4%b8%8d%e5%90%8c%e7%9a%84%e5%af%b9%e8%b1%a1%e4%b8%ad%ef%bc%8c%e5%be%97%e5%88%b0%e7%9a%84%e4%b8%80%e4%ba%9b%e8%bd%bb%e9%87%8f%e7%ba%a7%e7%9a%84%e5%af%b9%e8%b1%a1%ef%bc%8c%e8%bf%99%e4%ba%9b%e5%af%b9%e8%b1%a1%e9%80%9a%e8%bf%87%e6%b6%88%e6%81%af%e9%80%9a%e8%bf%87%e6%b6%88%e6%81%af%e8%bd%ac%e5%8f%91%e8%81%94%e5%90%88%e8%b5%b7%e6%9d%a5%e3%80%82%0a%e8%bf%99%e9%87%8c%e5%80%bc%e5%be%97%e8%af%b4%e6%98%8e%e7%9a%84%e4%b8%80%e7%82%b9%e6%98%af%ef%bc%8c%e5%8d%b3%e4%bd%bf%e6%88%91%e4%bb%ac%e5%88%a9%e7%94%a8%e8%bd%ac%e5%8f%91%e6%b6%88%e6%81%af%e6%9d%a5%e5%ae%9e%e7%8e%b0%e4%ba%86%e2%80%9c%e5%81%87%e2%80%9d%e7%bb%a7%e6%89%bf%ef%bc%8c%e4%bd%86%e6%98%afNSObject%e7%b1%bb%e8%bf%98%e6%98%af%e4%bc%9a%e5%b0%86%e4%b8%a4%e8%80%85%e5%8c%ba%e5%88%86%e5%bc%80%e3%80%82%e5%83%8frespondsToSelector%3a%e5%92%8c%c2%a0isKindOfClass%3a%e8%bf%99%e7%b1%bb%e6%96%b9%e6%b3%95%e5%8f%aa%e4%bc%9a%e8%80%83%e8%99%91%e7%bb%a7%e6%89%bf%e4%bd%93%e7%b3%bb%ef%bc%8c%e4%b8%8d%e4%bc%9a%e8%80%83%e8%99%91%e8%bd%ac%e5%8f%91%e9%93%be%e3%80%82%e6%af%94%e5%a6%82%e4%b8%8a%e5%9b%be%e4%b8%ad%e4%b8%80%e4%b8%aaWarrior%e5%af%b9%e8%b1%a1%e5%a6%82%e6%9e%9c%e8%a2%ab%e9%97%ae%e5%88%b0%e6%98%af%e5%90%a6%e8%83%bd%e5%93%8d%e5%ba%94negotiate%e6%b6%88%e6%81%af%ef%bc%9a%0aif%20%28%20%5baWarrior%20respondsToSelector%3a%40selector%28negotiate%29%5d%20%29%20%e7%bb%93%e6%9e%9c%e6%98%afNO%ef%bc%8c%e8%99%bd%e7%84%b6%e5%ae%83%e8%83%bd%e5%a4%9f%e5%93%8d%e5%ba%94negotiate%e6%b6%88%e6%81%af%e8%80%8c%e4%b8%8d%e6%8a%a5%e9%94%99%ef%bc%8c%e4%bd%86%e6%98%af%e5%ae%83%e6%98%af%e9%9d%a0%e8%bd%ac%e5%8f%91%e6%b6%88%e6%81%af%e7%bb%99Diplomat%e7%b1%bb%e6%9d%a5%e5%93%8d%e5%ba%94%e6%b6%88%e6%81%af%e7%9a%84%e3%80%82%0a%e5%a6%82%e6%9e%9c%e9%9d%9e%e8%a6%81%e5%88%b6%e9%80%a0%e5%81%87%e8%b1%a1%ef%bc%8c%e5%8f%8d%e5%ba%94%e5%87%ba%e8%bf%99%e7%a7%8d%e2%80%9c%e5%81%87%e2%80%9d%e7%9a%84%e7%bb%a7%e6%89%bf%e5%85%b3%e7%b3%bb%ef%bc%8c%e9%82%a3%e4%b9%88%e9%9c%80%e8%a6%81%e9%87%8d%e6%96%b0%e5%ae%9e%e7%8e%b0%c2%a0respondsToSelector%3a%e5%92%8c%c2%a0isKindOfClass%3a%e6%9d%a5%e5%8a%a0%e5%85%a5%e4%bd%a0%e7%9a%84%e8%bd%ac%e5%8f%91%e7%ae%97%e6%b3%95%ef%bc%9a%0a-%20%28BOOL%29respondsToSelector%3a%28SEL%29aSelector%20%7b%20if%20%28%20%5bsuper%20respondsToSelector%3aaSelector%5d%20%29%20return%20YES%3b%20else%20%7b%20%2f%2a%20Here%2c%20test%20whether%20the%20aSelector%20message%20can%20%2a%20%2a%20be%20forwarded%20to%20another%20object%20and%20whether%20that%c2%a0%2a%20%2a%20object%20can%20respond%20to%20it."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fhow_to_use_runtime%2f&t=%e7%a5%9e%e7%bb%8f%e7%97%85%e9%99%a2%20Objective-C%20Runtime%20%e5%87%ba%e9%99%a2%e7%ac%ac%e4%b8%89%e5%a4%a9%e2%80%94%e2%80%94%e5%a6%82%e4%bd%95%e6%ad%a3%e7%a1%ae%e4%bd%bf%e7%94%a8%20Runtime"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

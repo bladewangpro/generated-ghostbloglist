@@ -1,0 +1,1252 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>Weex 中别具匠心的 JS Framework | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="Weex 中别具匠心的 JS Framework"><meta property="og:description" content="前言 Weex为了提高Native的极致性能，做了很多优化的工作
+为了达到所有页面在用户端达到秒开，也就是网络（JS Bundle下载）和首屏渲染（展现在用户第一屏的渲染时间）时间和小于1s。
+手淘团队在对Weex进行性能优化时，遇到了很多问题和挑战：
+JS Bundle下载慢，压缩后60k左右大小的JS Bundle，在全网环境下，平均下载速度大于800ms（在2G/3G下甚至是2s以上）。 JS和Native通信效率低，拖慢了首屏加载时间。
+最终想到的办法就是把JSFramework内置到SDK中，达到极致优化的作用。
+  客户端访问Weex页面时，首先会网络请求JS Bundle，JS Bundle被加载到客户端本地后，传入JSFramework中进行解析渲染。JS Framework解析和渲染的过程其实是根据JS Bundle的数据结构创建Virtual DOM 和数据绑定，然后传递给客户端渲染。
+由于JSFramework在本地，所以就减少了JS Bundle的体积，每个JS Bundle都可以减少一部分体积，Bundle里面只保留业务代码。每个页面下载Bundle的时间都可以节约10-20ms。如果Weex页面非常多，那么每个页面累计起来节约的时间就很多了。 Weex这种默认就拆包加载的设计，比ReactNative强，也就不需要考虑一直困扰ReactNative头疼的拆包的问题了。
+  整个过程中，JSFramework将整个页面的渲染分拆成一个个渲染指令，然后通过JS Bridge发送给各个平台的RenderEngine进行Native渲染。因此，尽管在开发时写的是 HTML / CSS / JS，但最后在各个移动端（在iOS上对应的是iOS的Native UI、在Android上对应的是Android的Native UI）渲染后产生的结果是纯Native页面。 由于JSFramework在本地SDK中，只用在初始化的时候初始化一次，之后每个页面都无须再初始化了。也进一步的提高了与Native的通信效率。
+  JSFramework在客户端的作用在前几篇文章里面也提到了。它的在Native端的职责有3个：
+ 管理每个Weex instance实例的生命周期。 不断的接收Native传过来的JS Bundle，转换成Virtual DOM，再调用Native的方法，构建页面布局。 响应Native传过来的事件，进行响应。  接下来，笔者从源码的角度详细分析一下Weex 中别具匠心的JS Framework是如何实现上述的特性的。
+目录  1.Weex JS Framework 初始化 2.Weex JS Framework 管理实例的生命周期 3.Weex JS Framework 构建Virtual DOM 4.Weex JS Framework 处理Native触发的事件 5.Weex JS Framework 未来可能做更多的事情  一."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/weex_js_framework/"><meta property="article:published_time" content="2017-04-23T05:15:00+00:00"><meta property="article:modified_time" content="2017-04-23T05:15:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="Weex 中别具匠心的 JS Framework"><meta name=twitter:description content="前言 Weex为了提高Native的极致性能，做了很多优化的工作
+为了达到所有页面在用户端达到秒开，也就是网络（JS Bundle下载）和首屏渲染（展现在用户第一屏的渲染时间）时间和小于1s。
+手淘团队在对Weex进行性能优化时，遇到了很多问题和挑战：
+JS Bundle下载慢，压缩后60k左右大小的JS Bundle，在全网环境下，平均下载速度大于800ms（在2G/3G下甚至是2s以上）。 JS和Native通信效率低，拖慢了首屏加载时间。
+最终想到的办法就是把JSFramework内置到SDK中，达到极致优化的作用。
+  客户端访问Weex页面时，首先会网络请求JS Bundle，JS Bundle被加载到客户端本地后，传入JSFramework中进行解析渲染。JS Framework解析和渲染的过程其实是根据JS Bundle的数据结构创建Virtual DOM 和数据绑定，然后传递给客户端渲染。
+由于JSFramework在本地，所以就减少了JS Bundle的体积，每个JS Bundle都可以减少一部分体积，Bundle里面只保留业务代码。每个页面下载Bundle的时间都可以节约10-20ms。如果Weex页面非常多，那么每个页面累计起来节约的时间就很多了。 Weex这种默认就拆包加载的设计，比ReactNative强，也就不需要考虑一直困扰ReactNative头疼的拆包的问题了。
+  整个过程中，JSFramework将整个页面的渲染分拆成一个个渲染指令，然后通过JS Bridge发送给各个平台的RenderEngine进行Native渲染。因此，尽管在开发时写的是 HTML / CSS / JS，但最后在各个移动端（在iOS上对应的是iOS的Native UI、在Android上对应的是Android的Native UI）渲染后产生的结果是纯Native页面。 由于JSFramework在本地SDK中，只用在初始化的时候初始化一次，之后每个页面都无须再初始化了。也进一步的提高了与Native的通信效率。
+  JSFramework在客户端的作用在前几篇文章里面也提到了。它的在Native端的职责有3个：
+ 管理每个Weex instance实例的生命周期。 不断的接收Native传过来的JS Bundle，转换成Virtual DOM，再调用Native的方法，构建页面布局。 响应Native传过来的事件，进行响应。  接下来，笔者从源码的角度详细分析一下Weex 中别具匠心的JS Framework是如何实现上述的特性的。
+目录  1.Weex JS Framework 初始化 2.Weex JS Framework 管理实例的生命周期 3.Weex JS Framework 构建Virtual DOM 4.Weex JS Framework 处理Native触发的事件 5.Weex JS Framework 未来可能做更多的事情  一."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/weex_event/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/weex_best_practice_guidelines/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&text=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&is_video=false&description=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&name=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework&description=%e5%89%8d%e8%a8%80%20Weex%e4%b8%ba%e4%ba%86%e6%8f%90%e9%ab%98Native%e7%9a%84%e6%9e%81%e8%87%b4%e6%80%a7%e8%83%bd%ef%bc%8c%e5%81%9a%e4%ba%86%e5%be%88%e5%a4%9a%e4%bc%98%e5%8c%96%e7%9a%84%e5%b7%a5%e4%bd%9c%0a%e4%b8%ba%e4%ba%86%e8%be%be%e5%88%b0%e6%89%80%e6%9c%89%e9%a1%b5%e9%9d%a2%e5%9c%a8%e7%94%a8%e6%88%b7%e7%ab%af%e8%be%be%e5%88%b0%e7%a7%92%e5%bc%80%ef%bc%8c%e4%b9%9f%e5%b0%b1%e6%98%af%e7%bd%91%e7%bb%9c%ef%bc%88JS%20Bundle%e4%b8%8b%e8%bd%bd%ef%bc%89%e5%92%8c%e9%a6%96%e5%b1%8f%e6%b8%b2%e6%9f%93%ef%bc%88%e5%b1%95%e7%8e%b0%e5%9c%a8%e7%94%a8%e6%88%b7%e7%ac%ac%e4%b8%80%e5%b1%8f%e7%9a%84%e6%b8%b2%e6%9f%93%e6%97%b6%e9%97%b4%ef%bc%89%e6%97%b6%e9%97%b4%e5%92%8c%e5%b0%8f%e4%ba%8e1s%e3%80%82%0a%e6%89%8b%e6%b7%98%e5%9b%a2%e9%98%9f%e5%9c%a8%e5%af%b9Weex%e8%bf%9b%e8%a1%8c%e6%80%a7%e8%83%bd%e4%bc%98%e5%8c%96%e6%97%b6%ef%bc%8c%e9%81%87%e5%88%b0%e4%ba%86%e5%be%88%e5%a4%9a%e9%97%ae%e9%a2%98%e5%92%8c%e6%8c%91%e6%88%98%ef%bc%9a%0aJS%20Bundle%e4%b8%8b%e8%bd%bd%e6%85%a2%ef%bc%8c%e5%8e%8b%e7%bc%a9%e5%90%8e60k%e5%b7%a6%e5%8f%b3%e5%a4%a7%e5%b0%8f%e7%9a%84JS%20Bundle%ef%bc%8c%e5%9c%a8%e5%85%a8%e7%bd%91%e7%8e%af%e5%a2%83%e4%b8%8b%ef%bc%8c%e5%b9%b3%e5%9d%87%e4%b8%8b%e8%bd%bd%e9%80%9f%e5%ba%a6%e5%a4%a7%e4%ba%8e800ms%ef%bc%88%e5%9c%a82G%2f3G%e4%b8%8b%e7%94%9a%e8%87%b3%e6%98%af2s%e4%bb%a5%e4%b8%8a%ef%bc%89%e3%80%82%20JS%e5%92%8cNative%e9%80%9a%e4%bf%a1%e6%95%88%e7%8e%87%e4%bd%8e%ef%bc%8c%e6%8b%96%e6%85%a2%e4%ba%86%e9%a6%96%e5%b1%8f%e5%8a%a0%e8%bd%bd%e6%97%b6%e9%97%b4%e3%80%82%0a%e6%9c%80%e7%bb%88%e6%83%b3%e5%88%b0%e7%9a%84%e5%8a%9e%e6%b3%95%e5%b0%b1%e6%98%af%e6%8a%8aJSFramework%e5%86%85%e7%bd%ae%e5%88%b0SDK%e4%b8%ad%ef%bc%8c%e8%be%be%e5%88%b0%e6%9e%81%e8%87%b4%e4%bc%98%e5%8c%96%e7%9a%84%e4%bd%9c%e7%94%a8%e3%80%82%0a%20%20%e5%ae%a2%e6%88%b7%e7%ab%af%e8%ae%bf%e9%97%aeWeex%e9%a1%b5%e9%9d%a2%e6%97%b6%ef%bc%8c%e9%a6%96%e5%85%88%e4%bc%9a%e7%bd%91%e7%bb%9c%e8%af%b7%e6%b1%82JS%20Bundle%ef%bc%8cJS%20Bundle%e8%a2%ab%e5%8a%a0%e8%bd%bd%e5%88%b0%e5%ae%a2%e6%88%b7%e7%ab%af%e6%9c%ac%e5%9c%b0%e5%90%8e%ef%bc%8c%e4%bc%a0%e5%85%a5JSFramework%e4%b8%ad%e8%bf%9b%e8%a1%8c%e8%a7%a3%e6%9e%90%e6%b8%b2%e6%9f%93%e3%80%82JS%20Framework%e8%a7%a3%e6%9e%90%e5%92%8c%e6%b8%b2%e6%9f%93%e7%9a%84%e8%bf%87%e7%a8%8b%e5%85%b6%e5%ae%9e%e6%98%af%e6%a0%b9%e6%8d%aeJS%20Bundle%e7%9a%84%e6%95%b0%e6%8d%ae%e7%bb%93%e6%9e%84%e5%88%9b%e5%bb%baVirtual%20DOM%20%e5%92%8c%e6%95%b0%e6%8d%ae%e7%bb%91%e5%ae%9a%ef%bc%8c%e7%84%b6%e5%90%8e%e4%bc%a0%e9%80%92%e7%bb%99%e5%ae%a2%e6%88%b7%e7%ab%af%e6%b8%b2%e6%9f%93%e3%80%82%0a%e7%94%b1%e4%ba%8eJSFramework%e5%9c%a8%e6%9c%ac%e5%9c%b0%ef%bc%8c%e6%89%80%e4%bb%a5%e5%b0%b1%e5%87%8f%e5%b0%91%e4%ba%86JS%20Bundle%e7%9a%84%e4%bd%93%e7%a7%af%ef%bc%8c%e6%af%8f%e4%b8%aaJS%20Bundle%e9%83%bd%e5%8f%af%e4%bb%a5%e5%87%8f%e5%b0%91%e4%b8%80%e9%83%a8%e5%88%86%e4%bd%93%e7%a7%af%ef%bc%8cBundle%e9%87%8c%e9%9d%a2%e5%8f%aa%e4%bf%9d%e7%95%99%e4%b8%9a%e5%8a%a1%e4%bb%a3%e7%a0%81%e3%80%82%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e4%b8%8b%e8%bd%bdBundle%e7%9a%84%e6%97%b6%e9%97%b4%e9%83%bd%e5%8f%af%e4%bb%a5%e8%8a%82%e7%ba%a610-20ms%e3%80%82%e5%a6%82%e6%9e%9cWeex%e9%a1%b5%e9%9d%a2%e9%9d%9e%e5%b8%b8%e5%a4%9a%ef%bc%8c%e9%82%a3%e4%b9%88%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e7%b4%af%e8%ae%a1%e8%b5%b7%e6%9d%a5%e8%8a%82%e7%ba%a6%e7%9a%84%e6%97%b6%e9%97%b4%e5%b0%b1%e5%be%88%e5%a4%9a%e4%ba%86%e3%80%82%20Weex%e8%bf%99%e7%a7%8d%e9%bb%98%e8%ae%a4%e5%b0%b1%e6%8b%86%e5%8c%85%e5%8a%a0%e8%bd%bd%e7%9a%84%e8%ae%be%e8%ae%a1%ef%bc%8c%e6%af%94ReactNative%e5%bc%ba%ef%bc%8c%e4%b9%9f%e5%b0%b1%e4%b8%8d%e9%9c%80%e8%a6%81%e8%80%83%e8%99%91%e4%b8%80%e7%9b%b4%e5%9b%b0%e6%89%b0ReactNative%e5%a4%b4%e7%96%bc%e7%9a%84%e6%8b%86%e5%8c%85%e7%9a%84%e9%97%ae%e9%a2%98%e4%ba%86%e3%80%82%0a%20%20%e6%95%b4%e4%b8%aa%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8cJSFramework%e5%b0%86%e6%95%b4%e4%b8%aa%e9%a1%b5%e9%9d%a2%e7%9a%84%e6%b8%b2%e6%9f%93%e5%88%86%e6%8b%86%e6%88%90%e4%b8%80%e4%b8%aa%e4%b8%aa%e6%b8%b2%e6%9f%93%e6%8c%87%e4%bb%a4%ef%bc%8c%e7%84%b6%e5%90%8e%e9%80%9a%e8%bf%87JS%20Bridge%e5%8f%91%e9%80%81%e7%bb%99%e5%90%84%e4%b8%aa%e5%b9%b3%e5%8f%b0%e7%9a%84RenderEngine%e8%bf%9b%e8%a1%8cNative%e6%b8%b2%e6%9f%93%e3%80%82%e5%9b%a0%e6%ad%a4%ef%bc%8c%e5%b0%bd%e7%ae%a1%e5%9c%a8%e5%bc%80%e5%8f%91%e6%97%b6%e5%86%99%e7%9a%84%e6%98%af%20HTML%20%2f%20CSS%20%2f%20JS%ef%bc%8c%e4%bd%86%e6%9c%80%e5%90%8e%e5%9c%a8%e5%90%84%e4%b8%aa%e7%a7%bb%e5%8a%a8%e7%ab%af%ef%bc%88%e5%9c%a8iOS%e4%b8%8a%e5%af%b9%e5%ba%94%e7%9a%84%e6%98%afiOS%e7%9a%84Native%20UI%e3%80%81%e5%9c%a8Android%e4%b8%8a%e5%af%b9%e5%ba%94%e7%9a%84%e6%98%afAndroid%e7%9a%84Native%20UI%ef%bc%89%e6%b8%b2%e6%9f%93%e5%90%8e%e4%ba%a7%e7%94%9f%e7%9a%84%e7%bb%93%e6%9e%9c%e6%98%af%e7%ba%afNative%e9%a1%b5%e9%9d%a2%e3%80%82%20%e7%94%b1%e4%ba%8eJSFramework%e5%9c%a8%e6%9c%ac%e5%9c%b0SDK%e4%b8%ad%ef%bc%8c%e5%8f%aa%e7%94%a8%e5%9c%a8%e5%88%9d%e5%a7%8b%e5%8c%96%e7%9a%84%e6%97%b6%e5%80%99%e5%88%9d%e5%a7%8b%e5%8c%96%e4%b8%80%e6%ac%a1%ef%bc%8c%e4%b9%8b%e5%90%8e%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e9%83%bd%e6%97%a0%e9%a1%bb%e5%86%8d%e5%88%9d%e5%a7%8b%e5%8c%96%e4%ba%86%e3%80%82%e4%b9%9f%e8%bf%9b%e4%b8%80%e6%ad%a5%e7%9a%84%e6%8f%90%e9%ab%98%e4%ba%86%e4%b8%8eNative%e7%9a%84%e9%80%9a%e4%bf%a1%e6%95%88%e7%8e%87%e3%80%82%0a%20%20JSFramework%e5%9c%a8%e5%ae%a2%e6%88%b7%e7%ab%af%e7%9a%84%e4%bd%9c%e7%94%a8%e5%9c%a8%e5%89%8d%e5%87%a0%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e4%b9%9f%e6%8f%90%e5%88%b0%e4%ba%86%e3%80%82%e5%ae%83%e7%9a%84%e5%9c%a8Native%e7%ab%af%e7%9a%84%e8%81%8c%e8%b4%a3%e6%9c%893%e4%b8%aa%ef%bc%9a%0a%20%e7%ae%a1%e7%90%86%e6%af%8f%e4%b8%aaWeex%20instance%e5%ae%9e%e4%be%8b%e7%9a%84%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%e3%80%82%20%e4%b8%8d%e6%96%ad%e7%9a%84%e6%8e%a5%e6%94%b6Native%e4%bc%a0%e8%bf%87%e6%9d%a5%e7%9a%84JS%20Bundle%ef%bc%8c%e8%bd%ac%e6%8d%a2%e6%88%90Virtual%20DOM%ef%bc%8c%e5%86%8d%e8%b0%83%e7%94%a8Native%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e6%9e%84%e5%bb%ba%e9%a1%b5%e9%9d%a2%e5%b8%83%e5%b1%80%e3%80%82%20%e5%93%8d%e5%ba%94Native%e4%bc%a0%e8%bf%87%e6%9d%a5%e7%9a%84%e4%ba%8b%e4%bb%b6%ef%bc%8c%e8%bf%9b%e8%a1%8c%e5%93%8d%e5%ba%94%e3%80%82%20%20%e6%8e%a5%e4%b8%8b%e6%9d%a5%ef%bc%8c%e7%ac%94%e8%80%85%e4%bb%8e%e6%ba%90%e7%a0%81%e7%9a%84%e8%a7%92%e5%ba%a6%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%b8%80%e4%b8%8bWeex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84JS%20Framework%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e4%b8%8a%e8%bf%b0%e7%9a%84%e7%89%b9%e6%80%a7%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.Weex%20JS%20Framework%20%e5%88%9d%e5%a7%8b%e5%8c%96%202.Weex%20JS%20Framework%20%e7%ae%a1%e7%90%86%e5%ae%9e%e4%be%8b%e7%9a%84%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%203.Weex%20JS%20Framework%20%e6%9e%84%e5%bb%baVirtual%20DOM%204.Weex%20JS%20Framework%20%e5%a4%84%e7%90%86Native%e8%a7%a6%e5%8f%91%e7%9a%84%e4%ba%8b%e4%bb%b6%205.Weex%20JS%20Framework%20%e6%9c%aa%e6%9d%a5%e5%8f%af%e8%83%bd%e5%81%9a%e6%9b%b4%e5%a4%9a%e7%9a%84%e4%ba%8b%e6%83%85%20%20%e4%b8%80."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&t=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-weex-js-framework-初始化>一. Weex JS Framework 初始化</a></li><li><a href=#二-weex-js-framework-管理实例的生命周期>二. Weex JS Framework 管理实例的生命周期</a></li><li><a href=#三-weex-js-framework-构建virtual-dom>三. Weex JS Framework 构建Virtual DOM</a><ul><li><a href=#1-initevents-初始化事件和生命周期>1. initEvents 初始化事件和生命周期</a></li><li><a href=#2-initstate-实现数据绑定功能>2. initState 实现数据绑定功能</a></li><li><a href=#3-build模板>3. build模板</a></li><li><a href=#4-绘制-native-ui>4. 绘制 Native UI</a></li></ul></li><li><a href=#四-weex-js-framework-处理native触发的事件>四. Weex JS Framework 处理Native触发的事件</a></li><li><a href=#五weex-js-framework-未来可能做更多的事情>五.Weex JS Framework 未来可能做更多的事情</a></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">Weex 中别具匠心的 JS Framework</h1><div class=meta><div class=postdate><time datetime="2017-04-23 05:15:00 +0000 UTC" itemprop=datePublished>Apr 23</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/weex>Weex</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/weex rel=tag>Weex</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>Weex为了提高Native的极致性能，做了很多优化的工作</p><p>为了达到所有页面在用户端达到秒开，也就是网络（JS Bundle下载）和首屏渲染（展现在用户第一屏的渲染时间）时间和小于1s。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_1.png alt></p><p>手淘团队在对Weex进行性能优化时，遇到了很多问题和挑战：</p><p>JS Bundle下载慢，压缩后60k左右大小的JS Bundle，在全网环境下，平均下载速度大于800ms（在2G/3G下甚至是2s以上）。
+JS和Native通信效率低，拖慢了首屏加载时间。</p><p>最终想到的办法就是把JSFramework内置到SDK中，达到极致优化的作用。</p><ol><li><p>客户端访问Weex页面时，首先会网络请求JS Bundle，JS Bundle被加载到客户端本地后，传入JSFramework中进行解析渲染。JS Framework解析和渲染的过程其实是根据JS Bundle的数据结构创建Virtual DOM 和数据绑定，然后传递给客户端渲染。<br>由于JSFramework在本地，所以就减少了JS Bundle的体积，每个JS Bundle都可以减少一部分体积，Bundle里面只保留业务代码。每个页面下载Bundle的时间都可以节约10-20ms。如果Weex页面非常多，那么每个页面累计起来节约的时间就很多了。 Weex这种默认就拆包加载的设计，比ReactNative强，也就不需要考虑一直困扰ReactNative头疼的拆包的问题了。</p></li><li><p>整个过程中，JSFramework将整个页面的渲染分拆成一个个渲染指令，然后通过JS Bridge发送给各个平台的RenderEngine进行Native渲染。因此，尽管在开发时写的是 HTML / CSS / JS，但最后在各个移动端（在iOS上对应的是iOS的Native UI、在Android上对应的是Android的Native UI）渲染后产生的结果是纯Native页面。
+由于JSFramework在本地SDK中，只用在初始化的时候初始化一次，之后每个页面都无须再初始化了。也进一步的提高了与Native的通信效率。</p></li></ol><p>JSFramework在客户端的作用在前几篇文章里面也提到了。它的在Native端的职责有3个：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_2.png alt></p><ol><li>管理每个Weex instance实例的生命周期。</li><li>不断的接收Native传过来的JS Bundle，转换成Virtual DOM，再调用Native的方法，构建页面布局。</li><li>响应Native传过来的事件，进行响应。</li></ol><p>接下来，笔者从源码的角度详细分析一下Weex 中别具匠心的JS Framework是如何实现上述的特性的。</p><h3 id=目录>目录</h3><ul><li>1.Weex JS Framework 初始化</li><li>2.Weex JS Framework 管理实例的生命周期</li><li>3.Weex JS Framework 构建Virtual DOM</li><li>4.Weex JS Framework 处理Native触发的事件</li><li>5.Weex JS Framework 未来可能做更多的事情</li></ul><h3 id=一-weex-js-framework-初始化>一. Weex JS Framework 初始化</h3><p>分析Weex JS Framework 之前，先来看看整个Weex JS Framework的代码文件结构树状图。以下的代码版本是0.19.8。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+weex<span style=color:#f92672>/</span>html5<span style=color:#f92672>/</span>frameworks
+    <span style=color:#960050;background-color:#1e0010>├──</span> index.js
+    <span style=color:#960050;background-color:#1e0010>├──</span> legacy   
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> api         <span style=color:#75715e>// 定义 Vm 上的接口
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> methods.js        <span style=color:#75715e>// 以$开头的一些内部方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> modules.js        <span style=color:#75715e>// 一些组件的信息
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> app        <span style=color:#75715e>// 页面实例相关代码
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> bundle            <span style=color:#75715e>// 打包编译的主代码
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> bootstrap.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> define.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>└──</span> index.js  <span style=color:#75715e>// 处理jsbundle的入口
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> ctrl              <span style=color:#75715e>// 处理Native触发回来方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> index.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> init.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>└──</span> misc.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> differ.js        <span style=color:#75715e>// differ相关的处理方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> downgrade.js     <span style=color:#75715e>//  H5降级相关的处理方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> index.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> instance.js      <span style=color:#75715e>// Weex实例的构造函数
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> <span style=color:#66d9ef>register</span>.js      <span style=color:#75715e>// 注册模块和组件的处理方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> viewport.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> core       <span style=color:#75715e>// 数据监听相关代码，ViewModel的核心代码
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> array.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> dep.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> LICENSE
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> object.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> observer.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> state.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> watcher.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> <span style=color:#66d9ef>static</span>     <span style=color:#75715e>// 一些静态的方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> bridge.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> create.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> life.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> map.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> misc.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> <span style=color:#66d9ef>register</span>.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> util        <span style=color:#75715e>// 工具函数如isReserved，toArray，isObject等方法
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> index.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> LICENSE
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> shared.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> vm         <span style=color:#75715e>// 组件模型相关代码
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> compiler.js     <span style=color:#75715e>// ViewModel模板解析器和数据绑定操作
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> directive.js    <span style=color:#75715e>// 指令编译器
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> dom<span style=color:#f92672>-</span>helper.js   <span style=color:#75715e>// Dom 元素的helper
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>├──</span> events.js       <span style=color:#75715e>// 组件的所有事件以及生命周期
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>│</span>   <span style=color:#960050;background-color:#1e0010>└──</span> index.js        <span style=color:#75715e>// ViewModel的构造器和定义
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>├──</span> config.js
+    <span style=color:#960050;background-color:#1e0010>│</span>     <span style=color:#960050;background-color:#1e0010>└──</span> index.js <span style=color:#75715e>// 入口文件
+</span><span style=color:#75715e></span>    <span style=color:#960050;background-color:#1e0010>└──</span> vanilla
+          <span style=color:#960050;background-color:#1e0010>└──</span> index.js
+
+</code></pre></div><p>还会用到runtime文件夹里面的文件，所以runtime的文件结构也梳理一遍。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+weex<span style=color:#f92672>/</span>html5<span style=color:#f92672>/</span>runtime
+    <span style=color:#960050;background-color:#1e0010>├──</span> callback<span style=color:#f92672>-</span>manager.js
+    <span style=color:#960050;background-color:#1e0010>├──</span> config.js  
+    <span style=color:#960050;background-color:#1e0010>├──</span> handler.js 
+    <span style=color:#960050;background-color:#1e0010>├──</span> index.js 
+    <span style=color:#960050;background-color:#1e0010>├──</span> init.js 
+    <span style=color:#960050;background-color:#1e0010>├──</span> listener.js 
+    <span style=color:#960050;background-color:#1e0010>├──</span> service.js 
+    <span style=color:#960050;background-color:#1e0010>├──</span> task<span style=color:#f92672>-</span>center.js 
+    <span style=color:#960050;background-color:#1e0010>└──</span> vdom  
+          <span style=color:#960050;background-color:#1e0010>├──</span> comment.js        
+          <span style=color:#960050;background-color:#1e0010>├──</span> document.js 
+          <span style=color:#960050;background-color:#1e0010>├──</span> element<span style=color:#f92672>-</span>types.js 
+          <span style=color:#960050;background-color:#1e0010>├──</span> element.js 
+          <span style=color:#960050;background-color:#1e0010>├──</span> index.js 
+          <span style=color:#960050;background-color:#1e0010>├──</span> node.js 
+          <span style=color:#960050;background-color:#1e0010>└──</span> operation.js 
+
+
+
+</code></pre></div><p>接下来开始分析Weex JS Framework 初始化。</p><p>Weex JS Framework 初始化是从对应的入口文件是 <a href=https://github.com/apache/incubator-weex/blob/master/html5/render/native/index.js>html5/render/native/index.js</a></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>subversion</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;../../../package.json&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#a6e22e>runtime</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;../../runtime&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#a6e22e>frameworks</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;../../frameworks/index&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#a6e22e>services</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;../../services/index&#39;</span>
+
+<span style=color:#66d9ef>const</span> { <span style=color:#a6e22e>init</span>, <span style=color:#a6e22e>config</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>runtime</span>
+<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>frameworks</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>frameworks</span>
+<span style=color:#66d9ef>const</span> { <span style=color:#66d9ef>native</span>, <span style=color:#a6e22e>transformer</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>subversion</span>
+
+<span style=color:#75715e>// 根据serviceName注册service
+</span><span style=color:#75715e></span><span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>serviceName</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>services</span>) {
+  <span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>service</span>.<span style=color:#a6e22e>register</span>(<span style=color:#a6e22e>serviceName</span>, <span style=color:#a6e22e>services</span>[<span style=color:#a6e22e>serviceName</span>])
+}
+
+<span style=color:#75715e>// 调用runtime里面的freezePrototype()方法，防止修改现有属性的特性和值，并阻止添加新属性。
+</span><span style=color:#75715e></span><span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>freezePrototype</span>()
+
+<span style=color:#75715e>// 调用runtime里面的setNativeConsole()方法，根据Native设置的logLevel等级设置相应的Console
+</span><span style=color:#75715e></span><span style=color:#a6e22e>runtime</span>.<span style=color:#a6e22e>setNativeConsole</span>()
+
+<span style=color:#75715e>// 注册 framework 元信息
+</span><span style=color:#75715e></span><span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>frameworkVersion</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>native</span>
+<span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>transformerVersion</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>transformer</span>
+
+<span style=color:#75715e>// 初始化 frameworks
+</span><span style=color:#75715e></span><span style=color:#66d9ef>const</span> <span style=color:#a6e22e>globalMethods</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>init</span>(<span style=color:#a6e22e>config</span>)
+
+<span style=color:#75715e>// 设置全局方法
+</span><span style=color:#75715e></span><span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>methodName</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>globalMethods</span>) {
+  <span style=color:#a6e22e>global</span>[<span style=color:#a6e22e>methodName</span>] <span style=color:#f92672>=</span> (...<span style=color:#a6e22e>args</span>) =&gt; {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>ret</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>globalMethods</span>[<span style=color:#a6e22e>methodName</span>](...<span style=color:#a6e22e>args</span>)
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>ret</span> <span style=color:#66d9ef>instanceof</span> Error) {
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#a6e22e>ret</span>.<span style=color:#a6e22e>toString</span>())
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>ret</span>
+  }
+}
+
+
+
+
+</code></pre></div><p>上述方法中会调用init( )方法，这个方法就会进行JS Framework的初始化。</p><p>init( )方法在weex/html5/runtime/init.js里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span> (<span style=color:#a6e22e>config</span>) {
+  <span style=color:#a6e22e>runtimeConfig</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>config</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#a6e22e>frameworks</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>runtimeConfig</span>.<span style=color:#a6e22e>frameworks</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#a6e22e>initTaskHandler</span>()
+
+  <span style=color:#75715e>// 每个framework都是由init初始化，
+</span><span style=color:#75715e></span>  <span style=color:#75715e>// config里面都包含3个重要的virtual-DOM类，`Document`，`Element`，`Comment`和一个JS bridge 方法sendTasks(...args)
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>name</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>frameworks</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>framework</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>name</span>]
+    <span style=color:#a6e22e>framework</span>.<span style=color:#a6e22e>init</span>(<span style=color:#a6e22e>config</span>)
+  }
+
+  <span style=color:#75715e>// @todo: The method `registerMethods` will be re-designed or removed later.
+</span><span style=color:#75715e></span>  ; [<span style=color:#e6db74>&#39;registerComponents&#39;</span>, <span style=color:#e6db74>&#39;registerModules&#39;</span>, <span style=color:#e6db74>&#39;registerMethods&#39;</span>].<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>genInit</span>)
+
+  ; [<span style=color:#e6db74>&#39;destroyInstance&#39;</span>, <span style=color:#e6db74>&#39;refreshInstance&#39;</span>, <span style=color:#e6db74>&#39;receiveTasks&#39;</span>, <span style=color:#e6db74>&#39;getRoot&#39;</span>].<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>genInstance</span>)
+
+  <span style=color:#a6e22e>adaptInstance</span>(<span style=color:#e6db74>&#39;receiveTasks&#39;</span>, <span style=color:#e6db74>&#39;callJS&#39;</span>)
+
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>methods</span>
+}
+
+
+
+</code></pre></div><p>在初始化方法里面传入了config，这个入参是从weex/html5/runtime/config.js里面传入的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>Document</span>, <span style=color:#a6e22e>Element</span>, <span style=color:#a6e22e>Comment</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./vdom&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#a6e22e>Listener</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./listener&#39;</span>
+<span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>TaskCenter</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./task-center&#39;</span>
+
+<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>config</span> <span style=color:#f92672>=</span> {
+  <span style=color:#a6e22e>Document</span>, <span style=color:#a6e22e>Element</span>, <span style=color:#a6e22e>Comment</span>, <span style=color:#a6e22e>Listener</span>,
+  <span style=color:#a6e22e>TaskCenter</span>,
+  <span style=color:#a6e22e>sendTasks</span> (...<span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callNative</span>(...<span style=color:#a6e22e>args</span>)
+  }
+}
+
+<span style=color:#a6e22e>Document</span>.<span style=color:#a6e22e>handler</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>sendTasks</span>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#a6e22e>config</span>
+
+
+
+</code></pre></div><p>config里面包含Document，Element，Comment，Listener，TaskCenter，以及一个sendTasks方法。</p><p>config初始化以后还会添加一个framework属性，这个属性是由weex/html5/frameworks/index.js传进来的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>Vanilla</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./vanilla/index&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>Vue</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;weex-vue-framework&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>Weex</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./legacy/index&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#a6e22e>Rax</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;weex-rax-framework&#39;</span>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> {
+  <span style=color:#a6e22e>Vanilla</span>,
+  <span style=color:#a6e22e>Vue</span>,
+  <span style=color:#a6e22e>Rax</span>,
+  <span style=color:#a6e22e>Weex</span>
+}
+
+</code></pre></div><p>init( )获取到config和config.frameworks以后，开始执行initTaskHandler()方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>import</span> { <span style=color:#a6e22e>init</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>initTaskHandler</span> } <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;./task-center&#39;</span>
+
+</code></pre></div><p>initTaskHandler( )方法来自于task-center.js里面的init( )方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span> () {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>DOM_METHODS</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>createFinish</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callCreateFinish</span>,
+    <span style=color:#a6e22e>updateFinish</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callUpdateFinish</span>,
+    <span style=color:#a6e22e>refreshFinish</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callRefreshFinish</span>,
+
+    <span style=color:#a6e22e>createBody</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callCreateBody</span>,
+
+    <span style=color:#a6e22e>addElement</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callAddElement</span>,
+    <span style=color:#a6e22e>removeElement</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callRemoveElement</span>,
+    <span style=color:#a6e22e>moveElement</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callMoveElement</span>,
+    <span style=color:#a6e22e>updateAttrs</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callUpdateAttrs</span>,
+    <span style=color:#a6e22e>updateStyle</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callUpdateStyle</span>,
+
+    <span style=color:#a6e22e>addEvent</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callAddEvent</span>,
+    <span style=color:#a6e22e>removeEvent</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callRemoveEvent</span>
+  }
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>proto</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>TaskCenter</span>.<span style=color:#a6e22e>prototype</span>
+
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>name</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>DOM_METHODS</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>method</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>DOM_METHODS</span>[<span style=color:#a6e22e>name</span>]
+    <span style=color:#a6e22e>proto</span>[<span style=color:#a6e22e>name</span>] <span style=color:#f92672>=</span> <span style=color:#a6e22e>method</span> <span style=color:#f92672>?</span>
+      (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>args</span>) =&gt; <span style=color:#a6e22e>method</span>(<span style=color:#a6e22e>id</span>, ...<span style=color:#a6e22e>args</span>) <span style=color:#f92672>:</span>
+      (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>args</span>) =&gt; <span style=color:#a6e22e>fallback</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+  }
+
+  <span style=color:#a6e22e>proto</span>.<span style=color:#a6e22e>componentHandler</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callNativeComponent</span> <span style=color:#f92672>||</span>
+    ((<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span>, <span style=color:#a6e22e>options</span>) =&gt;
+      <span style=color:#a6e22e>fallback</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>component</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>component</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span> }]))
+
+  <span style=color:#a6e22e>proto</span>.<span style=color:#a6e22e>moduleHandler</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callNativeModule</span> <span style=color:#f92672>||</span>
+    ((<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span>) =&gt;
+      <span style=color:#a6e22e>fallback</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span> }]))
+}
+
+
+</code></pre></div><p>这里的初始化方法就是往prototype上11个方法：createFinish，updateFinish，refreshFinish，createBody，addElement，removeElement，moveElement，updateAttrs，updateStyle，addEvent，removeEvent。</p><p>如果method存在，就用method(id, &mldr;args)方法初始化，如果不存在，就用fallback(id, [{ module: &lsquo;dom&rsquo;, method: name, args }], &lsquo;-1&rsquo;)初始化。</p><p>最后再加上componentHandler和moduleHandler。</p><p>initTaskHandler( )方法初始化了13个方法(其中2个handler)，都绑定到了prototype上</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+    <span style=color:#a6e22e>createFinish</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>createFinish</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>updateFinish</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>updateFinish</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>refreshFinish</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>refreshFinish</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>createBody</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>createBody</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+
+    <span style=color:#a6e22e>addElement</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>addElement</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>removeElement</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>removeElement</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>moveElement</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>moveElement</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>updateAttrs</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>updateAttrs</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>updateStyle</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>updateStyle</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+
+    <span style=color:#a6e22e>addEvent</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>addEvent</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+    <span style=color:#a6e22e>removeEvent</span><span style=color:#f92672>:</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;dom&#39;</span>, <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>removeEvent</span>, <span style=color:#a6e22e>args</span> }], <span style=color:#e6db74>&#39;-1&#39;</span>)
+
+    <span style=color:#a6e22e>componentHandler</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>component</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>component</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span> }]))
+    <span style=color:#a6e22e>moduleHandler</span>(<span style=color:#a6e22e>id</span>, [{ <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span> }]))
+
+</code></pre></div><p>回到init( )方法，处理完initTaskHandler()之后有一个循环：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>name</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>frameworks</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>framework</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>name</span>]
+    <span style=color:#a6e22e>framework</span>.<span style=color:#a6e22e>init</span>(<span style=color:#a6e22e>config</span>)
+  }
+
+</code></pre></div><p>在这个循环里面会对frameworks里面每个对象调用init方法，入参都传入config。</p><p>比如Vanilla的init( )实现如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span> (<span style=color:#a6e22e>cfg</span>) {
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Document</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Document</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Element</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Element</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Comment</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Comment</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>sendTasks</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>sendTasks</span>
+}
+
+</code></pre></div><p>Weex的init( )实现如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span> (<span style=color:#a6e22e>cfg</span>) {
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Document</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Document</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Element</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Element</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Comment</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Comment</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>sendTasks</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>sendTasks</span>
+  <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>Listener</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>cfg</span>.<span style=color:#a6e22e>Listener</span>
+}
+
+</code></pre></div><p>初始化config以后就开始执行genInit</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[<span style=color:#e6db74>&#39;registerComponents&#39;</span>, <span style=color:#e6db74>&#39;registerModules&#39;</span>, <span style=color:#e6db74>&#39;registerMethods&#39;</span>].<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>genInit</span>)
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>genInit</span> (<span style=color:#a6e22e>methodName</span>) {
+  <span style=color:#a6e22e>methods</span>[<span style=color:#a6e22e>methodName</span>] <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> (...<span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>methodName</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;registerComponents&#39;</span>) {
+      <span style=color:#a6e22e>checkComponentMethods</span>(<span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>0</span>])
+    }
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>name</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>frameworks</span>) {
+      <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>framework</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>name</span>]
+      <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>framework</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>framework</span>[<span style=color:#a6e22e>methodName</span>]) {
+        <span style=color:#a6e22e>framework</span>[<span style=color:#a6e22e>methodName</span>](...<span style=color:#a6e22e>args</span>)
+      }
+    }
+  }
+}
+
+</code></pre></div><p>methods默认有3个方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>methods</span> <span style=color:#f92672>=</span> {
+  <span style=color:#a6e22e>createInstance</span>,
+  <span style=color:#a6e22e>registerService</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>register</span>,
+  <span style=color:#a6e22e>unregisterService</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>unregister</span>
+}
+
+
+</code></pre></div><p>除去这3个方法以外都是调用framework对应的方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>registerComponents</span> (<span style=color:#a6e22e>components</span>) {
+  <span style=color:#66d9ef>if</span> (Array.<span style=color:#a6e22e>isArray</span>(<span style=color:#a6e22e>components</span>)) {
+    <span style=color:#a6e22e>components</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>register</span> (<span style=color:#a6e22e>name</span>) {
+      <span style=color:#75715e>/* istanbul ignore if */</span>
+      <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>name</span>) {
+        <span style=color:#66d9ef>return</span>
+      }
+      <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;string&#39;</span>) {
+        <span style=color:#a6e22e>nativeComponentMap</span>[<span style=color:#a6e22e>name</span>] <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+      }
+      <span style=color:#75715e>/* istanbul ignore else */</span>
+      <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>name</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;object&#39;</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>name</span>.<span style=color:#a6e22e>type</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;string&#39;</span>) {
+        <span style=color:#a6e22e>nativeComponentMap</span>[<span style=color:#a6e22e>name</span>.<span style=color:#a6e22e>type</span>] <span style=color:#f92672>=</span> <span style=color:#a6e22e>name</span>
+      }
+    })
+  }
+}
+
+
+</code></pre></div><p>上述方法就是注册Native的组件的核心代码实现。最终的注册信息都存在nativeComponentMap对象中，nativeComponentMap对象最初里面有如下的数据:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> {
+  <span style=color:#a6e22e>nativeComponentMap</span><span style=color:#f92672>:</span> {
+    <span style=color:#a6e22e>text</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>,
+    <span style=color:#a6e22e>image</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>,
+    <span style=color:#a6e22e>container</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>,
+    <span style=color:#a6e22e>slider</span><span style=color:#f92672>:</span> {
+      <span style=color:#a6e22e>type</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;slider&#39;</span>,
+      <span style=color:#a6e22e>append</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;tree&#39;</span>
+    },
+    <span style=color:#a6e22e>cell</span><span style=color:#f92672>:</span> {
+      <span style=color:#a6e22e>type</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;cell&#39;</span>,
+      <span style=color:#a6e22e>append</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;tree&#39;</span>
+    }
+  }
+}
+
+
+
+</code></pre></div><p>接着会调用registerModules方法：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>registerModules</span> (<span style=color:#a6e22e>modules</span>) {
+  <span style=color:#75715e>/* istanbul ignore else */</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>modules</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;object&#39;</span>) {
+    <span style=color:#a6e22e>initModules</span>(<span style=color:#a6e22e>modules</span>)
+  }
+}
+
+
+</code></pre></div><p>initModules是来自./frameworks/legacy/app/register.js，在这个文件里面会调用initModules (modules, ifReplace)进行初始化。这个方法里面是注册Native的模块的核心代码实现。</p><p>最后调用registerMethods</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>registerMethods</span> (<span style=color:#a6e22e>methods</span>) {
+  <span style=color:#75715e>/* istanbul ignore else */</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>methods</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;object&#39;</span>) {
+    <span style=color:#a6e22e>initMethods</span>(<span style=color:#a6e22e>Vm</span>, <span style=color:#a6e22e>methods</span>)
+  }
+}
+
+</code></pre></div><p>initMethods是来自./frameworks/legacy/app/register.js，在这个方法里面会调用initMethods (Vm, apis)进行初始化，initMethods方法里面是注册Native的handler的核心实现。</p><p>当registerComponents，registerModules，registerMethods初始化完成之后，就开始注册每个instance实例的方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[<span style=color:#e6db74>&#39;destroyInstance&#39;</span>, <span style=color:#e6db74>&#39;refreshInstance&#39;</span>, <span style=color:#e6db74>&#39;receiveTasks&#39;</span>, <span style=color:#e6db74>&#39;getRoot&#39;</span>].<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>genInstance</span>)
+
+</code></pre></div><p>这里会给genInstance分别传入destroyInstance，refreshInstance，receiveTasks，getRoot四个方法名。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>genInstance</span> (<span style=color:#a6e22e>methodName</span>) {
+  <span style=color:#a6e22e>methods</span>[<span style=color:#a6e22e>methodName</span>] <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> (...<span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>id</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>0</span>]
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>info</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>info</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>]) {
+      <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>][<span style=color:#a6e22e>methodName</span>](...<span style=color:#a6e22e>args</span>)
+
+      <span style=color:#75715e>// Lifecycle methods
+</span><span style=color:#75715e></span>      <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>methodName</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;refreshInstance&#39;</span>) {
+        <span style=color:#a6e22e>services</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>service</span> =&gt; {
+          <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>refresh</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>service</span>.<span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>refresh</span>
+          <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>refresh</span>) {
+            <span style=color:#a6e22e>refresh</span>(<span style=color:#a6e22e>id</span>, { <span style=color:#a6e22e>info</span>, <span style=color:#a6e22e>runtime</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>runtimeConfig</span> })
+          }
+        })
+      }
+      <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>methodName</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;destroyInstance&#39;</span>) {
+        <span style=color:#a6e22e>services</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>service</span> =&gt; {
+          <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>destroy</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>service</span>.<span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>destroy</span>
+          <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>destroy</span>) {
+            <span style=color:#a6e22e>destroy</span>(<span style=color:#a6e22e>id</span>, { <span style=color:#a6e22e>info</span>, <span style=color:#a6e22e>runtime</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>runtimeConfig</span> })
+          }
+        })
+        <span style=color:#66d9ef>delete</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+      }
+
+      <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid instance id &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>)
+  }
+}
+
+</code></pre></div><p>上面的代码就是给每个instance注册方法的具体实现，在Weex里面每个instance默认都会有三个生命周期的方法：createInstance，refreshInstance，destroyInstance。所有Instance的方法都会存在services中。</p><p>init( )初始化的最后一步就是给每个实例添加callJS的方法</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>adaptInstance</span>(<span style=color:#e6db74>&#39;receiveTasks&#39;</span>, <span style=color:#e6db74>&#39;callJS&#39;</span>)
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>adaptInstance</span> (<span style=color:#a6e22e>methodName</span>, <span style=color:#a6e22e>nativeMethodName</span>) {
+  <span style=color:#a6e22e>methods</span>[<span style=color:#a6e22e>nativeMethodName</span>] <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> (...<span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>id</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>args</span>[<span style=color:#ae81ff>0</span>]
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>info</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>info</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>]) {
+      <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>][<span style=color:#a6e22e>methodName</span>](...<span style=color:#a6e22e>args</span>)
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid instance id &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>)
+  }
+}
+
+</code></pre></div><p>当Native调用callJS方法的时候，就会调用到对应id的instance的receiveTasks方法。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_3.png alt></p><p>整个init流程总结如上图。</p><p>init结束以后会设置全局方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>methodName</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>globalMethods</span>) {
+  <span style=color:#a6e22e>global</span>[<span style=color:#a6e22e>methodName</span>] <span style=color:#f92672>=</span> (...<span style=color:#a6e22e>args</span>) =&gt; {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>ret</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>globalMethods</span>[<span style=color:#a6e22e>methodName</span>](...<span style=color:#a6e22e>args</span>)
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>ret</span> <span style=color:#66d9ef>instanceof</span> Error) {
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#a6e22e>ret</span>.<span style=color:#a6e22e>toString</span>())
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>ret</span>
+  }
+}
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_4.png alt></p><p>图上标的红色的3个方法表示的是默认就有的方法。</p><p>至此，Weex JS Framework就算初始化完成。</p><h3 id=二-weex-js-framework-管理实例的生命周期>二. Weex JS Framework 管理实例的生命周期</h3><p>当Native初始化完成Component，Module，handler之后，从远端请求到了JS Bundle，Native通过调用createInstance方法，把JS Bundle传给JS Framework。于是接下来的这一切从createInstance开始说起。</p><p>Native通过调用createInstance，就会执行到html5/runtime/init.js里面的function createInstance (id, code, config, data)方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>createInstance</span> (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>code</span>, <span style=color:#a6e22e>config</span>, <span style=color:#a6e22e>data</span>) {
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>info</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>info</span>) {
+    <span style=color:#75715e>// 检查版本信息
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>info</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>checkVersion</span>(<span style=color:#a6e22e>code</span>) <span style=color:#f92672>||</span> {}
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>]) {
+      <span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;Weex&#39;</span>
+    }
+
+    <span style=color:#75715e>// 初始化 instance 的 config.
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>config</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>JSON</span>.<span style=color:#a6e22e>parse</span>(<span style=color:#a6e22e>JSON</span>.<span style=color:#a6e22e>stringify</span>(<span style=color:#a6e22e>config</span> <span style=color:#f92672>||</span> {}))
+    <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>bundleVersion</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>version</span>
+    <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>env</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>JSON</span>.<span style=color:#a6e22e>parse</span>(<span style=color:#a6e22e>JSON</span>.<span style=color:#a6e22e>stringify</span>(<span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>WXEnvironment</span> <span style=color:#f92672>||</span> {}))
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] create an </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span><span style=color:#e6db74>}</span><span style=color:#e6db74>@</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>bundleVersion</span><span style=color:#e6db74>}</span><span style=color:#e6db74> instance from </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>bundleVersion</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>env</span> <span style=color:#f92672>=</span> {
+      <span style=color:#a6e22e>info</span>,
+      <span style=color:#a6e22e>config</span>,
+      <span style=color:#a6e22e>created</span><span style=color:#f92672>:</span> Date.<span style=color:#a6e22e>now</span>(),
+      <span style=color:#a6e22e>framework</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>
+    }
+    <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>services</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>createServices</span>(<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>env</span>, <span style=color:#a6e22e>runtimeConfig</span>)
+    <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>] <span style=color:#f92672>=</span> <span style=color:#a6e22e>env</span>
+
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>frameworks</span>[<span style=color:#a6e22e>info</span>.<span style=color:#a6e22e>framework</span>].<span style=color:#a6e22e>createInstance</span>(<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>code</span>, <span style=color:#a6e22e>config</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>env</span>)
+  }
+  <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid instance id &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>)
+}
+
+</code></pre></div><p>这个方法里面就是对版本信息，config，日期等信息进行初始化。并在Native记录一条日志信息：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+[JS Framework] create an Weex<span style=color:#960050;background-color:#1e0010>@</span>undefined instance from undefined
+
+</code></pre></div><p>上面这个createInstance方法最终还是要调用html5/framework/legacy/static/create.js里面的createInstance (id, code, options, data, info)方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>createInstance</span> (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>code</span>, <span style=color:#a6e22e>options</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>info</span>) {
+  <span style=color:#66d9ef>const</span> { <span style=color:#a6e22e>services</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>info</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#75715e>// 初始化target
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>resetTarget</span>()
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>instance</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+  <span style=color:#75715e>/* istanbul ignore else */</span>
+  <span style=color:#a6e22e>options</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>result</span>
+  <span style=color:#75715e>/* istanbul ignore else */</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>instance</span>) {
+    <span style=color:#a6e22e>instance</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>App</span>(<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>options</span>)
+    <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>] <span style=color:#f92672>=</span> <span style=color:#a6e22e>instance</span>
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>initApp</span>(<span style=color:#a6e22e>instance</span>, <span style=color:#a6e22e>code</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>services</span>)
+  }
+  <span style=color:#66d9ef>else</span> {
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid instance id &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>)
+  }
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+}
+
+
+</code></pre></div><p>new App()方法会创建新的 App 实例对象，并且把对象放入 instanceMap 中。</p><p>App对象的定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>App</span> (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>options</span>) {
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>id</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>id</span>
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>options</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>vm</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>null</span>
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>customComponentMap</span> <span style=color:#f92672>=</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>commonModules</span> <span style=color:#f92672>=</span> {}
+
+  <span style=color:#75715e>// document
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>doc</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>renderer</span>.<span style=color:#a6e22e>Document</span>(
+    <span style=color:#a6e22e>id</span>,
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>bundleUrl</span>,
+    <span style=color:#66d9ef>null</span>,
+    <span style=color:#a6e22e>renderer</span>.<span style=color:#a6e22e>Listener</span>
+  )
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>differ</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Differ</span>(<span style=color:#a6e22e>id</span>)
+}
+
+</code></pre></div><p>其中有三个比较重要的属性：</p><ol><li>id 是 JS Framework 与 Native 端通信时的唯一标识。</li><li>vm 是 View Model，组件模型，包含了数据绑定相关功能。</li><li>doc 是 Virtual DOM 中的根节点。</li></ol><p>举个例子，假设Native传入了如下的信息进行createInstance初始化：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+args:( 
+      <span style=color:#ae81ff>0</span>,
+       <span style=color:#960050;background-color:#1e0010>“（这里是网络上下载的</span>JS<span style=color:#960050;background-color:#1e0010>，由于太长了，省略）”</span>, 
+      { 
+        bundleUrl <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;http://192.168.31.117:8081/HelloWeex.js&#34;</span>; 
+        debug <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>; 
+      }
+) 
+
+</code></pre></div><p>那么instance = 0，code就是JS代码，data对应的是下面那个字典，service = @{ }。通过这个入参传入initApp(instance, code, data, services)方法。这个方法在html5/framework/legacy/app/ctrl/init.js里面。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>init</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>code</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>services</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>&#39;[JS Framework] Intialize an instance with:\n&#39;</span>, <span style=color:#a6e22e>data</span>)
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>result</span>
+
+  <span style=color:#75715e>/* 此处省略了一些代码*/</span> 
+
+  <span style=color:#75715e>// 初始化weexGlobalObject
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>weexGlobalObject</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>config</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>options</span>,
+    <span style=color:#a6e22e>define</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleDefine</span>,
+    <span style=color:#a6e22e>bootstrap</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleBootstrap</span>,
+    <span style=color:#a6e22e>requireModule</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleRequireModule</span>,
+    document<span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleDocument</span>,
+    <span style=color:#a6e22e>Vm</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleVm</span>
+  }
+
+  <span style=color:#75715e>// 防止weexGlobalObject被修改
+</span><span style=color:#75715e></span>  Object.<span style=color:#a6e22e>freeze</span>(<span style=color:#a6e22e>weexGlobalObject</span>)
+  <span style=color:#75715e>/* 此处省略了一些代码*/</span> 
+
+  <span style=color:#75715e>// 下面开始转换JS Boudle的代码
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>functionBody</span>
+  <span style=color:#75715e>/* istanbul ignore if */</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>code</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;function&#39;</span>) {
+    <span style=color:#75715e>// `function () {...}` -&gt; `{...}`
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// not very strict
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>functionBody</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>code</span>.<span style=color:#a6e22e>toString</span>().<span style=color:#a6e22e>substr</span>(<span style=color:#ae81ff>12</span>)
+  }
+  <span style=color:#75715e>/* istanbul ignore next */</span>
+  <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>code</span>) {
+    <span style=color:#a6e22e>functionBody</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>code</span>.<span style=color:#a6e22e>toString</span>()
+  }
+  <span style=color:#75715e>// wrap IFFE and use strict mode
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>functionBody</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>`(function(global){</span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n</span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n&#34;use strict&#34;;</span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n</span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>functionBody</span><span style=color:#e6db74>}</span><span style=color:#e6db74> </span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n</span><span style=color:#960050;background-color:#1e0010>\</span><span style=color:#e6db74>n})(Object.create(this))`</span>
+
+  <span style=color:#75715e>// run code and get result
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>globalObjects</span> <span style=color:#f92672>=</span> Object.<span style=color:#a6e22e>assign</span>({
+    <span style=color:#a6e22e>define</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleDefine</span>,
+    <span style=color:#a6e22e>require</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleRequire</span>,
+    <span style=color:#a6e22e>bootstrap</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleBootstrap</span>,
+    <span style=color:#a6e22e>register</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleRegister</span>,
+    <span style=color:#a6e22e>render</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleRender</span>,
+    <span style=color:#a6e22e>__weex_define__</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleDefine</span>, <span style=color:#75715e>// alias for define
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>__weex_bootstrap__</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleBootstrap</span>, <span style=color:#75715e>// alias for bootstrap
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>__weex_document__</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleDocument</span>,
+    <span style=color:#a6e22e>__weex_require__</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleRequireModule</span>,
+    <span style=color:#a6e22e>__weex_viewmodel__</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>bundleVm</span>,
+    <span style=color:#a6e22e>weex</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>weexGlobalObject</span>
+  }, <span style=color:#a6e22e>timerAPIs</span>, <span style=color:#a6e22e>services</span>)
+
+  <span style=color:#a6e22e>callFunction</span>(<span style=color:#a6e22e>globalObjects</span>, <span style=color:#a6e22e>functionBody</span>)
+
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+}
+
+
+</code></pre></div><p>上面这个方法很重要。在上面这个方法中封装了一个globalObjects对象，里面装了define 、require 、bootstrap 、register 、render这5个方法。</p><p>也会在Native本地记录一条日志：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[<span style=color:#a6e22e>JS</span> <span style=color:#a6e22e>Framework</span>] <span style=color:#a6e22e>Intialize</span> <span style=color:#a6e22e>an</span> <span style=color:#a6e22e>instance</span> <span style=color:#66d9ef>with</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>undefined</span>
+
+</code></pre></div><p>在上述5个方法中：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * @deprecated
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>register</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>options</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>warn</span>(<span style=color:#e6db74>&#39;[JS Framework] Register is deprecated, please install lastest transformer.&#39;</span>)
+  <span style=color:#a6e22e>registerCustomComponent</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>options</span>)
+}
+
+</code></pre></div><p>其中register、render、require是已经废弃的方法。</p><p>bundleDefine函数原型：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+(...<span style=color:#a6e22e>args</span>) =&gt; <span style=color:#a6e22e>defineFn</span>(<span style=color:#a6e22e>app</span>, ...<span style=color:#a6e22e>args</span>)
+
+</code></pre></div><p>bundleBootstrap函数原型：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+(<span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>config</span>, <span style=color:#a6e22e>_data</span>) =&gt; {
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>bootstrap</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>config</span>, <span style=color:#a6e22e>_data</span> <span style=color:#f92672>||</span> <span style=color:#a6e22e>data</span>)
+    <span style=color:#a6e22e>updateActions</span>(<span style=color:#a6e22e>app</span>)
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>listener</span>.<span style=color:#a6e22e>createFinish</span>()
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] After intialized an instance(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  }
+
+</code></pre></div><p>bundleRequire函数原型：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>name</span> =&gt; <span style=color:#a6e22e>_data</span> =&gt; {
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>bootstrap</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>name</span>, {}, <span style=color:#a6e22e>_data</span>)
+  }
+
+</code></pre></div><p>bundleRegister函数原型：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+(...<span style=color:#a6e22e>args</span>) =&gt; <span style=color:#a6e22e>register</span>(<span style=color:#a6e22e>app</span>, ...<span style=color:#a6e22e>args</span>)
+
+</code></pre></div><p>bundleRender函数原型：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+(<span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>_data</span>) =&gt; {
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>bootstrap</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>name</span>, {}, <span style=color:#a6e22e>_data</span>)
+  }
+
+</code></pre></div><p>上述5个方法封装到globalObjects中，传到 JS Bundle 中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>callFunction</span> (<span style=color:#a6e22e>globalObjects</span>, <span style=color:#a6e22e>body</span>) {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>globalKeys</span> <span style=color:#f92672>=</span> []
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>globalValues</span> <span style=color:#f92672>=</span> []
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>key</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>globalObjects</span>) {
+    <span style=color:#a6e22e>globalKeys</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>key</span>)
+    <span style=color:#a6e22e>globalValues</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>globalObjects</span>[<span style=color:#a6e22e>key</span>])
+  }
+  <span style=color:#a6e22e>globalKeys</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>body</span>)
+  <span style=color:#75715e>// 最终JS Bundle会通过new Function( )的方式被执行
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> Function(...<span style=color:#a6e22e>globalKeys</span>)
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>(...<span style=color:#a6e22e>globalValues</span>)
+}
+
+
+</code></pre></div><p>最终JS Bundle是会通过new Function( )的方式被执行。JS Bundle的代码将会在全局环境中执行，并不能获取到 JS Framework 执行环境中的数据，只能用globalObjects对象里面的方法。JS Bundle 本身也用了IFFE 和 严格模式，也并不会污染全局环境。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_5.png alt></p><p>以上就是createInstance做的所有事情，在接收到Native的createInstance调用的时候，先会在JSFramework中新建App实例对象并保存在instanceMap 中。再把5个方法(其中3个方法已经废弃了)传入到new Function( )中。new Function( )会进行JSFramework最重要的事情，将 JS Bundle 转换成 Virtual DOM 发送到原生模块渲染。</p><h3 id=三-weex-js-framework-构建virtual-dom>三. Weex JS Framework 构建Virtual DOM</h3><p>构建Virtual DOM的过程就是编译执行JS Boudle的过程。</p><p>先给一个实际的JS Boudle的例子，比如如下的代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#75715e>// { &#34;framework&#34;: &#34;Weex&#34; }
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> (<span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>modules</span>) { <span style=color:#75715e>// webpackBootstrap
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// The module cache
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>installedModules</span> <span style=color:#f92672>=</span> {};
+
+<span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// The require function
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>__webpack_require__</span>(<span style=color:#a6e22e>moduleId</span>) {
+
+<span style=color:#75715e>/******/</span> 		<span style=color:#75715e>// Check if module is in cache
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 		<span style=color:#66d9ef>if</span>(<span style=color:#a6e22e>installedModules</span>[<span style=color:#a6e22e>moduleId</span>])
+<span style=color:#75715e>/******/</span> 			<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>installedModules</span>[<span style=color:#a6e22e>moduleId</span>].<span style=color:#a6e22e>exports</span>;
+
+<span style=color:#75715e>/******/</span> 		<span style=color:#75715e>// Create a new module (and put it into the cache)
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 		<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>module</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>installedModules</span>[<span style=color:#a6e22e>moduleId</span>] <span style=color:#f92672>=</span> {
+<span style=color:#75715e>/******/</span> 			<span style=color:#a6e22e>exports</span><span style=color:#f92672>:</span> {},
+<span style=color:#75715e>/******/</span> 			<span style=color:#a6e22e>id</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>moduleId</span>,
+<span style=color:#75715e>/******/</span> 			<span style=color:#a6e22e>loaded</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>false</span>
+<span style=color:#75715e>/******/</span> 		};
+
+<span style=color:#75715e>/******/</span> 		<span style=color:#75715e>// Execute the module function
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 		<span style=color:#a6e22e>modules</span>[<span style=color:#a6e22e>moduleId</span>].<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span>, <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span>, <span style=color:#a6e22e>__webpack_require__</span>);
+
+<span style=color:#75715e>/******/</span> 		<span style=color:#75715e>// Flag the module as loaded
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 		<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>loaded</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>;
+
+<span style=color:#75715e>/******/</span> 		<span style=color:#75715e>// Return the exports of the module
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 		<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span>;
+<span style=color:#75715e>/******/</span> 	}
+
+
+<span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// expose the modules object (__webpack_modules__)
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#a6e22e>__webpack_require__</span>.<span style=color:#a6e22e>m</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>modules</span>;
+
+<span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// expose the module cache
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#a6e22e>__webpack_require__</span>.<span style=color:#a6e22e>c</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>installedModules</span>;
+
+<span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// __webpack_public_path__
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#a6e22e>__webpack_require__</span>.<span style=color:#a6e22e>p</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#34;&#34;</span>;
+
+<span style=color:#75715e>/******/</span> 	<span style=color:#75715e>// Load entry module and return exports
+</span><span style=color:#75715e></span><span style=color:#75715e>/******/</span> 	<span style=color:#66d9ef>return</span> <span style=color:#a6e22e>__webpack_require__</span>(<span style=color:#ae81ff>0</span>);
+<span style=color:#75715e>/******/</span> })
+<span style=color:#75715e>/************************************************************************/</span>
+<span style=color:#75715e>/******/</span> ([
+<span style=color:#75715e>/* 0 */</span>
+<span style=color:#75715e>/***/</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>exports</span>, <span style=color:#a6e22e>__webpack_require__</span>) {
+
+	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>__weex_template__</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__webpack_require__</span>(<span style=color:#ae81ff>1</span>)
+	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>__weex_style__</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__webpack_require__</span>(<span style=color:#ae81ff>2</span>)
+	<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>__weex_script__</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__webpack_require__</span>(<span style=color:#ae81ff>3</span>)
+
+	<span style=color:#a6e22e>__weex_define__</span>(<span style=color:#e6db74>&#39;@weex-component/916f9ecb075bbff1f4ea98389a4bb514&#39;</span>, [], <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>__weex_require__</span>, <span style=color:#a6e22e>__weex_exports__</span>, <span style=color:#a6e22e>__weex_module__</span>) {
+
+	    <span style=color:#a6e22e>__weex_script__</span>(<span style=color:#a6e22e>__weex_module__</span>, <span style=color:#a6e22e>__weex_exports__</span>, <span style=color:#a6e22e>__weex_require__</span>)
+	    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>__weex_exports__</span>.<span style=color:#a6e22e>__esModule</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>__weex_exports__</span>.<span style=color:#66d9ef>default</span>) {
+	      <span style=color:#a6e22e>__weex_module__</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__weex_exports__</span>.<span style=color:#66d9ef>default</span>
+	    }
+
+	    <span style=color:#a6e22e>__weex_module__</span>.<span style=color:#a6e22e>exports</span>.<span style=color:#a6e22e>template</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__weex_template__</span>
+
+	    <span style=color:#a6e22e>__weex_module__</span>.<span style=color:#a6e22e>exports</span>.<span style=color:#a6e22e>style</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>__weex_style__</span>
+
+	})
+
+	<span style=color:#a6e22e>__weex_bootstrap__</span>(<span style=color:#e6db74>&#39;@weex-component/916f9ecb075bbff1f4ea98389a4bb514&#39;</span>,<span style=color:#66d9ef>undefined</span>,<span style=color:#66d9ef>undefined</span>)
+
+<span style=color:#75715e>/***/</span> },
+<span style=color:#75715e>/* 1 */</span>
+<span style=color:#75715e>/***/</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>exports</span>) {
+
+	<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> {
+	  <span style=color:#e6db74>&#34;type&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;div&#34;</span>,
+	  <span style=color:#e6db74>&#34;classList&#34;</span><span style=color:#f92672>:</span> [
+	    <span style=color:#e6db74>&#34;container&#34;</span>
+	  ],
+	  <span style=color:#e6db74>&#34;children&#34;</span><span style=color:#f92672>:</span> [
+	    {
+	      <span style=color:#e6db74>&#34;type&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;image&#34;</span>,
+	      <span style=color:#e6db74>&#34;attr&#34;</span><span style=color:#f92672>:</span> {
+	        <span style=color:#e6db74>&#34;src&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;http://9.pic.paopaoche.net/up/2016-7/201671315341.png&#34;</span>
+	      },
+	      <span style=color:#e6db74>&#34;classList&#34;</span><span style=color:#f92672>:</span> [
+	        <span style=color:#e6db74>&#34;pic&#34;</span>
+	      ],
+	      <span style=color:#e6db74>&#34;events&#34;</span><span style=color:#f92672>:</span> {
+	        <span style=color:#e6db74>&#34;click&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;picClick&#34;</span>
+	      }
+	    },
+	    {
+	      <span style=color:#e6db74>&#34;type&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;text&#34;</span>,
+	      <span style=color:#e6db74>&#34;classList&#34;</span><span style=color:#f92672>:</span> [
+	        <span style=color:#e6db74>&#34;text&#34;</span>
+	      ],
+	      <span style=color:#e6db74>&#34;attr&#34;</span><span style=color:#f92672>:</span> {
+	        <span style=color:#e6db74>&#34;value&#34;</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> () {<span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span>}
+	      }
+	    }
+	  ]
+	}
+
+<span style=color:#75715e>/***/</span> },
+<span style=color:#75715e>/* 2 */</span>
+<span style=color:#75715e>/***/</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>exports</span>) {
+
+	<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> {
+	  <span style=color:#e6db74>&#34;container&#34;</span><span style=color:#f92672>:</span> {
+	    <span style=color:#e6db74>&#34;alignItems&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;center&#34;</span>
+	  },
+	  <span style=color:#e6db74>&#34;pic&#34;</span><span style=color:#f92672>:</span> {
+	    <span style=color:#e6db74>&#34;width&#34;</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>200</span>,
+	    <span style=color:#e6db74>&#34;height&#34;</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>200</span>
+	  },
+	  <span style=color:#e6db74>&#34;text&#34;</span><span style=color:#f92672>:</span> {
+	    <span style=color:#e6db74>&#34;fontSize&#34;</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>40</span>,
+	    <span style=color:#e6db74>&#34;color&#34;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;#000000&#34;</span>
+	  }
+	}
+
+<span style=color:#75715e>/***/</span> },
+<span style=color:#75715e>/* 3 */</span>
+<span style=color:#75715e>/***/</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>exports</span>) {
+
+	<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>exports</span>, <span style=color:#a6e22e>__weex_require__</span>){<span style=color:#e6db74>&#39;use strict&#39;</span>;
+
+	<span style=color:#a6e22e>module</span>.<span style=color:#a6e22e>exports</span> <span style=color:#f92672>=</span> {
+	    <span style=color:#a6e22e>data</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> () {<span style=color:#66d9ef>return</span> {
+	        <span style=color:#a6e22e>title</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;Hello World&#39;</span>,
+	        <span style=color:#a6e22e>toggle</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>false</span>
+	    }},
+	    <span style=color:#a6e22e>ready</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>ready</span>() {
+	        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;this.title == &#39;</span> <span style=color:#f92672>+</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span>);
+	        <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;hello Weex&#39;</span>;
+	        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;this.title == &#39;</span> <span style=color:#f92672>+</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span>);
+	    },
+	    <span style=color:#a6e22e>methods</span><span style=color:#f92672>:</span> {
+	        <span style=color:#a6e22e>picClick</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>picClick</span>() {
+	            <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>toggle</span> <span style=color:#f92672>=</span> <span style=color:#f92672>!</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>toggle</span>;
+	            <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>toggle</span>) {
+	                <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;图片被点击&#39;</span>;
+	            } <span style=color:#66d9ef>else</span> {
+	                <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>title</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>&#39;Hello Weex&#39;</span>;
+	            }
+	        }
+	    }
+	};}
+	<span style=color:#75715e>/* generated by weex-loader */</span>
+
+
+<span style=color:#75715e>/***/</span> }
+<span style=color:#75715e>/******/</span> ]);
+
+
+
+
+</code></pre></div><p>JS Framework拿到JS Boudle以后，会先执行bundleDefine。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>defineFn</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>name</span>, ...<span style=color:#a6e22e>args</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] define a component </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>name</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+
+  <span style=color:#75715e>/*以下代码省略*/</span>
+  <span style=color:#75715e>/*在这个方法里面注册自定义组件和普通的模块*/</span>
+
+}
+
+
+</code></pre></div><p>用户自定义的组件放在app.customComponentMap中。执行完bundleDefine以后调用bundleBootstrap方法。</p><ol><li>define: 用来自定义一个复合组件</li><li>bootstrap: 用来以某个复合组件为根结点渲染页面</li></ol><p>bundleDefine会解析代码中的__weex_define__("@weex-component/"）定义的component，包含依赖的子组件。并将component记录到customComponentMap[name] = exports数组中，维护组件与组件代码的对应关系。由于会依赖子组件，因此会被多次调用，直到所有的组件都被解析完全。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>bootstrap</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>name</span>, <span style=color:#a6e22e>config</span>, <span style=color:#a6e22e>data</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] bootstrap for </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>name</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+
+  <span style=color:#75715e>// 1. 验证自定义的Component的名字
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>cleanName</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>isWeexComponent</span>(<span style=color:#a6e22e>name</span>)) {
+    <span style=color:#a6e22e>cleanName</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>removeWeexPrefix</span>(<span style=color:#a6e22e>name</span>)
+  }
+  <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>isNpmModule</span>(<span style=color:#a6e22e>name</span>)) {
+    <span style=color:#a6e22e>cleanName</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>removeJSSurfix</span>(<span style=color:#a6e22e>name</span>)
+    <span style=color:#75715e>// 检查是否通过老的 &#39;define&#39; 方法定义的
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>requireCustomComponent</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>cleanName</span>)) {
+      <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`It&#39;s not a component: </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>name</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+    }
+  }
+  <span style=color:#66d9ef>else</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`Wrong component name: </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>name</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+  }
+
+  <span style=color:#75715e>// 2. 验证 configuration
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>config</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>isPlainObject</span>(<span style=color:#a6e22e>config</span>) <span style=color:#f92672>?</span> <span style=color:#a6e22e>config</span> <span style=color:#f92672>:</span> {}
+  <span style=color:#75715e>// 2.1 transformer的版本检查
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>transformerVersion</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;string&#39;</span> <span style=color:#f92672>&amp;&amp;</span>
+    <span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>transformerVersion</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;string&#39;</span> <span style=color:#f92672>&amp;&amp;</span>
+    <span style=color:#f92672>!</span><span style=color:#a6e22e>semver</span>.<span style=color:#a6e22e>satisfies</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>transformerVersion</span>,
+      <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>transformerVersion</span>)) {
+    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`JS Bundle version: </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>transformerVersion</span><span style=color:#e6db74>}</span><span style=color:#e6db74> `</span> <span style=color:#f92672>+</span>
+      <span style=color:#e6db74>`not compatible with </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>transformerVersion</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+  }
+  <span style=color:#75715e>// 2.2 降级版本检查
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>downgradeResult</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>downgrade</span>.<span style=color:#a6e22e>check</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>downgrade</span>)
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>isDowngrade</span>) {
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>callTasks</span>([{
+      <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;instanceWrap&#39;</span>,
+      <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;error&#39;</span>,
+      <span style=color:#a6e22e>args</span><span style=color:#f92672>:</span> [
+        <span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>errorType</span>,
+        <span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>code</span>,
+        <span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>errorMessage</span>
+      ]
+    }])
+    <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`Downgrade[</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>code</span><span style=color:#e6db74>}</span><span style=color:#e6db74>]: </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>downgradeResult</span>.<span style=color:#a6e22e>errorMessage</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+  }
+
+  <span style=color:#75715e>// 设置 viewport
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>viewport</span>) {
+    <span style=color:#a6e22e>setViewport</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>viewport</span>)
+  }
+
+  <span style=color:#75715e>// 3. 新建一个新的自定义的Component组件名字和数据的viewModel
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>vm</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Vm</span>(<span style=color:#a6e22e>cleanName</span>, <span style=color:#66d9ef>null</span>, { <span style=color:#a6e22e>_app</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>app</span> }, <span style=color:#66d9ef>null</span>, <span style=color:#a6e22e>data</span>)
+}
+
+
+</code></pre></div><p>bootstrap方法会在Native本地日志记录：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[<span style=color:#a6e22e>JS</span> <span style=color:#a6e22e>Framework</span>] <span style=color:#a6e22e>bootstrap</span> <span style=color:#66d9ef>for</span> <span style=color:#960050;background-color:#1e0010>@</span><span style=color:#a6e22e>weex</span><span style=color:#f92672>-</span><span style=color:#a6e22e>component</span><span style=color:#f92672>/</span><span style=color:#ae81ff>677</span><span style=color:#a6e22e>c57764d82d558f236d5241843a2a2</span>(<span style=color:#a6e22e>此处的编号是举一个例子</span>)
+
+</code></pre></div><p>bootstrap方法的作用是校验参数和环境信息，如果不符合当前条件，会触发页面降级，(也可以手动进行，比如Native出现问题了，降级到H5)。最后会根据Component新建对应的viewModel。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>Vm</span> (
+  <span style=color:#a6e22e>type</span>,
+  <span style=color:#a6e22e>options</span>,
+  <span style=color:#a6e22e>parentVm</span>,
+  <span style=color:#a6e22e>parentEl</span>,
+  <span style=color:#a6e22e>mergedData</span>,
+  <span style=color:#a6e22e>externalEvents</span>
+) {
+  <span style=color:#75715e>/*省略部分代码*/</span>
+  <span style=color:#75715e>// 初始化
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_options</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_methods</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>methods</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_computed</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>computed</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_css</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>style</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_ids</span> <span style=color:#f92672>=</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_vmEvents</span> <span style=color:#f92672>=</span> {}
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_childrenVms</span> <span style=color:#f92672>=</span> []
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_type</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>type</span>
+
+  <span style=color:#75715e>// 绑定事件和生命周期
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>initEvents</span>(<span style=color:#66d9ef>this</span>, <span style=color:#a6e22e>externalEvents</span>)
+
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] &#34;init&#34; lifecycle in 
+</span><span style=color:#e6db74>  Vm(</span><span style=color:#e6db74>${</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>$emit</span>(<span style=color:#e6db74>&#39;hook:init&#39;</span>)
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_inited</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+
+  <span style=color:#75715e>// 绑定数据到viewModel上
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_data</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>data</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;function&#39;</span> <span style=color:#f92672>?</span> <span style=color:#a6e22e>data</span>() <span style=color:#f92672>:</span> <span style=color:#a6e22e>data</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>mergedData</span>) {
+    <span style=color:#a6e22e>extend</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_data</span>, <span style=color:#a6e22e>mergedData</span>)
+  }
+  <span style=color:#a6e22e>initState</span>(<span style=color:#66d9ef>this</span>)
+
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] &#34;created&#34; lifecycle in Vm(</span><span style=color:#e6db74>${</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>$emit</span>(<span style=color:#e6db74>&#39;hook:created&#39;</span>)
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_created</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+
+  <span style=color:#75715e>// backward old ready entry
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>methods</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>methods</span>.<span style=color:#a6e22e>ready</span>) {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>warn</span>(<span style=color:#e6db74>&#39;&#34;exports.methods.ready&#34; is deprecated, &#39;</span> <span style=color:#f92672>+</span>
+      <span style=color:#e6db74>&#39;please use &#34;exports.created&#34; instead&#39;</span>)
+    <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>methods</span>.<span style=color:#a6e22e>ready</span>.<span style=color:#a6e22e>call</span>(<span style=color:#66d9ef>this</span>)
+  }
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_app</span>.<span style=color:#a6e22e>doc</span>) {
+    <span style=color:#66d9ef>return</span>
+  }
+
+  <span style=color:#75715e>// 如果没有parentElement，那么就指定为documentElement
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_parentEl</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>parentEl</span> <span style=color:#f92672>||</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>_app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>documentElement</span>
+  <span style=color:#75715e>// 构建模板
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>build</span>(<span style=color:#66d9ef>this</span>)
+}
+
+
+</code></pre></div><p>上述代码就是关键的新建viewModel的代码，在这个函数中，如果正常运行完，会在Native记录下两条日志信息：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[<span style=color:#a6e22e>JS</span> <span style=color:#a6e22e>Framework</span>] <span style=color:#e6db74>&#34;init&#34;</span> <span style=color:#a6e22e>lifecycle</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>Vm</span>(<span style=color:#ae81ff>677</span><span style=color:#a6e22e>c57764d82d558f236d5241843a2a2</span>)  <span style=color:#960050;background-color:#1e0010></span>[;
+[<span style=color:#a6e22e>JS</span> <span style=color:#a6e22e>Framework</span>] <span style=color:#e6db74>&#34;created&#34;</span> <span style=color:#a6e22e>lifecycle</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>Vm</span>(<span style=color:#ae81ff>677</span><span style=color:#a6e22e>c57764d82d558f236d5241843a2a2</span>)  <span style=color:#960050;background-color:#1e0010></span>[;
+
+
+</code></pre></div><p>同时干了三件事情：</p><ol><li>initEvents 初始化事件和生命周期</li><li>initState 实现数据绑定功能</li><li>build模板并绘制 Native UI</li></ol><h4 id=1-initevents-初始化事件和生命周期>1. initEvents 初始化事件和生命周期</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>initEvents</span> (<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>externalEvents</span>) {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>options</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_options</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>events</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>.<span style=color:#a6e22e>events</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>type1</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>events</span>) {
+    <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>$on</span>(<span style=color:#a6e22e>type1</span>, <span style=color:#a6e22e>events</span>[<span style=color:#a6e22e>type1</span>])
+  }
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>type2</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>externalEvents</span>) {
+    <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>$on</span>(<span style=color:#a6e22e>type2</span>, <span style=color:#a6e22e>externalEvents</span>[<span style=color:#a6e22e>type2</span>])
+  }
+  <span style=color:#a6e22e>LIFE_CYCLE_TYPES</span>.<span style=color:#a6e22e>forEach</span>((<span style=color:#a6e22e>type</span>) =&gt; {
+    <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>$on</span>(<span style=color:#e6db74>`hook:</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>, <span style=color:#a6e22e>options</span>[<span style=color:#a6e22e>type</span>])
+  })
+}
+
+
+
+</code></pre></div><p>在initEvents方法里面会监听三类事件：</p><ol><li>组件options里面定义的事情</li><li>一些外部的事件externalEvents</li><li>还要绑定生命周期的hook钩子</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>LIFE_CYCLE_TYPES</span> <span style=color:#f92672>=</span> [<span style=color:#e6db74>&#39;init&#39;</span>, <span style=color:#e6db74>&#39;created&#39;</span>, <span style=color:#e6db74>&#39;ready&#39;</span>, <span style=color:#e6db74>&#39;destroyed&#39;</span>]
+
+</code></pre></div><p>生命周期的钩子包含上述4种，init，created，ready，destroyed。</p><p>$on方法是增加事件监听者listener的。$emit方式是用来执行方法的，但是不进行dispatch和broadcast。$dispatch方法是派发事件，沿着父类往上传递。$broadcast方法是广播事件，沿着子类往下传递。$off方法是移除事件监听者listener。</p><p>事件object的定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>Evt</span> (<span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>detail</span>) {
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>detail</span> <span style=color:#66d9ef>instanceof</span> <span style=color:#a6e22e>Evt</span>) {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>detail</span>
+  }
+
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>timestamp</span> <span style=color:#f92672>=</span> Date.<span style=color:#a6e22e>now</span>()
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>detail</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>detail</span>
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>type</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>type</span>
+
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>shouldStop</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>stop</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> () {
+    <span style=color:#a6e22e>shouldStop</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+  }
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>hasStopped</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> () {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>shouldStop</span>
+  }
+}
+
+</code></pre></div><p>每个组件的事件包含事件的object，事件的监听者，事件的emitter，生命周期的hook钩子。</p><p>initEvents的作用就是对当前的viewModel绑定上上述三种事件的监听者listener。</p><h4 id=2-initstate-实现数据绑定功能>2. initState 实现数据绑定功能</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>initState</span> (<span style=color:#a6e22e>vm</span>) {
+  <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_watchers</span> <span style=color:#f92672>=</span> []
+  <span style=color:#a6e22e>initData</span>(<span style=color:#a6e22e>vm</span>)
+  <span style=color:#a6e22e>initComputed</span>(<span style=color:#a6e22e>vm</span>)
+  <span style=color:#a6e22e>initMethods</span>(<span style=color:#a6e22e>vm</span>)
+}
+
+</code></pre></div><ol><li>initData，设置 proxy，监听 _data 中的属性；然后添加 reactiveGetter & reactiveSetter 实现数据监听。 （</li><li>initComputed，初始化计算属性，只有 getter，在 _data 中没有对应的值。</li><li>initMethods 将 _method 中的方法挂在实例上。</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>initData</span> (<span style=color:#a6e22e>vm</span>) {
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>data</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_data</span>
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>isPlainObject</span>(<span style=color:#a6e22e>data</span>)) {
+    <span style=color:#a6e22e>data</span> <span style=color:#f92672>=</span> {}
+  }
+  <span style=color:#75715e>// proxy data on instance
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>keys</span> <span style=color:#f92672>=</span> Object.<span style=color:#a6e22e>keys</span>(<span style=color:#a6e22e>data</span>)
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>keys</span>.<span style=color:#a6e22e>length</span>
+  <span style=color:#66d9ef>while</span> (<span style=color:#a6e22e>i</span><span style=color:#f92672>--</span>) {
+    <span style=color:#a6e22e>proxy</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>keys</span>[<span style=color:#a6e22e>i</span>])
+  }
+  <span style=color:#75715e>// observe data
+</span><span style=color:#75715e></span>  <span style=color:#a6e22e>observe</span>(<span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>vm</span>)
+}
+
+</code></pre></div><p>在initData方法里面最后一步会进行data的observe。</p><p>数据绑定的核心思想是基于 ES5 的 Object.defineProperty 方法，在 vm 实例上创建了一系列的 getter / setter，支持数组和深层对象，在设置属性值的时候，会派发更新事件。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_6.png alt></p><p>这块数据绑定的思想，一部分是借鉴了Vue的实现，这块打算以后写篇文章专门谈谈。</p><h4 id=3-build模板>3. build模板</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>build</span> (<span style=color:#a6e22e>vm</span>) {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>opt</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_options</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>template</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>opt</span>.<span style=color:#a6e22e>template</span> <span style=color:#f92672>||</span> {}
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>opt</span>.<span style=color:#a6e22e>replace</span>) {
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>children</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>children</span>.<span style=color:#a6e22e>length</span> <span style=color:#f92672>===</span> <span style=color:#ae81ff>1</span>) {
+      <span style=color:#a6e22e>compile</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>children</span>[<span style=color:#ae81ff>0</span>], <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_parentEl</span>)
+    }
+    <span style=color:#66d9ef>else</span> {
+      <span style=color:#a6e22e>compile</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>children</span>, <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_parentEl</span>)
+    }
+  }
+  <span style=color:#66d9ef>else</span> {
+    <span style=color:#a6e22e>compile</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>template</span>, <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_parentEl</span>)
+  }
+
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] &#34;ready&#34; lifecycle in Vm(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>$emit</span>(<span style=color:#e6db74>&#39;hook:ready&#39;</span>)
+  <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_ready</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+}
+
+
+</code></pre></div><p>build构建思路如下：</p><p>compile(template, parentNode)</p><ol><li>如果 type 是 content ，就创建contentNode。</li><li>否则 如果含有 v-for 标签， 那么就循环遍历，创建context，继续compile(templateWithoutFor, parentNode)</li><li>否则 如果含有 v-if 标签，继续compile(templateWithoutIf, parentNode)</li><li>否则如果 type 是 dynamic ，继续compile(templateWithoutDynamicType, parentNode)</li><li>否则如果 type 是 custom ，那么调用addChildVm(vm, parentVm)，build(externalDirs)，遍历子节点，然后再compile(childNode, template)</li><li>最后如果 type 是 Native ，更新(id/attr/style/class)，append(template, parentNode)，遍历子节点，compile(childNode, template)</li></ol><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_7.png alt></p><p>在上述一系列的compile方法中，有4个参数，</p><ol><li>vm: 待编译的 Vm 对象。</li><li>target: 待编译的节点，是模板中的标签经过 transformer 转换后的结构。</li><li>dest: 当前节点父节点的 Virtual DOM。</li><li>meta: 元数据，在内部调用时可以用来传递数据。</li></ol><p>编译的方法也分为以下7种：</p><ol><li>compileFragment 编译多个节点，创建 Fragment 片段。</li><li>compileBlock 创建特殊的Block。</li><li>compileRepeat 编译 repeat 指令，同时会执行数据绑定，在数据变动时会触发 DOM 节点的更新。</li><li>compileShown 编译 if 指令，也会执行数据绑定。</li><li>compileType 编译动态类型的组件。</li><li>compileCustomComponent 编译展开用户自定义的组件，这个过程会递归创建子 vm，并且绑定父子关系，也会触发子组件的生命周期函数。</li><li>compileNativeComponent 编译内置原生组件。这个方法会调用 createBody 或 createElement 与原生模块通信并创建 Native UI。</li></ol><p>上述7个方法里面，除了compileBlock和compileNativeComponent以外的5个方法，都会递归调用。</p><p>编译好模板以后，原来的JS Boudle就都被转变成了类似Json格式的 Virtual DOM 了。下一步开始绘制Native UI。</p><h4 id=4-绘制-native-ui>4. 绘制 Native UI</h4><p>绘制Native UI的核心方法就是compileNativeComponent (vm, template, dest, type)。</p><p>compileNativeComponent的核心实现如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>compileNativeComponent</span> (<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>template</span>, <span style=color:#a6e22e>dest</span>, <span style=color:#a6e22e>type</span>) {
+  <span style=color:#a6e22e>applyNaitveComponentOptions</span>(<span style=color:#a6e22e>template</span>)
+
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>element</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>dest</span>.<span style=color:#a6e22e>ref</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;_documentElement&#39;</span>) {
+    <span style=color:#75715e>// if its parent is documentElement then it&#39;s a body
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] compile to create body for </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+    <span style=color:#75715e>// 构建DOM根
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>element</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>createBody</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>type</span>)
+  }
+  <span style=color:#66d9ef>else</span> {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] compile to create element for </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>)
+    <span style=color:#75715e>// 添加元素
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>element</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>createElement</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>type</span>)
+  }
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_rootEl</span>) {
+    <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_rootEl</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>element</span>
+    <span style=color:#75715e>// bind event earlier because of lifecycle issues
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>binding</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_externalBinding</span> <span style=color:#f92672>||</span> {}
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>target</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>binding</span>.<span style=color:#a6e22e>template</span>
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>parentVm</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>binding</span>.<span style=color:#a6e22e>parent</span>
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>target</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>target</span>.<span style=color:#a6e22e>events</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>parentVm</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>element</span>) {
+      <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>type</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>target</span>.<span style=color:#a6e22e>events</span>) {
+        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>handler</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>parentVm</span>[<span style=color:#a6e22e>target</span>.<span style=color:#a6e22e>events</span>[<span style=color:#a6e22e>type</span>]]
+        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>handler</span>) {
+          <span style=color:#a6e22e>element</span>.<span style=color:#a6e22e>addEvent</span>(<span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>bind</span>(<span style=color:#a6e22e>handler</span>, <span style=color:#a6e22e>parentVm</span>))
+        }
+      }
+    }
+  }
+
+  <span style=color:#a6e22e>bindElement</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>element</span>, <span style=color:#a6e22e>template</span>)
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>attr</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>attr</span>.<span style=color:#a6e22e>append</span>) { <span style=color:#75715e>// backward, append prop in attr
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>append</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>attr</span>.<span style=color:#a6e22e>append</span>
+  }
+
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>append</span>) { <span style=color:#75715e>// give the append attribute for ios adaptation
+</span><span style=color:#75715e></span>    <span style=color:#a6e22e>element</span>.<span style=color:#a6e22e>attr</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>element</span>.<span style=color:#a6e22e>attr</span> <span style=color:#f92672>||</span> {}
+    <span style=color:#a6e22e>element</span>.<span style=color:#a6e22e>attr</span>.<span style=color:#a6e22e>append</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>append</span>
+  }
+
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>treeMode</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>template</span>.<span style=color:#a6e22e>append</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;tree&#39;</span>
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>app</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>vm</span>.<span style=color:#a6e22e>_app</span> <span style=color:#f92672>||</span> {}
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>lastSignal</span> <span style=color:#f92672>!==</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#f92672>!</span><span style=color:#a6e22e>treeMode</span>) {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>&#39;[JS Framework] compile to append single node for&#39;</span>, <span style=color:#a6e22e>element</span>)
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>lastSignal</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>attachTarget</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>element</span>, <span style=color:#a6e22e>dest</span>)
+  }
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>lastSignal</span> <span style=color:#f92672>!==</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span>) {
+    <span style=color:#a6e22e>compileChildren</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>template</span>, <span style=color:#a6e22e>element</span>)
+  }
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>lastSignal</span> <span style=color:#f92672>!==</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>1</span> <span style=color:#f92672>&amp;&amp;</span> <span style=color:#a6e22e>treeMode</span>) {
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>&#39;[JS Framework] compile to append whole tree for&#39;</span>, <span style=color:#a6e22e>element</span>)
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>lastSignal</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>attachTarget</span>(<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>element</span>, <span style=color:#a6e22e>dest</span>)
+  }
+}
+
+
+</code></pre></div><p>绘制Native的UI会先绘制DOM的根，然后绘制上面的子孩子元素。子孩子需要递归判断，如果还有子孩子，还需要继续进行之前的compile的流程。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_8.png alt></p><p>每个 Document 对象中都会包含一个 listener 属性，它可以向 Native 端发送消息，每当创建元素或者是有更新操作时，listener 就会拼装出制定格式的 action，并且最终调用 callNative 把 action 传递给原生模块，原生模块中也定义了相应的方法来执行 action 。</p><p>例如当某个元素执行了 element.appendChild() 时，就会调用 listener.addElement()，然后就会拼成一个类似Json格式的数据，再调用callTasks方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>callTasks</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>tasks</span>) {
+  <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>result</span>
+
+  <span style=color:#75715e>/* istanbul ignore next */</span>
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>typof</span>(<span style=color:#a6e22e>tasks</span>) <span style=color:#f92672>!==</span> <span style=color:#e6db74>&#39;array&#39;</span>) {
+    <span style=color:#a6e22e>tasks</span> <span style=color:#f92672>=</span> [<span style=color:#a6e22e>tasks</span>]
+  }
+
+  <span style=color:#a6e22e>tasks</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>task</span> =&gt; {
+    <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>taskCenter</span>.<span style=color:#a6e22e>send</span>(
+      <span style=color:#e6db74>&#39;module&#39;</span>,
+      {
+        <span style=color:#a6e22e>module</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>task</span>.<span style=color:#a6e22e>module</span>,
+        <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>task</span>.<span style=color:#a6e22e>method</span>
+      },
+      <span style=color:#a6e22e>task</span>.<span style=color:#a6e22e>args</span>
+    )
+  })
+
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+}
+
+
+</code></pre></div><p>在上述方法中会继续调用在html5/runtime/task-center.js中的send方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>send</span> (<span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>options</span>, <span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>const</span> { <span style=color:#a6e22e>action</span>, <span style=color:#a6e22e>component</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>method</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>options</span>
+
+    <span style=color:#a6e22e>args</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>args</span>.<span style=color:#a6e22e>map</span>(<span style=color:#a6e22e>arg</span> =&gt; <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>normalize</span>(<span style=color:#a6e22e>arg</span>))
+
+    <span style=color:#66d9ef>switch</span> (<span style=color:#a6e22e>type</span>) {
+      <span style=color:#66d9ef>case</span> <span style=color:#e6db74>&#39;dom&#39;</span><span style=color:#f92672>:</span>
+        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>[<span style=color:#a6e22e>action</span>](<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>instanceId</span>, <span style=color:#a6e22e>args</span>)
+      <span style=color:#66d9ef>case</span> <span style=color:#e6db74>&#39;component&#39;</span><span style=color:#f92672>:</span>
+        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>componentHandler</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>instanceId</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span>, { <span style=color:#a6e22e>component</span> })
+      <span style=color:#66d9ef>default</span><span style=color:#f92672>:</span>
+        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>moduleHandler</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>instanceId</span>, <span style=color:#a6e22e>module</span>, <span style=color:#a6e22e>method</span>, <span style=color:#a6e22e>args</span>, {})
+    }
+  }
+
+
+</code></pre></div><p>这里存在有2个handler，它们的实现是之前传进来的sendTasks方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>config</span> <span style=color:#f92672>=</span> {
+  <span style=color:#a6e22e>Document</span>, <span style=color:#a6e22e>Element</span>, <span style=color:#a6e22e>Comment</span>, <span style=color:#a6e22e>Listener</span>,
+  <span style=color:#a6e22e>TaskCenter</span>,
+  <span style=color:#a6e22e>sendTasks</span> (...<span style=color:#a6e22e>args</span>) {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>global</span>.<span style=color:#a6e22e>callNative</span>(...<span style=color:#a6e22e>args</span>)
+  }
+}
+
+
+</code></pre></div><p>sendTasks方法最终会调用callNative，调用本地原生的UI进行绘制。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_9.png alt></p><h3 id=四-weex-js-framework-处理native触发的事件>四. Weex JS Framework 处理Native触发的事件</h3><p>最后来看看Weex JS Framework是如何处理Native传递过来的事件的。</p><p>在html5/framework/legacy/static/bridge.js里面对应的是Native的传递过来的事件处理方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>jsHandlers</span> <span style=color:#f92672>=</span> {
+  <span style=color:#a6e22e>fireEvent</span><span style=color:#f92672>:</span> (<span style=color:#a6e22e>id</span>, ...<span style=color:#a6e22e>args</span>) =&gt; {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>fireEvent</span>(<span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>], ...<span style=color:#a6e22e>args</span>)
+  },
+  <span style=color:#a6e22e>callback</span><span style=color:#f92672>:</span> (<span style=color:#a6e22e>id</span>, ...<span style=color:#a6e22e>args</span>) =&gt; {
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>callback</span>(<span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>], ...<span style=color:#a6e22e>args</span>)
+  }
+}
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> * 接收来自Native的事件和回调
+</span><span style=color:#75715e> */</span>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>receiveTasks</span> (<span style=color:#a6e22e>id</span>, <span style=color:#a6e22e>tasks</span>) {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>instance</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>instanceMap</span>[<span style=color:#a6e22e>id</span>]
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>instance</span> <span style=color:#f92672>&amp;&amp;</span> Array.<span style=color:#a6e22e>isArray</span>(<span style=color:#a6e22e>tasks</span>)) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>results</span> <span style=color:#f92672>=</span> []
+    <span style=color:#a6e22e>tasks</span>.<span style=color:#a6e22e>forEach</span>((<span style=color:#a6e22e>task</span>) =&gt; {
+      <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>handler</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>jsHandlers</span>[<span style=color:#a6e22e>task</span>.<span style=color:#a6e22e>method</span>]
+      <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>args</span> <span style=color:#f92672>=</span> [...<span style=color:#a6e22e>task</span>.<span style=color:#a6e22e>args</span>]
+      <span style=color:#75715e>/* istanbul ignore else */</span>
+      <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>handler</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;function&#39;</span>) {
+        <span style=color:#a6e22e>args</span>.<span style=color:#a6e22e>unshift</span>(<span style=color:#a6e22e>id</span>)
+        <span style=color:#a6e22e>results</span>.<span style=color:#a6e22e>push</span>(<span style=color:#a6e22e>handler</span>(...<span style=color:#a6e22e>args</span>))
+      }
+    })
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>results</span>
+  }
+  <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid instance id &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34; or tasks`</span>)
+}
+
+
+
+</code></pre></div><p>在Weex 每个instance实例里面都包含有一个callJS的全局方法，当本地调用了callJS这个方法以后，会调用receiveTasks方法。</p><p>关于Native会传递过来哪些事件，可以看这篇文章<a href=http://www.jianshu.com/p/419b96aecc39>《Weex 事件传递的那些事儿》</a></p><p>在jsHandler里面封装了fireEvent和callback方法，这两个方法在html5/frameworks/legacy/app/ctrl/misc.js方法中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>fireEvent</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>, <span style=color:#a6e22e>domChanges</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] Fire a &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>type</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34; event on an element(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>ref</span><span style=color:#e6db74>}</span><span style=color:#e6db74>) in instance(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  <span style=color:#66d9ef>if</span> (Array.<span style=color:#a6e22e>isArray</span>(<span style=color:#a6e22e>ref</span>)) {
+    <span style=color:#a6e22e>ref</span>.<span style=color:#a6e22e>some</span>((<span style=color:#a6e22e>ref</span>) =&gt; {
+      <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>fireEvent</span>(<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>ref</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>) <span style=color:#f92672>!==</span> <span style=color:#66d9ef>false</span>
+    })
+    <span style=color:#66d9ef>return</span>
+  }
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>el</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>getRef</span>(<span style=color:#a6e22e>ref</span>)
+  <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>el</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>fireEvent</span>(<span style=color:#a6e22e>el</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>, <span style=color:#a6e22e>domChanges</span>)
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>differ</span>.<span style=color:#a6e22e>flush</span>()
+    <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>taskCenter</span>.<span style=color:#a6e22e>send</span>(<span style=color:#e6db74>&#39;dom&#39;</span>, { <span style=color:#a6e22e>action</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;updateFinish&#39;</span> }, [])
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+  }
+  <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>`invalid element reference &#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>ref</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>)
+}
+
+</code></pre></div><p>fireEvent传递过来的参数包含，事件类型，事件object，是一个元素的ref。如果事件会引起DOM的变化，那么还会带一个参数描述DOM的变化。</p><p>在htlm5/frameworks/runtime/vdom/document.js里面</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+  <span style=color:#a6e22e>fireEvent</span> (<span style=color:#a6e22e>el</span>, <span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>, <span style=color:#a6e22e>domChanges</span>) {
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>el</span>) {
+      <span style=color:#66d9ef>return</span>
+    }
+    <span style=color:#a6e22e>e</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>e</span> <span style=color:#f92672>||</span> {}
+    <span style=color:#a6e22e>e</span>.<span style=color:#a6e22e>type</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>type</span>
+    <span style=color:#a6e22e>e</span>.<span style=color:#a6e22e>target</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>el</span>
+    <span style=color:#a6e22e>e</span>.<span style=color:#a6e22e>timestamp</span> <span style=color:#f92672>=</span> Date.<span style=color:#a6e22e>now</span>()
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>domChanges</span>) {
+      <span style=color:#a6e22e>updateElement</span>(<span style=color:#a6e22e>el</span>, <span style=color:#a6e22e>domChanges</span>)
+    }
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>el</span>.<span style=color:#a6e22e>fireEvent</span>(<span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>)
+  }
+
+
+</code></pre></div><p>这里可以发现，其实对DOM的更新是单独做的，然后接着把事件继续往下传，传给element。</p><p>接着在htlm5/frameworks/runtime/vdom/element.js里面</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+  <span style=color:#a6e22e>fireEvent</span> (<span style=color:#a6e22e>type</span>, <span style=color:#a6e22e>e</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>handler</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>event</span>[<span style=color:#a6e22e>type</span>]
+    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>handler</span>) {
+      <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>handler</span>.<span style=color:#a6e22e>call</span>(<span style=color:#66d9ef>this</span>, <span style=color:#a6e22e>e</span>)
+    }
+  }
+
+</code></pre></div><p>最终事件在这里通过handler的call方法进行调用。</p><p>当有数据发生变化的时候，会触发watcher的数据监听，当前的value和oldValue比较。先会调用watcher的update方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>Watcher</span>.<span style=color:#a6e22e>prototype</span>.<span style=color:#a6e22e>update</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>shallow</span>) {
+  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>lazy</span>) {
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>dirty</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>true</span>
+  } <span style=color:#66d9ef>else</span> {
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>run</span>()
+  }
+
+</code></pre></div><p>update方法里面会调用run方法。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>Watcher</span>.<span style=color:#a6e22e>prototype</span>.<span style=color:#a6e22e>run</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> () {
+  <span style=color:#66d9ef>if</span> (<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>active</span>) {
+    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>get</span>()
+    <span style=color:#66d9ef>if</span> (
+      <span style=color:#a6e22e>value</span> <span style=color:#f92672>!==</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>value</span> <span style=color:#f92672>||</span>
+      <span style=color:#75715e>// Deep watchers and watchers on Object/Arrays should fire even
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// when the value is the same, because the value may
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// have mutated; but only do so if this is a
+</span><span style=color:#75715e></span>      <span style=color:#75715e>// non-shallow update (caused by a vm digest).
+</span><span style=color:#75715e></span>      ((<span style=color:#a6e22e>isObject</span>(<span style=color:#a6e22e>value</span>) <span style=color:#f92672>||</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>deep</span>) <span style=color:#f92672>&amp;&amp;</span> <span style=color:#f92672>!</span><span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>shallow</span>)
+    ) {
+      <span style=color:#75715e>// set new value
+</span><span style=color:#75715e></span>      <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>oldValue</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>value</span>
+      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>value</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>value</span>
+      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>cb</span>.<span style=color:#a6e22e>call</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>vm</span>, <span style=color:#a6e22e>value</span>, <span style=color:#a6e22e>oldValue</span>)
+    }
+    <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>queued</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>shallow</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>false</span>
+  }
+}
+
+
+</code></pre></div><p>run方法之后会触发differ，dep会通知所有相关的子视图的改变。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#a6e22e>Dep</span>.<span style=color:#a6e22e>prototype</span>.<span style=color:#a6e22e>notify</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> () {
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>subs</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>subs</span>.<span style=color:#a6e22e>slice</span>()
+  <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>let</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>, <span style=color:#a6e22e>l</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>subs</span>.<span style=color:#a6e22e>length</span>; <span style=color:#a6e22e>i</span> <span style=color:#f92672>&lt;</span> <span style=color:#a6e22e>l</span>; <span style=color:#a6e22e>i</span><span style=color:#f92672>++</span>) {
+    <span style=color:#a6e22e>subs</span>[<span style=color:#a6e22e>i</span>].<span style=color:#a6e22e>update</span>()
+  }
+}
+
+</code></pre></div><p>相关联的子视图也会触发update的方法。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_10.png alt></p><p>还有一种事件是Native通过模块的callback回调传递事件。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>callback</span> (<span style=color:#a6e22e>app</span>, <span style=color:#a6e22e>callbackId</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>ifKeepAlive</span>) {
+  <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>debug</span>(<span style=color:#e6db74>`[JS Framework] Invoke a callback(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>callbackId</span><span style=color:#e6db74>}</span><span style=color:#e6db74>) with`</span>, <span style=color:#a6e22e>data</span>,
+            <span style=color:#e6db74>`in instance(</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>id</span><span style=color:#e6db74>}</span><span style=color:#e6db74>)`</span>)
+  <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>result</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>taskCenter</span>.<span style=color:#a6e22e>callback</span>(<span style=color:#a6e22e>callbackId</span>, <span style=color:#a6e22e>data</span>, <span style=color:#a6e22e>ifKeepAlive</span>)
+  <span style=color:#a6e22e>updateActions</span>(<span style=color:#a6e22e>app</span>)
+  <span style=color:#a6e22e>app</span>.<span style=color:#a6e22e>doc</span>.<span style=color:#a6e22e>taskCenter</span>.<span style=color:#a6e22e>send</span>(<span style=color:#e6db74>&#39;dom&#39;</span>, { <span style=color:#a6e22e>action</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;updateFinish&#39;</span> }, [])
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>result</span>
+}
+
+</code></pre></div><p>callback的回调比较简单，taskCenter.callback会调用callbackManager.consume的方法。执行完callback方法以后，接着就是执行differ.flush，最后一步就是回调Native，通知updateFinish。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_11.png alt></p><p>至此，Weex JS Framework 的三大基本功能都分析完毕了，用一张大图做个总结，描绘它干了哪些事情：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_12_.png alt></p><p>大图点<a href=https://img.halfrost.com/Blog/ArticleImage/45_12_.png>这里</a></p><h3 id=五weex-js-framework-未来可能做更多的事情>五.Weex JS Framework 未来可能做更多的事情</h3><p>除了目前官方默认支持的 Vue 2.0，Rax的Framework，还可以支持其他平台的 JS Framework 。Weex还可以支持自己自定义的 JS Framework。只要按照如下的步骤来定制，可以写一套完整的 JS Framework。</p><ol><li>首先你要有一套完整的 JS Framework。</li><li>了解 Weex 的 JS 引擎的特性支持情况。</li><li>适配 Weex 的 native DOM APIs。</li><li>适配 Weex 的初始化入口和多实例管理机制。</li><li>在 Weex JS runtime 的 framework 配置中加入自己的 JS Framework 然后打包。</li><li>基于该 JS Framework 撰写 JS bundle，并加入特定的前缀注释，以便 Weex JS runtime 能够正确识别。</li></ol><p>如果经过上述的步骤进行扩展以后，可以出现如下的代码：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>Vue</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;...&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>React</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;...&#39;</span>
+<span style=color:#66d9ef>import</span> <span style=color:#f92672>*</span> <span style=color:#a6e22e>as</span> <span style=color:#a6e22e>Angular</span> <span style=color:#a6e22e>from</span> <span style=color:#e6db74>&#39;...&#39;</span>
+<span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> { <span style=color:#a6e22e>Vue</span>, <span style=color:#a6e22e>React</span>, <span style=color:#a6e22e>Angular</span> };
+
+</code></pre></div><p>这样可以支持Vue，React，Angular。</p><p>如果在 JS Bundle 在文件开头带有如下格式的注释：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#75715e>// { &#34;framework&#34;: &#34;Vue&#34; }
+</span><span style=color:#75715e></span>...
+
+</code></pre></div><p>这样 Weex JS 引擎就会识别出这个 JS bundle 需要用 Vue 框架来解析。并分发给 Vue 框架处理。</p><p>这样每个 JS Framework，只要：</p><ol><li>封装了这几个接口。</li><li>给自己的 JS Bundle 第一行写好特殊格式的注释，Weex 就可以正常的运行基于各种 JS Framework 的页面了。</li></ol><p><strong>Weex 支持同时多种框架在一个移动应用中共存并各自解析基于不同框架的 JS bundle。</strong></p><p>这一块笔者暂时还没有实践各自解析不同的 JS bundle，相信这部分未来也许可以干很多有趣的事情。</p><h3 id=最后>最后</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/45_13.png alt></p><p>本篇文章把 Weex 在 Native 端的 JS Framework 的工作原理简单的梳理了一遍，中间唯一没有深究的点可能就是 Weex 是 如何 利用 Vue 进行数据绑定的，如何监听数据变化的，这块打算另外开一篇文章详细的分析一下。到此篇为止，Weex 在 Native 端的所有源码实现就分析完毕了。</p><p>请大家多多指点。</p><p>References:</p><p><a href=https://weex.incubator.apache.org/cn/references/advanced/extend-jsfm.html>Weex 官方文档</a><br><a href=https://yq.aliyun.com/articles/59934>Weex 框架中 JS Framework 的结构</a><br><a href=https://github.com/weexteam/article/issues/51>浅析weex之vdom渲染</a><br><a href=https://yq.aliyun.com/articles/69005>Native 性能稳定性极致优化</a></p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-weex-js-framework-初始化>一. Weex JS Framework 初始化</a></li><li><a href=#二-weex-js-framework-管理实例的生命周期>二. Weex JS Framework 管理实例的生命周期</a></li><li><a href=#三-weex-js-framework-构建virtual-dom>三. Weex JS Framework 构建Virtual DOM</a><ul><li><a href=#1-initevents-初始化事件和生命周期>1. initEvents 初始化事件和生命周期</a></li><li><a href=#2-initstate-实现数据绑定功能>2. initState 实现数据绑定功能</a></li><li><a href=#3-build模板>3. build模板</a></li><li><a href=#4-绘制-native-ui>4. 绘制 Native UI</a></li></ul></li><li><a href=#四-weex-js-framework-处理native触发的事件>四. Weex JS Framework 处理Native触发的事件</a></li><li><a href=#五weex-js-framework-未来可能做更多的事情>五.Weex JS Framework 未来可能做更多的事情</a></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&text=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&is_video=false&description=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&title=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&name=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework&description=%e5%89%8d%e8%a8%80%20Weex%e4%b8%ba%e4%ba%86%e6%8f%90%e9%ab%98Native%e7%9a%84%e6%9e%81%e8%87%b4%e6%80%a7%e8%83%bd%ef%bc%8c%e5%81%9a%e4%ba%86%e5%be%88%e5%a4%9a%e4%bc%98%e5%8c%96%e7%9a%84%e5%b7%a5%e4%bd%9c%0a%e4%b8%ba%e4%ba%86%e8%be%be%e5%88%b0%e6%89%80%e6%9c%89%e9%a1%b5%e9%9d%a2%e5%9c%a8%e7%94%a8%e6%88%b7%e7%ab%af%e8%be%be%e5%88%b0%e7%a7%92%e5%bc%80%ef%bc%8c%e4%b9%9f%e5%b0%b1%e6%98%af%e7%bd%91%e7%bb%9c%ef%bc%88JS%20Bundle%e4%b8%8b%e8%bd%bd%ef%bc%89%e5%92%8c%e9%a6%96%e5%b1%8f%e6%b8%b2%e6%9f%93%ef%bc%88%e5%b1%95%e7%8e%b0%e5%9c%a8%e7%94%a8%e6%88%b7%e7%ac%ac%e4%b8%80%e5%b1%8f%e7%9a%84%e6%b8%b2%e6%9f%93%e6%97%b6%e9%97%b4%ef%bc%89%e6%97%b6%e9%97%b4%e5%92%8c%e5%b0%8f%e4%ba%8e1s%e3%80%82%0a%e6%89%8b%e6%b7%98%e5%9b%a2%e9%98%9f%e5%9c%a8%e5%af%b9Weex%e8%bf%9b%e8%a1%8c%e6%80%a7%e8%83%bd%e4%bc%98%e5%8c%96%e6%97%b6%ef%bc%8c%e9%81%87%e5%88%b0%e4%ba%86%e5%be%88%e5%a4%9a%e9%97%ae%e9%a2%98%e5%92%8c%e6%8c%91%e6%88%98%ef%bc%9a%0aJS%20Bundle%e4%b8%8b%e8%bd%bd%e6%85%a2%ef%bc%8c%e5%8e%8b%e7%bc%a9%e5%90%8e60k%e5%b7%a6%e5%8f%b3%e5%a4%a7%e5%b0%8f%e7%9a%84JS%20Bundle%ef%bc%8c%e5%9c%a8%e5%85%a8%e7%bd%91%e7%8e%af%e5%a2%83%e4%b8%8b%ef%bc%8c%e5%b9%b3%e5%9d%87%e4%b8%8b%e8%bd%bd%e9%80%9f%e5%ba%a6%e5%a4%a7%e4%ba%8e800ms%ef%bc%88%e5%9c%a82G%2f3G%e4%b8%8b%e7%94%9a%e8%87%b3%e6%98%af2s%e4%bb%a5%e4%b8%8a%ef%bc%89%e3%80%82%20JS%e5%92%8cNative%e9%80%9a%e4%bf%a1%e6%95%88%e7%8e%87%e4%bd%8e%ef%bc%8c%e6%8b%96%e6%85%a2%e4%ba%86%e9%a6%96%e5%b1%8f%e5%8a%a0%e8%bd%bd%e6%97%b6%e9%97%b4%e3%80%82%0a%e6%9c%80%e7%bb%88%e6%83%b3%e5%88%b0%e7%9a%84%e5%8a%9e%e6%b3%95%e5%b0%b1%e6%98%af%e6%8a%8aJSFramework%e5%86%85%e7%bd%ae%e5%88%b0SDK%e4%b8%ad%ef%bc%8c%e8%be%be%e5%88%b0%e6%9e%81%e8%87%b4%e4%bc%98%e5%8c%96%e7%9a%84%e4%bd%9c%e7%94%a8%e3%80%82%0a%20%20%e5%ae%a2%e6%88%b7%e7%ab%af%e8%ae%bf%e9%97%aeWeex%e9%a1%b5%e9%9d%a2%e6%97%b6%ef%bc%8c%e9%a6%96%e5%85%88%e4%bc%9a%e7%bd%91%e7%bb%9c%e8%af%b7%e6%b1%82JS%20Bundle%ef%bc%8cJS%20Bundle%e8%a2%ab%e5%8a%a0%e8%bd%bd%e5%88%b0%e5%ae%a2%e6%88%b7%e7%ab%af%e6%9c%ac%e5%9c%b0%e5%90%8e%ef%bc%8c%e4%bc%a0%e5%85%a5JSFramework%e4%b8%ad%e8%bf%9b%e8%a1%8c%e8%a7%a3%e6%9e%90%e6%b8%b2%e6%9f%93%e3%80%82JS%20Framework%e8%a7%a3%e6%9e%90%e5%92%8c%e6%b8%b2%e6%9f%93%e7%9a%84%e8%bf%87%e7%a8%8b%e5%85%b6%e5%ae%9e%e6%98%af%e6%a0%b9%e6%8d%aeJS%20Bundle%e7%9a%84%e6%95%b0%e6%8d%ae%e7%bb%93%e6%9e%84%e5%88%9b%e5%bb%baVirtual%20DOM%20%e5%92%8c%e6%95%b0%e6%8d%ae%e7%bb%91%e5%ae%9a%ef%bc%8c%e7%84%b6%e5%90%8e%e4%bc%a0%e9%80%92%e7%bb%99%e5%ae%a2%e6%88%b7%e7%ab%af%e6%b8%b2%e6%9f%93%e3%80%82%0a%e7%94%b1%e4%ba%8eJSFramework%e5%9c%a8%e6%9c%ac%e5%9c%b0%ef%bc%8c%e6%89%80%e4%bb%a5%e5%b0%b1%e5%87%8f%e5%b0%91%e4%ba%86JS%20Bundle%e7%9a%84%e4%bd%93%e7%a7%af%ef%bc%8c%e6%af%8f%e4%b8%aaJS%20Bundle%e9%83%bd%e5%8f%af%e4%bb%a5%e5%87%8f%e5%b0%91%e4%b8%80%e9%83%a8%e5%88%86%e4%bd%93%e7%a7%af%ef%bc%8cBundle%e9%87%8c%e9%9d%a2%e5%8f%aa%e4%bf%9d%e7%95%99%e4%b8%9a%e5%8a%a1%e4%bb%a3%e7%a0%81%e3%80%82%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e4%b8%8b%e8%bd%bdBundle%e7%9a%84%e6%97%b6%e9%97%b4%e9%83%bd%e5%8f%af%e4%bb%a5%e8%8a%82%e7%ba%a610-20ms%e3%80%82%e5%a6%82%e6%9e%9cWeex%e9%a1%b5%e9%9d%a2%e9%9d%9e%e5%b8%b8%e5%a4%9a%ef%bc%8c%e9%82%a3%e4%b9%88%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e7%b4%af%e8%ae%a1%e8%b5%b7%e6%9d%a5%e8%8a%82%e7%ba%a6%e7%9a%84%e6%97%b6%e9%97%b4%e5%b0%b1%e5%be%88%e5%a4%9a%e4%ba%86%e3%80%82%20Weex%e8%bf%99%e7%a7%8d%e9%bb%98%e8%ae%a4%e5%b0%b1%e6%8b%86%e5%8c%85%e5%8a%a0%e8%bd%bd%e7%9a%84%e8%ae%be%e8%ae%a1%ef%bc%8c%e6%af%94ReactNative%e5%bc%ba%ef%bc%8c%e4%b9%9f%e5%b0%b1%e4%b8%8d%e9%9c%80%e8%a6%81%e8%80%83%e8%99%91%e4%b8%80%e7%9b%b4%e5%9b%b0%e6%89%b0ReactNative%e5%a4%b4%e7%96%bc%e7%9a%84%e6%8b%86%e5%8c%85%e7%9a%84%e9%97%ae%e9%a2%98%e4%ba%86%e3%80%82%0a%20%20%e6%95%b4%e4%b8%aa%e8%bf%87%e7%a8%8b%e4%b8%ad%ef%bc%8cJSFramework%e5%b0%86%e6%95%b4%e4%b8%aa%e9%a1%b5%e9%9d%a2%e7%9a%84%e6%b8%b2%e6%9f%93%e5%88%86%e6%8b%86%e6%88%90%e4%b8%80%e4%b8%aa%e4%b8%aa%e6%b8%b2%e6%9f%93%e6%8c%87%e4%bb%a4%ef%bc%8c%e7%84%b6%e5%90%8e%e9%80%9a%e8%bf%87JS%20Bridge%e5%8f%91%e9%80%81%e7%bb%99%e5%90%84%e4%b8%aa%e5%b9%b3%e5%8f%b0%e7%9a%84RenderEngine%e8%bf%9b%e8%a1%8cNative%e6%b8%b2%e6%9f%93%e3%80%82%e5%9b%a0%e6%ad%a4%ef%bc%8c%e5%b0%bd%e7%ae%a1%e5%9c%a8%e5%bc%80%e5%8f%91%e6%97%b6%e5%86%99%e7%9a%84%e6%98%af%20HTML%20%2f%20CSS%20%2f%20JS%ef%bc%8c%e4%bd%86%e6%9c%80%e5%90%8e%e5%9c%a8%e5%90%84%e4%b8%aa%e7%a7%bb%e5%8a%a8%e7%ab%af%ef%bc%88%e5%9c%a8iOS%e4%b8%8a%e5%af%b9%e5%ba%94%e7%9a%84%e6%98%afiOS%e7%9a%84Native%20UI%e3%80%81%e5%9c%a8Android%e4%b8%8a%e5%af%b9%e5%ba%94%e7%9a%84%e6%98%afAndroid%e7%9a%84Native%20UI%ef%bc%89%e6%b8%b2%e6%9f%93%e5%90%8e%e4%ba%a7%e7%94%9f%e7%9a%84%e7%bb%93%e6%9e%9c%e6%98%af%e7%ba%afNative%e9%a1%b5%e9%9d%a2%e3%80%82%20%e7%94%b1%e4%ba%8eJSFramework%e5%9c%a8%e6%9c%ac%e5%9c%b0SDK%e4%b8%ad%ef%bc%8c%e5%8f%aa%e7%94%a8%e5%9c%a8%e5%88%9d%e5%a7%8b%e5%8c%96%e7%9a%84%e6%97%b6%e5%80%99%e5%88%9d%e5%a7%8b%e5%8c%96%e4%b8%80%e6%ac%a1%ef%bc%8c%e4%b9%8b%e5%90%8e%e6%af%8f%e4%b8%aa%e9%a1%b5%e9%9d%a2%e9%83%bd%e6%97%a0%e9%a1%bb%e5%86%8d%e5%88%9d%e5%a7%8b%e5%8c%96%e4%ba%86%e3%80%82%e4%b9%9f%e8%bf%9b%e4%b8%80%e6%ad%a5%e7%9a%84%e6%8f%90%e9%ab%98%e4%ba%86%e4%b8%8eNative%e7%9a%84%e9%80%9a%e4%bf%a1%e6%95%88%e7%8e%87%e3%80%82%0a%20%20JSFramework%e5%9c%a8%e5%ae%a2%e6%88%b7%e7%ab%af%e7%9a%84%e4%bd%9c%e7%94%a8%e5%9c%a8%e5%89%8d%e5%87%a0%e7%af%87%e6%96%87%e7%ab%a0%e9%87%8c%e9%9d%a2%e4%b9%9f%e6%8f%90%e5%88%b0%e4%ba%86%e3%80%82%e5%ae%83%e7%9a%84%e5%9c%a8Native%e7%ab%af%e7%9a%84%e8%81%8c%e8%b4%a3%e6%9c%893%e4%b8%aa%ef%bc%9a%0a%20%e7%ae%a1%e7%90%86%e6%af%8f%e4%b8%aaWeex%20instance%e5%ae%9e%e4%be%8b%e7%9a%84%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%e3%80%82%20%e4%b8%8d%e6%96%ad%e7%9a%84%e6%8e%a5%e6%94%b6Native%e4%bc%a0%e8%bf%87%e6%9d%a5%e7%9a%84JS%20Bundle%ef%bc%8c%e8%bd%ac%e6%8d%a2%e6%88%90Virtual%20DOM%ef%bc%8c%e5%86%8d%e8%b0%83%e7%94%a8Native%e7%9a%84%e6%96%b9%e6%b3%95%ef%bc%8c%e6%9e%84%e5%bb%ba%e9%a1%b5%e9%9d%a2%e5%b8%83%e5%b1%80%e3%80%82%20%e5%93%8d%e5%ba%94Native%e4%bc%a0%e8%bf%87%e6%9d%a5%e7%9a%84%e4%ba%8b%e4%bb%b6%ef%bc%8c%e8%bf%9b%e8%a1%8c%e5%93%8d%e5%ba%94%e3%80%82%20%20%e6%8e%a5%e4%b8%8b%e6%9d%a5%ef%bc%8c%e7%ac%94%e8%80%85%e4%bb%8e%e6%ba%90%e7%a0%81%e7%9a%84%e8%a7%92%e5%ba%a6%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%b8%80%e4%b8%8bWeex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84JS%20Framework%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e4%b8%8a%e8%bf%b0%e7%9a%84%e7%89%b9%e6%80%a7%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.Weex%20JS%20Framework%20%e5%88%9d%e5%a7%8b%e5%8c%96%202.Weex%20JS%20Framework%20%e7%ae%a1%e7%90%86%e5%ae%9e%e4%be%8b%e7%9a%84%e7%94%9f%e5%91%bd%e5%91%a8%e6%9c%9f%203.Weex%20JS%20Framework%20%e6%9e%84%e5%bb%baVirtual%20DOM%204.Weex%20JS%20Framework%20%e5%a4%84%e7%90%86Native%e8%a7%a6%e5%8f%91%e7%9a%84%e4%ba%8b%e4%bb%b6%205.Weex%20JS%20Framework%20%e6%9c%aa%e6%9d%a5%e5%8f%af%e8%83%bd%e5%81%9a%e6%9b%b4%e5%a4%9a%e7%9a%84%e4%ba%8b%e6%83%85%20%20%e4%b8%80."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fweex_js_framework%2f&t=Weex%20%e4%b8%ad%e5%88%ab%e5%85%b7%e5%8c%a0%e5%bf%83%e7%9a%84%20JS%20Framework"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

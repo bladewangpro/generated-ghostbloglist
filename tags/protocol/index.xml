@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Protocol on prometheus</title><link>https://new.halfrost.com/tags/protocol/</link><description>Recent content in Protocol on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 11 Aug 2019 07:43:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/protocol/index.xml" rel="self" type="application/rss+xml"/><item><title>TLS Application-Layer Protocol Negotiation Extension</title><link>https://new.halfrost.com/tls_alpn/</link><pubDate>Sun, 11 Aug 2019 07:43:00 +0000</pubDate><guid>https://new.halfrost.com/tls_alpn/</guid><description>这篇文章我们主要来讨论讨论 Transport Layer Security (TLS) 握手中的 Application-Layer Protocol Negotiation 扩展。对于在同一 TCP 或 UDP 端口上支持多个应用程序协议的实例，此扩展允许应用程序层去协商将在 TLS 连接中使用哪个协议。
+一. Introduction 应用层协议越来越多地封装在 TLS 协议 [RFC5246] 中。这种封装使应用程序可以使用几乎整个全球 IP 基础结构中已经存在的现有安全通信链路的 443 端口。
+当单个服务器端端口号（例如端口 443）上支持多个应用程序协议时，客户端和服务器需要协商用于每个连接的应用程序协议。希望在不增加客户端和服务器之间的网络往返次数的情况下完成此协商，因为每次往返都会降低最终用户的体验。此外，允许基于协商的应用协议来选择证书将是有利的。
+本文指定了 TLS 扩展，该扩展允许应用程序层在 TLS 握手中协商协议的选择。HTTPbis WG 要求进行这项工作，以解决通过 TLS 进行 HTTP/2（[HTTP2]）的协商。但是，ALPN 有助于协商任意应用程序层协议。
+借助 ALPN，客户端会将支持的应用程序协议列表作为 TLS ClientHello 消息的一部分发送。服务器选择一个协议，并将所选协议作为 TLS ServerHello 消息的一部分发送。因此，可以在 TLS 握手中完成应用协议协商，而无需添加网络往返，并且允许服务器根据需要，将不同的证书与每个应用协议相关联。
+二. Application-Layer Protocol Negotiation 1. The Application-Layer Protocol Negotiation Extension 定义了一个新的扩展类型(&amp;ldquo;application_layer_protocol_negotiation(16)&amp;quot;)，客户端可以在其 “ClientHello” 消息中包含该扩展类型。
+enum { application_layer_protocol_negotiation(16), (65535) } ExtensionType; (&amp;ldquo;application_layer_protocol_negotiation(16)&amp;quot;) 扩展名的 &amp;ldquo;extension_data&amp;rdquo; 字段应包含 &amp;ldquo;ProtocolNameList&amp;rdquo; 值。</description></item><item><title>HPACK: Header Compression for HTTP/2</title><link>https://new.halfrost.com/http2_rfc7541/</link><pubDate>Sun, 21 Jul 2019 07:41:00 +0000</pubDate><guid>https://new.halfrost.com/http2_rfc7541/</guid><description>Table of Contents 1. Introduction 1.1. Overview 1.2. Conventions 1.3. Terminology 2. Compression Process Overview 2.1. Header List Ordering 2.2. Encoding and Decoding Contexts 2.3. Indexing Tables 2.3.1. Static Table 2.3.2. Dynamic Table 2.3.3. Index Address Space 2.4. Header Field Representation 3. Header Block Decoding 3.1. Header Block Processing 3.2. Header Field Representation Processing 4. Dynamic Table Management 4.1. Calculating Table Size 4.2. Maximum Table Size 4.</description></item><item><title>HTTP/2 HPACK 实际应用举例</title><link>https://new.halfrost.com/http2-hpack-example/</link><pubDate>Sun, 14 Jul 2019 07:37:00 +0000</pubDate><guid>https://new.halfrost.com/http2-hpack-example/</guid><description>在上篇文章中，具体说明了 HPACK 算法中的 8 种场景(7 种 Name-value 的场景 + 1 种动态表更新场景)。
+动态表大小更新有两种方式，一种是在 HEADERS 帧中直接修改(“001” 3 位模式开始)，另外一种方式是通过 SETTINGS 帧中的 SETTINGS_HEADER_TABLE_SIZE 中设置的。
+在介绍 HPACK 实际应用之前，需要先来看看静态表的定义和 HTTP/2 中霍夫曼编码的定义。
+一. 静态表定义 静态表（请参阅第 2.3.1 节）包含一个预定义且不可更改的 header 字段列表。
+静态表是根据流行网站使用的最频繁的 header 字段创建的，并添加了 HTTP/2 特定的伪 header 字段（请参见 [HTTP2]的 8.1.2.1 节）。对于具有一些频繁值的 header 字段，为每个这些频繁值添加了一个条目。对于其他标题字段，添加了带有空值的条目。
+表 1 列出了构成静态表的预定义 header 字段，并提供了每个条目的索引。
+Index Header Name Header Value 1 :authority 2 :method GET 3 :method POST 4 :path / 5 :path /index.</description></item><item><title>详解 HTTP/2 头压缩算法 —— HPACK</title><link>https://new.halfrost.com/http2-header-compression/</link><pubDate>Sun, 16 Jun 2019 07:31:00 +0000</pubDate><guid>https://new.halfrost.com/http2-header-compression/</guid><description>一. 简介 在 HTTP/1.1（请参阅[RFC7230]）中，header 字段未被压缩。随着网页内的请求数增长到需要数十到数百个请求的时候，这些请求中的冗余 header 字段不必要地消耗了带宽，从而显着增加了延迟。
+SPDY [SPDY] 最初通过使用 DEFLATE [DEFLATE] 格式压缩 header 字段来解决此冗余问题，事实证明，这种格式非常有效地表示了冗余 header 字段。但是，这种方法暴露了安全风险，如 CRIME（轻松实现压缩率信息泄漏）攻击所证明的安全风险（请参阅 [CRIME]）。
+本规范定义了 HPACK，这是一种新的压缩方法，它消除了多余的 header 字段，将漏洞限制到已知的安全攻击，并且在受限的环境中具有有限的内存需求。第 7 节介绍了 HPACK 的潜在安全问题。
+HPACK 格式特意被设计成简单且不灵活的形式。两种特性都降低了由于实现错误而引起的互操作性或安全性问题的风险。没有定义扩展机制；只能通过定义完整的替换来更改格式。
+1. 总览 本规范中定义的格式将 header 字段列表视为 name-value 对的有序集合，其中可以包括重复的对。名称和值被认为是八位字节的不透明序列，并且 header 字段的顺序在压缩和解压缩后保持不变。
+header 字段表将 header 字段映射到索引值，从而得到编码。这些 header 字段表可以在编码或解码新 header 字段时进行增量更新。
+在编码形式中，header 字段以字面形式表示或作为对 header 字段表中的一个 header 字段的引用。因此，可以使用引用和字面值的混合来编码 header 字段的列表。
+字面值可以直接编码，也可以使用静态霍夫曼编码(最高压缩比 8:5)。
+编码器负责决定将哪些 header 字段作为新条目插入 header 字段表中。解码器执行对编码器指定的 header 字段表的修改，从而在此过程中重建 header 字段的列表。这使解码器保持简单并可以与多种编码器互操作。
+附录C 中提供了使用这些不同的机制表示 header 字段的示例。
+注：在 HTTP/2 中，请求和响应标头字段的定义保持不变，仅有一些微小的差异：所有标头字段名称均为小写，请求行现在拆分成各个 :method、:scheme、:authority 和 :path 伪标头字段。</description></item><item><title>Hypertext Transfer Protocol Version 2 (HTTP/2)</title><link>https://new.halfrost.com/http2_rfc7540/</link><pubDate>Sun, 09 Jun 2019 07:28:00 +0000</pubDate><guid>https://new.halfrost.com/http2_rfc7540/</guid><description>Table of Contents 1. Introduction 2. HTTP/2 Protocol Overview 2.1. Document Organization 2.2. Conventions and Terminology 3. Starting HTTP/2 3.1. HTTP/2 Version Identification 3.2. Starting HTTP/2 for &amp;ldquo;http&amp;rdquo; URIs 3.2.1 HTTP2-Settings Header Field 3.3. Starting HTTP/2 for &amp;ldquo;https&amp;rdquo; URIs 3.4. Starting HTTP/2 with Prior Knowledge 3.5. HTTP/2 Connection Preface 4. HTTP Frames 4.1. Frame Format 4.2. Frame Size 4.3. Header Compression and Decompression 5. Streams and Multiplexing 5.</description></item><item><title>HTTP/2 中的常见问题</title><link>https://new.halfrost.com/http2-frequently-asked-questions/</link><pubDate>Sun, 26 May 2019 07:25:00 +0000</pubDate><guid>https://new.halfrost.com/http2-frequently-asked-questions/</guid><description>以下是有关 HTTP/2 的常见问题。
+一. 一般的问题 1. 为什么要修改 HTTP？ HTTP/1.1 在 Web 上已经服务了 15 年以上，但是它的缺点正在开始显现。加载网页比以往任何时候都需要更多资源(请参阅HTTP Archive’s page size statistics)，并且要高效地加载所有这些资源非常困难，因为事实上，HTTP 只允许每个 TCP 连接有一个未完成的请求。
+过去，浏览器使用多个 TCP 连接来发出并行请求。但是，这是有局限性的。如果使用的连接过多，则将适得其反(TCP 拥塞控制将被无效化，导致的用塞事件将会损害性能和网络)，并且从根本上讲是不公平的(因为浏览器会占用许多本不该属于它的资源)。同时，大量请求意味着“在线”上有大量重复数据。
+这两个因素都意味着 HTTP/1.1 请求有很多与之相关的开销。如果请求过多，则会影响性能。
+这使得业界误解了“最佳实践”，进行诸如 spriting 图片合并，data: inlining 内联数据，Domain Sharding 域名分片和 Concatenation 文件合并之类的事情。这些 hack 行为表明协议本身存在潜在问题，在使用的时候会出现很多问题。
+2. 谁制定了 HTTP/2？ HTTP/2 是由 IETF 的 HTTP 工作组开发的，该工作组维护 HTTP 协议。它由许多 HTTP 实现者，用户，网络运营商和 HTTP 专家组成。
+请注意，虽然我们的邮件列表托管在 W3C 网站上，但这并不是 W3C 的努力。但是，Tim Berners-Lee 和 W3C TAG 与 WG 的工作进度保持同步。
+大量的人为这项工作做出了贡献，最活跃的参与者包括来自诸如 Firefox，Chrome，Twitter，Microsoft 的 HTTP stack，Curl 和 Akamai 等“大型”项目的工程师，以及许多诸如 Python、Ruby 和 NodeJS 之类的 HTTP 实现者。</description></item><item><title>HTTP/2 中的注意事项</title><link>https://new.halfrost.com/http2-considerations/</link><pubDate>Sun, 19 May 2019 07:15:00 +0000</pubDate><guid>https://new.halfrost.com/http2-considerations/</guid><description>一. HTTP 值得关注的问题 本节概述了 HTTP 协议的属性，这些属性可提高互操作性，减少已知安全漏洞的风险或降低实现方在代码实现的时候出现歧义的可能性。
+1. 连接管理 HTTP/2 连接是持久的。为了获得最佳性能，建议客户端不要主动关闭连接。除非在确定不需要与服务器进行进一步通信(例如，当用户离开特定网页时)或服务器关闭连接的时候再去关闭连接。
+客户端不应该打开与给定主机和端口对的多个 HTTP/2 连接，其中主机包括是从 URI，选定的备用服务 ALT-SVC 或配置的代理中派生出来的。
+客户端可以创建其他连接作为替换，以替换可用的流标识符空间即将用完的连接（第 5.1.1 节），刷新 TLS 连接的密钥材料，或替换遇到错误的连接（第 5.4.1 节）。
+客户端可以对一个 IP 打开多个连接，并且 TCP 端口可以使用不同服务器标识 TLS-EXT 或者提供不同的 TLS 客户端证书，但应该避免使用相同的配置创建多个连接。
+鼓励服务器尽可能长时间地保持打开的连接，但如果有需要，允许服务器终止空闲连接。当任一端点选择关闭传输层 TCP 连接时，发起终止的端点应首先发送 GOAWAY 帧（第 6.8 节），这样做能够使得两个端点可以可靠地确定先前发送的帧是否已被处理并正常完成或者终止任何必要的剩余任务。
+(1). 连接重用 直接或通过使用 CONNECT 方法创建的隧道的方式（第 8.3 节）对原始服务器建立的连接，可以重用于具有多个不同 URI 权限组件的请求。只要原始服务器具有权限，就可以重用连接（第 10.1 节）。对于没有 TLS 的 TCP 连接，这取决于已解析为相同 IP 地址的主机。
+对于 &amp;ldquo;https&amp;rdquo; 资源，连接重用还取决于具有对 URI 中的主机的证书是否有效。服务器提供的证书必须要能通过客户端在 URI 中为主机建立新的 TLS 连接时将执行的任何检查。
+源服务器可能提供具有多个 &amp;ldquo;subjectAltName&amp;rdquo; 属性的证书或带有通配符的名称，其中一个对 URI 中的权限有效。例如，&amp;ldquo;subjectAltName&amp;rdquo; 为 &amp;ldquo;* .</description></item><item><title>HTTP/2 中的 HTTP 语义</title><link>https://new.halfrost.com/http2-http-semantics/</link><pubDate>Sun, 12 May 2019 07:04:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-semantics/</guid><description>HTTP/2 协议设计之初就为了与当前使用的 HTTP 尽可能兼容。这意味着，从应用程序的角度来看， 协议的功能基本没有变化。为了实现这一点，所有请求和响应语义被保留，虽然传达的语法那些语义已经改变了。
+因此，HTTP/1.1 中的语义和内容 [RFC7231]，条件请求 [RFC7232]，范围请求 [RFC7233]，缓存 [RFC7234] 和认证 [RFC7235] 的规范和要求同样适用于 HTTP/2。HTTP/1.1 消息语法和路由 [RFC7230] 的选定部分（例如 HTTP 和 HTTPS URI 方案）也适用于HTTP/2，但此协议的语义表达式在下文中定义。
+一. HTTP Request/Response Exchange 客户端使用先前未使用的流标识符在新流上发送 HTTP 请求 (第 5.1.1 节)。服务器在与请求相同的流上发送 HTTP 响应。
+HTTP消息（请求或响应）包括：
+仅用于响应，零个或多个 HEADERS 帧（每个帧后跟零个或多个 CONTINUATION 帧）包含信息（1xx）HTTP 响应的消息头（参见 [RFC7230] 第 3.2 节和[RFC7231] 第 6.2 节）， 一个包含消息头的 HEADERS 帧（后跟零个或多个 CONTINUATION 帧）（参见 [RFC7230] 第 3.2 节） 包含有效载荷主体 payload body 的零个或多个 DATA 帧（参见 [RFC7230] 第 3.3 节) 可选地，一个 HEADERS 帧，然后是零或更多 CONTINUATION 帧包含 trailer-part（如果有）（请参阅 [RFC7230] 第 4.</description></item><item><title>HTTP/2 中的帧定义</title><link>https://new.halfrost.com/http2-http-frames-definitions/</link><pubDate>Sun, 28 Apr 2019 07:02:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-frames-definitions/</guid><description>在 HTTP/2 的规范中定义了许多帧类型，每个帧类型由唯一的 8 位类型代码标识。每种帧类型在建立和管理整个连接或单个 stream 流中起到不同的作用。
+特定的帧类型的传输可以改变连接的状态。如果端点无法维持连接状态的同步视图，则无法在连接内继续成功通信。因此，重要的是端点必须共享的理解状态，在使用了任何给定帧的情况下，这些状态是如何受到它们影响的。
+Connection 连接:1 个 TCP 连接，包含 1 个或者多个 stream。所有通信都在一个 TCP 连接上完成，此连接可以承载任意数量的双向数据流。
+Stream 数据流：一个双向通信的数据流，包含 1 条或者多条 Message。每个数据流都有一个唯一的标识符和可选的优先级信息，用于承载双向消息。
+Message 消息：对应 HTTP/1.1 中的请求 request 或者响应 response，包含 1 条或者多条 Frame。
+Frame 数据帧：最小通信单位，以二进制压缩格式存放内容。来自不同数据流的帧可以交错发送，然后再根据每个帧头的数据流标识符重新组装。
+在 HTTP/1.1 中的一个消息是由 Start Line + header + body 组成的，而 HTTP/2 中一个消息是由 HEADER frame + 若干个 DATA frame 组成的，如下图：
+HTTP/2 所有性能增强的核心在于新的二进制分帧层，它定义了如何封装 HTTP 消息并在客户端与服务器之间传输。这里所谓的“层”，指的是位于套接字接口与应用可见的高级 HTTP API 之间一个经过优化的新编码机制：HTTP 的语义（包括各种动词、方法、标头）都不受影响，不同的是传输期间对它们的编码方式变了。 HTTP/1.x 协议以换行符作为纯文本的分隔符，而 HTTP/2 将所有传输的信息分割为更小的消息和帧，并采用二进制格式对它们编码。
+这样一来，客户端和服务器为了相互理解，都必须使用新的二进制编码机制：HTTP/1.x 客户端无法理解只支持 HTTP/2 的服务器，反之亦然。不过不要紧，现有的应用不必担心这些变化，因为客户端和服务器会替我们完成必要的分帧工作。</description></item><item><title>HTTP/2 中的 HTTP 帧和流的多路复用</title><link>https://new.halfrost.com/http2-http-frames/</link><pubDate>Sun, 21 Apr 2019 06:57:00 +0000</pubDate><guid>https://new.halfrost.com/http2-http-frames/</guid><description>上篇文章中讲的 HTTP/2 是如何建立连接的。这篇文章开始，我们来讨论讨论帧结构。一旦建立了 HTTP/2 连接后，端点就可以开始交换帧了。
+一. Frame Format 帧格式 HTTP/2 会发送有着不同类型的二进制帧，但他们都有如下的公共字段：Type, Length, Flags, Stream Identifier 和 frame payload。本规范中一共定义了 10 种不同的帧，其中最基础的两种分别对应于 HTTP 1.1 的 DATA 和 HEADERS。
+所有帧都以固定的 9 字节大小的头作为帧开始，后跟可变长度的有效载荷 payload。
++-----------------------------------------------+ | Length (24) | +---------------+---------------+---------------+ | Type (8) | Flags (8) | +-+-------------+---------------+-------------------------------+ |R| Stream Identifier (31) | +=+=============================================================+ | Frame Payload (0...) ... +---------------------------------------------------------------+ 帧头的字段定义如下：
+Length：
+帧有效负载的长度表示为无符号的 24 位整数。除非接收方为 SETTINGS_MAX_FRAME_SIZE 设置了较大的值(详情见这里)，否则不得发送大于2 ^ 14（16,384）的值。帧头的 9 个八位字节不包含在此长度值中。
+Type：</description></item><item><title>解开 HTTP/2 的面纱：HTTP/2 是如何建立连接的</title><link>https://new.halfrost.com/http2_begin/</link><pubDate>Sun, 14 Apr 2019 06:54:00 +0000</pubDate><guid>https://new.halfrost.com/http2_begin/</guid><description>超文本传输协议(HTTP)是一种非常成功的协议。 但是，HTTP/1.1 使用底层传输的方式([RFC7230]，第 6 节)，其中有几个特性对今天的应用程序性能有负面影响。
+特别是，HTTP/1.0 在给定的 TCP 连接上一次只允许一个请求未完成。HTTP/1.1 添加了请求流水线操作(request pipelining)，但这只是部分地解决了请求并发性，并且仍然受到队首阻塞的影响。因此，需要发出许多请求的 HTTP/1.0 和 HTTP/1.1 客户端使用多个连接到服务器以实现并发，从而减少延迟。
+此外，HTTP 头字段通常是重复且冗长的，导致不必要的网络流量以及导致初始 TCP 拥塞窗口被快速的填满。当在新的 TCP 连接上发出多个请求时，这可能导致过多的延迟。
+HTTP/2 通过定义了一个优化过的 HTTP 语义，它与底层连接映射，用这种方式来解决这些问题。具体而言，它允许在同一连接上交错请求和响应消息，并使用 HTTP 头字段的有效编码。它还允许对请求进行优先级排序，使更多重要请求更快地完成，从而进一步提高性能。
+HTTP/2 对网络更友好，因为与 HTTP/1.x 相比，可以使用更少的 TCP 连接。这意味着与其他流量和长连接的竞争减少，反过来可以更好地利用可用网络容量。最后，HTTP/2 还可以通过使用二进制消息帧来更有效地处理消息。
+HTTP/2 最大限度的兼容 HTTP/1.1 原有行为：
+在应用层上修改，基于并充分挖掘 TCP 协议性能。 客户端向服务端发送 request 请求的模型没有变化。 scheme 没有发生变化，没有 http2:// 使用 HTTP/1.X 的客户端和服务器可以无缝的通过代理方式转接到 HTTP/2 上。 不识别 HTTP/2 的代理服务器可以将请求降级到 HTTP/1.X。 一. HTTP/2 Protocol Overview HTTP/2 为 HTTP 语义提供了优化的传输。 HTTP/2 支持 HTTP/1.</description></item><item><title>HTTPS 温故知新（六） —— TLS 中的 Extensions</title><link>https://new.halfrost.com/https-extensions/</link><pubDate>Sun, 17 Mar 2019 03:08:00 +0000</pubDate><guid>https://new.halfrost.com/https-extensions/</guid><description>扩展是 TLS 比较重要的一个知识点。它的存在能让 Client 和 Server 在不更新 TLS 的基础上，获得新的能力。扩展的官方文档在 [RFC 6066] 中定义。Extension 像 TLS 中的一系列可水平扩展的插件。
+Client 在 ClientHello 中申明多个自己可以支持的 Extension，以向 Server 表示自己有以下这些能力，或者向 Server 协商某些协议。Server 收到 ClientHello 以后，依次解析 Extension，有些如果需要立即回应，就在 ServerHello 中作出回应，有些不需要回应，或者 Server 不支持的 Extension 就不用响应，忽略不处理。
+TLS 握手中的 Extension 有以下几个特点:
+Extension 不影响 TLS 握手的成功与否。Server 对 ClientHello 中的 Extension 有些不支持，忽略不处理即可，不影响握手的流程。
+ServerHello 中回应 Client 的 Extension 一定要是 ClientHello 中的 Extension 的子集(小于等于)。ServerHello 中禁止出现 ClientHello 中没有出现的 Extension。如果一个 Client 在 ServerHello 中收到一个扩展类型但在相关的 ClientHello 中并没有请求，它必须用一个 unsupported_extension 致命 alert 消息来丢弃握手。</description></item><item><title>HTTPS 温故知新（五） —— TLS 中的密钥计算</title><link>https://new.halfrost.com/https-key-cipher/</link><pubDate>Sun, 10 Mar 2019 03:00:00 +0000</pubDate><guid>https://new.halfrost.com/https-key-cipher/</guid><description>本篇文章我们来对比对比 TLS 1.2 和 TLS 1.3 中的密钥计算。
+一. TLS 1.2 中的密钥 在 TLS 1.2 中，有 3 种密钥：预备主密钥、主密钥和会话密钥(密钥块)，这几个密钥都是有联系的。
+struct { uint32 gmt_unix_time; opaque random_bytes[28]; } Random; struct { ProtocolVersion client_version; opaque random[46]; } PreMasterSecret; struct { uint8 major; uint8 minor; } ProtocolVersion; 对于 RSA 握手协商算法来说，Client 会生成的一个 48 字节的预备主密钥，其中前 2 个字节是 ProtocolVersion，后 46 字节是随机数，用 Server 的公钥加密之后通过 Client Key Exchange 子消息发给 Server，Server 用私钥来解密。对于 (EC)DHE 来说，预备主密钥是双方通过椭圆曲线算法生成的，双方各自生成临时公私钥对，保留私钥，将公钥发给对方，然后就可以用自己的私钥以及对方的公钥通过椭圆曲线算法来生成预备主密钥，预备主密钥长度取决于 DH/ECDH 算法公钥。预备主密钥长度是 48 字节或者 X 字节。
+主密钥是由预备主密钥、ClientHello random 和 ServerHello random 通过 PRF 函数生成的。主密钥长度是 48 字节。可以看出，只要我们知道预备主密钥或者主密钥便可以解密抓包数据，所以 TLS 1.</description></item><item><title>HTTPS 温故知新（四） —— 直观感受 TLS 握手流程(下)</title><link>https://new.halfrost.com/https_tls1-3_handshake/</link><pubDate>Sat, 02 Feb 2019 23:58:00 +0000</pubDate><guid>https://new.halfrost.com/https_tls1-3_handshake/</guid><description>在 HTTPS 开篇的文章中，笔者分析了 HTTPS 之所以安全的原因是因为 TLS 协议的存在。TLS 能保证信息安全和完整性的协议是记录层协议。(记录层协议在上一篇文章中详细分析了)。看完上篇文章的读者可能会感到疑惑，TLS 协议层加密的密钥是哪里来的呢？客户端和服务端究竟是如何协商 Security Parameters 加密参数的？这篇文章就来详细的分析一下 TLS 1.2 和 TLS 1.3 在 TLS 握手层上的异同点。
+TLS 1.3 在 TLS 1.2 的基础上，针对 TLS 握手协议最大的改进在于提升速度和安全性。本篇文章会重点分析这两块。
+先简述一下 TLS 1.3 的一些优化和改进:
+减少握手等待时间，将握手时间从 2-RTT 降低到 1-RTT，并且增加 0-RTT 模式。
+删除 RSA 密钥协商方式，静态的 Diffie-Hellman 密码套件也被删除了。因为 RSA 不支持前向加密性。TLS 1.3 只支持 (EC)DHE 的密钥协商算法。删除了 RSA 的方式以后，能有效预防心脏出血的攻击。所有基于公钥的密钥交换算法现在都能提供前向安全。TLS 1.3 规范中只支持 5 种密钥套件，TLS13-AES-256-GCM-SHA384、TLS13-CHACHA20-POLY1305-SHA256、TLS13-AES-128-GCM-SHA256、TLS13-AES-128-CCM-8-SHA256、TLS13-AES-128-CCM-SHA256，隐藏了非对称加密密钥协商算法，因为默认都是椭圆曲线密钥协商。
+删除对称加密中，分组加密和 MAC 导致的一些隐患。在 TLS1.3 之前的版本中，选择的是 MAC-then-Encrypt 方式。但是这种方式带来了一些漏洞，例如 BEAST，一系列填充 oracle 漏洞(Lucky 13 和 Lucky Microseconds)。CBC 模式和填充之间的交互也是 SSLv3 和一些 TLS 实现中广泛宣传的 POODLE 漏洞原因。在 TLS 1.</description></item><item><title>HTTPS 温故知新（三） —— 直观感受 TLS 握手流程(上)</title><link>https://new.halfrost.com/https_tls1-2_handshake/</link><pubDate>Sat, 26 Jan 2019 23:56:00 +0000</pubDate><guid>https://new.halfrost.com/https_tls1-2_handshake/</guid><description>在 HTTPS 开篇的文章中，笔者分析了 HTTPS 之所以安全的原因是因为 TLS 协议的存在。TLS 能保证信息安全和完整性的协议是记录层协议。(记录层协议在上一篇文章中详细分析了)。看完上篇文章的读者可能会感到疑惑，TLS 协议层加密的密钥是哪里来的呢？客户端和服务端究竟是如何协商 Security Parameters 加密参数的？这篇文章就来详细的分析一下 TLS 1.2 和 TLS 1.3 在 TLS 握手层上的异同点。
+TLS 1.3 在 TLS 1.2 的基础上，针对 TLS 握手协议最大的改进在于提升速度和安全性。本篇文章会重点分析这两块。
+一. TLS 对网络请求速度的影响 由于部署了 HTTPS，传输层增加了 TLS，对一个完成的请求耗时又会多增加一些。具体会增加几个 RTT 呢？
+先来看看一个请求从零开始，完整的需要多少个 RTT。假设访问一个 HTTPS 网站，用户从 HTTP 开始访问，到收到第一个 HTTPS 的 Response，大概需要经历一下几个步骤(以目前最主流的 TLS 1.2 为例)：
+流程 消耗时间 总计 1. DNS 解析网站域名 1-RTT 2. 访问 HTTP 网页 TCP 握手 1-RTT 3.</description></item><item><title>HTTPS 温故知新（二） —— TLS 记录层协议</title><link>https://new.halfrost.com/https_record_layer/</link><pubDate>Sun, 20 Jan 2019 05:57:00 +0000</pubDate><guid>https://new.halfrost.com/https_record_layer/</guid><description>TLS 记录协议是一个层次化的协议。在每一层中，消息都可能包含长度、描述、内容等字段。记录协议主要功能包括装载了被发送的消息，将数据分片为可管理的块，有选择地压缩数据，应用 MAC，加密，传输最终数据。接收到的数据被解密，验证，解压缩，重组，然后传递给高层应用。
+特别需要注意的是一条记录消息的类型 type 和长度 length 是不会被加密保护的，它们是明文的。如果这个信息本身是敏感的，应用设计者可能会希望采取一些措施(填充 padding，覆盖流量cover traffic) 来以减小信息泄露。
+这篇文章我们重点来讨论一下 TLS 1.2 和 TLS 1.3 在记录层上的不同。先从共同点开始。
+一、TLS 记录层的连接状态 一个 TLS 连接的状态就是 TLS 记录协议的操作环境。它指定了一个压缩算法，一个加密算法，一个 MAC 算法。此外，这些算法的参数必须是已知的：用于 connection 连接的读、写两个方向的 MAC 密钥和块加密密钥。逻辑上总是有4个状态比较突出：可读和可写状态，挂起的读和写状态。所有的记录协议都在可读写状态下处理。挂起状态的安全参数可以通过 TLS 握手协议来设置，而 ChangeCipherSpec 可以有选择地设置当前状态为挂起状态，在这种情况下适当的当前状态被设置，并被挂起状态所替代; 挂起状态随后会被重新初始化为一个空状态。将一个状态未经安全参数的初始化就设置为一个当前状态是非法的。初始当前状态一直会指定不使用加密，压缩或 MAC。
+ChangeCipherSpec 在官方 TLS 1.3 的规范中已经去掉了，但是为了兼容老的 TLS 1.2 或者网络中间件，这个协议还可能存在。
+简单来说，Client 和 Server 在建立链接之前都处于：
+pending read status 待读状态 pending write status 待写状态 一旦接收到对端的 ChangeCipherSpec 消息以后，Client 和 Server 就会开始转换为：
+current read status 可读状态 current write status 可写状态 在收到对端的 ChangeCipherSpec 之前，所有的 TLS 握手消息都是明文处理的，没有安全性和完整性的保护。一旦所有的加密参数都准备好，就会转换成可读可写状态，进入到了可读可写状态以后就会开始加密和完整性保护了。</description></item><item><title>HTTPS 温故知新（一） —— 开篇</title><link>https://new.halfrost.com/https-begin/</link><pubDate>Sun, 13 Jan 2019 05:31:00 +0000</pubDate><guid>https://new.halfrost.com/https-begin/</guid><description>一、为什么需要 HTTPS HTTP1.1 有以下安全性问题：
+使用明文(不加密)进行通信，内容可能会被窃听； 不验证通信方的身份，通信方的身份有可能遭遇伪装； 无法证明报文的完整性，报文有可能遭篡改。 由于 HTTP 设计之初没有考虑到这几点，所以基于 HTTP 的这些应用都会存在安全问题。
+1. 数据没有加密 基于 TCP/IP 的网络，网络各处都会存在被监听的风险。而且如果用 HTTP 协议进行通信，HTTP 本身没有加密功能，所以也无法做到对通信整体(使用 HTTP 协议通信的请求和响应的内容)进行加密。即，HTTP 报文使用明文(指未经过加密的报文)方式发送。
+像上图表示的那样，在互联网各个环节都可能被监听。就算是加密通信，也能被监听到通信内容，只不过监听者看到的是密文。要解决 HTTP 上面 3 个大的安全问题，第一步就是要先进行加密通信。于是在传输层增加了一层 SSL（Secure Sockets Layer 安全套接层）/ TLS (Transport Layer Security 安全层传输协议) 来加密 HTTP 的通信内容。
+HTTPS (HTTP Secure) 并不是新协议，而是 HTTP 先和 SSL（Secure Sockets Layer 安全套接层）/ TLS (Transport Layer Security 安全层传输协议) 通信，再由 SSL/TLS 和 TCP 通信。也就是说 HTTPS 使用了隧道进行通信。
+这个时候可能有同学会有疑问了，为什么不直接对 HTTP 报文进行加密，这样就不需要 SSL/TLS 这一层了。确实，如果直接对 HTTP 报文进行加密也可以做到加密通信，但是虽然解决了第一条，但是后面 2 条就不好解决了。</description></item><item><title>TLS &amp; DTLS Heartbeat Extension</title><link>https://new.halfrost.com/tls_heartbeat/</link><pubDate>Sun, 06 Jan 2019 05:14:00 +0000</pubDate><guid>https://new.halfrost.com/tls_heartbeat/</guid><description>这篇文章我们主要来讨论讨论 Transport Layer Security (TLS) 和 Datagram Transport Layer Security (DTLS) 中的 Heartbeat 扩展。
+Heartbeat 扩展为 TLS/DTLS 提供了一种新的协议，允许在不需要重协商的情况下，使用 keep-alive 功能。Heartbeat 扩展也为 path MTU (PMTU) 发现提供了基础。
+一. Introduction 这篇文章描述了 [RFC5246] 和 [RFC6347] 中定义的传输层安全性 (TLS) 和数据报传输层安全性 (DTLS) 协议的心跳扩展，以及它们对 [RFC3436]，[RFC5238] 和 [RFC6083] 中描述的特定传输协议的适应性。
+DTLS 协议设计的目的是，保护在不可靠的传输协议之上运行的流量数据。通常，此类协议没有会话管理。DTLS 层可用于确定对等方是否仍然 alive 的唯一机制是昂贵的重新协商机制，尤其是当应用程序使用单向流量时。此外，DTLS 需要执行路径 MTU (PMTU) 发现，但在不影响用户消息的传输的情况下，没有特定的消息类型来实现 PMTU 发现。
+TLS 是基于可靠的协议，但没有必要的功能可以在没有连续数据传输的情况下保持连接存活。
+本文中描述的心跳扩展克服了这些限制。用户可以使用新的 HeartbeatRequest 消息，该消息必须由具有 HeartbeartResponse 的对端立即应答。要执行 PMTU 发现，如 RFC4821 中所述，可以将包含填充的 HeartbeatRequest 消息用作探测包。
+二. Heartbeat Hello Extension Hello Extensions 表示支持 Heartbeats。对端不仅可以表明其实现支持Heartbeats，还可以选择是否愿意接收 HeartbeatRequest 消息并使用 HeartbeatResponse 消息进行响应或仅发送 HeartbeatRequest 消息。前者通过使用 peer_allowed_to_send 作为 HeartbeatMode 来表示;后者通过使用 peer_not_allowed_to_send 作为心跳模式来表示。每次重新谈判都可以改变这一决定。HeartbeatRequest 消息禁止发送到已经表明了 peer_not_allowed_to_send 的对端。如果已经表明了 peer_not_allowed_to_send 的端点收到 HeartbeatRequest 消息，则端点应该以静默方式丢弃该消息，并且可以发送 unexpected_message Alert 消息。</description></item><item><title>The Transport Layer Security (TLS) Protocol Version 1.3</title><link>https://new.halfrost.com/tls_1-3_rfc8446/</link><pubDate>Sun, 23 Dec 2018 01:10:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_rfc8446/</guid><description>Table of Contents 1. Introduction 1.1. Conventions and Terminology 1.2. Major Differences from TLS 1.2 1.3. Updates Affecting TLS 1.2 2. Protocol Overview 2.1. Incorrect DHE Share 2.2. Resumption and Pre-Shared Key (PSK) 2.3. 0-RTT Data 3. Presentation Language 这一章都是一些公认的表达语言，笔者觉得读者基本都清楚，所以就不翻译了。
+3.1. Basic Block Size 3.2. Miscellaneous 3.3. Numbers 3.4. Vectors 3.5. Enumerateds 3.6. Constructed Types 3.7. Constants 3.8. Variants 4. Handshake Protocol 4.</description></item><item><title>TLS 1.3 Overview of Security Properties</title><link>https://new.halfrost.com/tls_1-3_security_properties/</link><pubDate>Sun, 16 Dec 2018 01:07:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_security_properties/</guid><description>对 TLS 的完整安全性分析超出了本文的讨论范围。在本附录中，我们提供了对所需属性的非正式描述，以及对更加正式定义的研究文献中提出更详细工作的参考。
+我们将握手的属性与记录层的属性分开。
+一. Handshake TLS 握手是经过身份验证的密钥交换(AKE，Authenticated Key Exchange)协议，旨在提供单向身份验证(仅 Server)和相互身份验证(Client 和 Server)功能。在握手完成时，每一侧都输出其以下值：
+一组 &amp;ldquo;会话密钥&amp;rdquo;(从主密钥导出的各种密钥)，可以从中导出一组工作密钥。
+一组加密参数（算法等）。
+沟通各方的身份标识
+我们假设攻击者是一个活跃的网络攻击者，这意味着它可以完全控制双方通信的网络 [RFC3552]。即使在这些条件下，握手也应提供下面列出的属性。请注意，这些属性不一定是独立的，而是反映了协议消费者的需求的。
+建立相同的会话密钥：握手需要在握手的两边输出相同的会话密钥集，前提是它在每个端点上成功完成（参见 [CK01]，定义1，第1部分）
+会话密钥的保密性：共享会话密钥只能由通信方而不是攻击者所知（参见 [CK01]，定义 1，第 2 部分）。请注意，在单方面验证的连接中，攻击者可以与 Server 建立自己的会话密钥，但这些会话密钥与 Client 建立的会话密钥不同。
+对等身份验证：Client 对等身份的视图应该反映 Server 的身份标识。如果 Client 已通过身份验证，则 Server 的对等标识视图应与 Client 的标识匹配。
+会话密钥的唯一性：任何两个不同的握手都应该产生不同的，不相关的会话密钥。握手产生的各个会话密钥也应该是不同且独立的。
+降级保护：双方的加密参数应该相同，并且应该与在没有攻击的情况下双方进行通信的情况相同（参见 [BBFGKZ16]，定义 8 和 9）
+关于长期密钥的前向保密：如果长期密钥材料（在这种情况下，是基于证书的认证模式中的签名密钥或具有 (EC)DHE 模式的 PSK 中的外部/恢复 PSK）在握手后完成后泄露了，只要会话密钥本身已被删除，这不会影响会话密钥的安全性（参见 [DOW92]）。当在 &amp;ldquo;psk_ke&amp;rdquo; PskKeyExchangeMode 中使用 PSK 时，不能满足前向保密属性。
+密钥泄露模拟 (KCI，Key Compromise Impersonation) 抵抗性：在通过证书进行相互认证的连接中，泄露一个参与者的长期密钥不应该破坏该参与者在这个给定连接中对通信对端的认证（参见 [HGFS15]）。例如，如果 Client 的签名密钥被泄露，则不应该在随后的握手中模拟任意的 Server 和 Client 进行通信。</description></item><item><title>TLS 1.3 Backward Compatibility</title><link>https://new.halfrost.com/tls_1-3_backward_compatibility/</link><pubDate>Sun, 09 Dec 2018 01:02:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_backward_compatibility/</guid><description>TLS 协议为端点之间的版本协商提供了一个内置机制，让支持不同版本的 TLS 成为了可能。
+TLS 1.x 和 SSL 3.0 使用兼容的 ClientHello 消息。只要 ClientHello 消息格式保持兼容并且 Client 和 Server 都至少共同能支持一个协议版本，Server 就可以尝试使用未来版本 TLS 来回应 Client。
+TLS 的早期版本使用记录层版本号(TLSPlaintext.legacy_record_version 和 TLSCiphertext.legacy_record_version)用于各种目的。从 TLS 1.3 开始，此字段被废弃了。所有实现都必须忽略 TLSPlaintext.legacy_record_version 的值。TLSCiphertext.legacy_record_version 的值包含在不被保护的附加数据中，但可以忽略或者可以验证，以此匹配固定的常量值。只能使用握手版本执行版本协商(ClientHello.legacy_version 和 ServerHello.legacy_version 以及ClientHello，HelloRetryRequest 和 ServerHello 中的 &amp;ldquo;supported_versions&amp;rdquo; 扩展名)。为了最大限度地提高与旧的端点的互操作性，协商使用 TLS 1.0-1.2 的实现方应该将记录层版本号设置为协商版本，这样做是为了 ServerHello 和以后的所有记录。
+为了最大限度地兼容以前的非标准行为和配置错误的部署，所有实现方都应该支持基于本文档中的期望验证认证的方法，即使在处理先前的 TLS 版本的握手时也是如此(参见 第4.4.2.2节)。
+TLS 1.2 和之前版本支持 &amp;ldquo;Extended Master Secret&amp;rdquo; RFC7627 扩展，它将握手记录的大部分内容消化为主密钥。因为 TLS 1.3 总是从转录开始到 Server Finish 都在计算哈希，所以同时支持 TLS 1.3 和早期版本的实现方，无论是否使用了 TLS 1.3，都应该表明在其 API 中使用了Extended Master Secret extension。</description></item><item><title>TLS 1.3 Implementation Notes</title><link>https://new.halfrost.com/tls_1-3_implementation_notes/</link><pubDate>Sun, 02 Dec 2018 00:58:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_implementation_notes/</guid><description>一、Cipher Suites 对称密码套件定义了一对 AEAD 算法和与 HKDF 一起使用的哈希算法。密码套件名称遵循 命名惯例：
+CipherSuite TLS_AEAD_HASH = VALUE; +-----------+------------------------------------------------+ | Component | Contents | +-----------+------------------------------------------------+ | TLS | The string &amp;#34;TLS&amp;#34; | | | | | AEAD | The AEAD algorithm used for record protection | | | | | HASH | The hash algorithm used with HKDF | | | | | VALUE | The two-byte ID assigned for this cipher suite | +-----------+------------------------------------------------+ 此规范定义了以下用于 TLS 1.</description></item><item><title>TLS 1.3 Compliance Requirements</title><link>https://new.halfrost.com/tls_1-3_compliance_requirements/</link><pubDate>Sun, 25 Nov 2018 00:49:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_compliance_requirements/</guid><description>一. Mandatory-to-Implement Cipher Suites TLS 1.3 中有一些密码套件是强制必须实现的。
+在本文下面的描述中，“必须” 代表 MUST，“应该”代表 SHOULD。请读者注意措辞。
+在没有应用程序配置文件标准指定的情况下，除此以外都需要满足以下要求：
+符合 TLS 标准的应用程序必须实现 TLS_AES_128_GCM_SHA256 [GCM] 密码套件，应该实现TLS_AES_256_GCM_SHA384 [GCM] 和 TLS_CHACHA20_POLY1305_SHA256 [RFC8439] 密码套件（请参阅 附录 B.4）
+符合 TLS 标准的应用程序必须支持数字签名 rsa_pkcs1_sha256(用于证书)，rsa_pss_rsae_sha256（用于 CertificateVerify 和 证书）和ecdsa_secp256r1_sha256。一个符合 TLS 标准的应用程序必须支持与 secp256r1 的密钥交换(NIST P-256) 并且应该支持与 X25519 [RFC7748] 的密钥交换。
+二. Mandatory-to-Implement Extensions TLS 1.3 中有一些扩展是强制必须实现的。
+如果没有另外指定的应用程序配置文件标准，符合 TLS 标准的应用程序必须实现以下 TLS 扩展：
+支持的版本（&amp;ldquo;supported_versions&amp;rdquo;; 第 4.2.1 节）
+Cookie（&amp;ldquo;cookie&amp;rdquo;;第 4.2.2 节）
+签名算法（&amp;ldquo;signature_algorithms&amp;rdquo;; 第 4.2.3 节）</description></item><item><title>TLS 1.3 0-RTT and Anti-Replay</title><link>https://new.halfrost.com/tls_1-3_0-rtt/</link><pubDate>Sun, 18 Nov 2018 00:46:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_0-rtt/</guid><description>如 第2.3节 和 附录 E.5 所述，TLS不为 0-RTT 数据提供固有的重放保护。有两个潜在的威胁值得关注:
+通过简单地复制 0-RTT 数据并发送来进行重放攻击的网络攻击者
+网络攻击者利用 Client 重试行为使 Server 接收多个应用程序消息的副本。这种威胁在某种程度上已经存在，因为重视健壮性的 Client 通过尝试重试请求来响应网络错误。但是，0-RTT 为任何不维护全局一致服务器状态的 Server 系统添加了额外的维度。具体来说，如果服务器系统有多个 zone，zone B 中不接受来自 zone A 的 ticket，则攻击者可以将 A 中的 ClientHello 和 early data 复制到 A 和 B。对于 A，数据将在 0-RTT 内被接收，但对于 B，Server 将拒绝 0-RTT 数据，而是强制进行完全握手。如果攻击者 block 了 A 的 ServerHello，那么 Client 将会与 B 完成握手并且很可能重试一次请求，从而导致整个服务器系统上出现重复。
+通过共享状态可以防止第一类攻击，以保证最多接受一次 0-RTT 数据。Server 应该通过实现本文中描述的方法之一或通过等效方法提供一定级别的重放安全性。但是，据了解，由于操作问题，并非所有部署都将维持该级别的状态。因此，在正常操作中，Client 并不知道这些 Server 实际实现了哪些机制(如果有的话)，因此必须只发送他们认为可以安全重放的 early data。
+除了重放的直接影响之外，还存在一类攻击，即使通常被认为是幂等的操作也会被大量重放(定时攻击，资源限制耗尽等，如 附录 E.</description></item><item><title>TLS 1.3 Cryptographic Computations</title><link>https://new.halfrost.com/tls_1-3_cryptographic_computations/</link><pubDate>Sun, 11 Nov 2018 00:44:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_cryptographic_computations/</guid><description>TLS 握手建立一个或多个输入的 secrets，如下文所述，将这些 secrets 组合起来以创建实际工作密钥材料。密钥派生过程包含输入 secrets 和握手记录。请注意，由于握手记录包含来自 Hello 消息的随机值，因此即使使用相同的输入 secrets，任何给定的握手都将具有不同的流量 secrets，就像将相同的 PSK 用于多个连接的情况一样。
+一. Key Schedule 密钥派生过程使用 HKDF [RFC5869] 定义的 HKDF-Extract 和 HKDF-Expand 函数，以及下面定义的函数:
+HKDF-Expand-Label(Secret, Label, Context, Length) = HKDF-Expand(Secret, HkdfLabel, Length) Where HkdfLabel is specified as: struct { uint16 length = Length; opaque label&amp;lt;7..255&amp;gt; = &amp;#34;tls13 &amp;#34; + Label; opaque context&amp;lt;0..255&amp;gt; = Context; } HkdfLabel; Derive-Secret(Secret, Label, Messages) = HKDF-Expand-Label(Secret, Label, Transcript-Hash(Messages), Hash.length) Transcript-Hash 和 HKDF 使用的 Hash 函数是密码套件哈希算法。Hash.length 是其输出长度(以字节为单位)。消息是表示的握手消息的串联，包括握手消息类型和长度字段，但不包括记录层头。请注意，在某些情况下，零长度 context（由 &amp;quot;&amp;rdquo; 表示）传递给 HKDF-Expand-Label。本文档中指定的 labels 都是 ASCII 字符串，不包括尾随 NUL 字节。</description></item><item><title>TLS 1.3 Alert Protocol</title><link>https://new.halfrost.com/tls_1-3_alert_protocol/</link><pubDate>Sun, 04 Nov 2018 00:35:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_alert_protocol/</guid><description>TLS 提供 alert 内容类型用来表示关闭信息和错误。与其他消息一样，alert 消息也会根据当前连接状态的进行加密。
+Alert 消息传达警报的描述以及在先前版本的 TLS 中传达消息严重性级别的遗留字段。警报分为两类：关闭警报和错误警报。在 TLS 1.3 中，错误的严重性隐含在正在发送的警报类型中，并且可以安全地忽略 &amp;ldquo;level&amp;rdquo; 字段。&amp;ldquo;close_notify&amp;rdquo; alert 用于表示连接从一个方向开始有序的关闭。收到这样的警报后，TLS 实现方应该表明应用程序的数据结束。
+错误警报表示关闭连接中断(参见第6.2节)。收到错误警报后，TLS 实现方应该向应用程序表示出现了错误，并且不允许在连接上发送或接收任何其他数据。Server 和 Client 必须忘记在失败的连接中建立的秘密值和密钥，但是与会话 ticket 关联的 PSK 除外，如果可能，应该丢弃它们。
+第 6.2 节中列出的所有警报必须与 AlertLevel = fatal 一起发送，并且在收到时必须将其视为错误警报，而不管消息中的 AlertLevel 如何。未知的警报类型必须都应该被视为错误警报。
+注意：TLS 定义了两个通用警报(请参阅第6节)，以便在解析消息失败时使用。对端接收到了语法无法解析的消息(例如，消息具有超出消息边界的长度或包含超出范围的长度)必须以 &amp;ldquo;decode_error&amp;rdquo; 警报终止连接。对端接收到了语法正确，但是语义无效的消息(例如，p-1 的 DHE 共享或无效的枚举)必须使用 &amp;ldquo;illegal_parameter&amp;rdquo; 警报终止连接。
+enum { warning(1), fatal(2), (255) } AlertLevel; enum { close_notify(0), unexpected_message(10), bad_record_mac(20), record_overflow(22), handshake_failure(40), bad_certificate(42), unsupported_certificate(43), certificate_revoked(44), certificate_expired(45), certificate_unknown(46), illegal_parameter(47), unknown_ca(48), access_denied(49), decode_error(50), decrypt_error(51), protocol_version(70), insufficient_security(71), internal_error(80), inappropriate_fallback(86), user_canceled(90), missing_extension(109), unsupported_extension(110), unrecognized_name(112), bad_certificate_status_response(113), unknown_psk_identity(115), certificate_required(116), no_application_protocol(120), (255) } AlertDescription; struct { AlertLevel level; AlertDescription description; } Alert; 一.</description></item><item><title>TLS 1.3 Record Protocol</title><link>https://new.halfrost.com/tls_1-3_record_protocol/</link><pubDate>Sun, 28 Oct 2018 00:22:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_record_protocol/</guid><description>TLS 记录协议接收要传输的消息，将数据分段为可管理的块，保护记录并传输结果。收到的数据经过验证，解密，重新组装，然后交付给更上层的协议。
+TLS 记录允许同一层记录层上复用多个更高层的协议。本文档指定了 4 种内容类型：handshake，application_data，alert 和 change_cipher_spec。change_cipher_spec 记录仅用于兼容性目的。
+实现方可能会在发送或接收第一个 ClientHello 消息之后，和，在接收到对等方的 Finished 消息之前的任何时间接收由单字节值 0x01 组成的未加密的类型 change_cipher_spec 的记录，如果接收到了这种记录，则必须简单地丢弃它而不进行进一步处理。请注意，此记录可能出现在握手中，这时候实现方是期望保护记录的，因此有必要在尝试对记录进行去除保护之前检测此情况。接收到任何其他 change_cipher_spec 值或接收到受保护的 change_cipher_spec 记录的实现方必须使用 &amp;ldquo;unexpected_message&amp;rdquo; alert 消息中止握手。如果实现方检测到在第一个 ClientHello 消息之前或在对等方的 Finished 消息之后收到的 change_cipher_spec 记录，则必须将其视为意外记录类型(尽管无状态的 Server 可能无法将这些情况与允许的情况区分开)
+除非协商了某些扩展，否则实现方绝不能发送本文档中未定义的记录类型。如果 TLS 实现方收到意外的记录类型，它必须使用 &amp;ldquo;unexpected_message&amp;rdquo; alert 消息终止连接。新记录内容类型值由 IANA 在 TLS ContentType 注册表中分配，具体见第 11 节。
+一. Record Layer 记录层将信息块分段为 TLSPlaintext 记录，TLSPlaintext 中包含 2^14 字节或更少字节块的数据。根据底层 ContentType 的不同，消息边界的处理方式也不同。任何未来的新增的内容类型必须指定适当的规则。请注意，这些规则比 TLS 1.2 中强制执行的规则更加严格。
+握手消息可以合并为单个 TLSPlaintext 记录，或者在几个记录中分段，前提是：
+握手消息不得与其他记录类型交错。也就是说，如果握手消息被分成两个或多个记录，则它们之间不能有任何其他记录。
+握手消息绝不能跨越密钥更改。实现方必须验证密钥更改之前的所有消息是否与记录边界对齐; 如果没有，那么他们必须用 &amp;ldquo;unexpected_message&amp;rdquo; alert 消息终止连接。因为 ClientHello，EndOfEarlyData，ServerHello，Finished 和 KeyUpdate 消息可以在密钥更改之前立即发生，所以实现方必须将这些消息与记录边界对齐。</description></item><item><title>TLS 1.3 Handshake Protocol</title><link>https://new.halfrost.com/tls_1-3_handshake_protocol/</link><pubDate>Sun, 21 Oct 2018 00:15:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_handshake_protocol/</guid><description>握手协议用于协商连接的安全参数。握手消息被提供给 TLS 记录层，在记录层它们被封装到一个或多个 TLSPlaintext 或 TLSCiphertext 中，它们按照当前活动连接状态进行处理和传输。
+enum { client_hello(1), server_hello(2), new_session_ticket(4), end_of_early_data(5), encrypted_extensions(8), certificate(11), certificate_request(13), certificate_verify(15), finished(20), key_update(24), message_hash(254), (255) } HandshakeType; struct { HandshakeType msg_type; /* handshake type */ uint24 length; /* remaining bytes in message */ select (Handshake.msg_type) { case client_hello: ClientHello; case server_hello: ServerHello; case end_of_early_data: EndOfEarlyData; case encrypted_extensions: EncryptedExtensions; case certificate_request: CertificateRequest; case certificate: Certificate; case certificate_verify: CertificateVerify; case finished: Finished; case new_session_ticket: NewSessionTicket; case key_update: KeyUpdate; }; } Handshake; 协议消息必须按照一定顺序发送(顺序见下文)。如果对端发现收到的握手消息顺序不对，必须使用 “unexpected_message” alert 消息来中止握手。</description></item><item><title>TLS 1.3 Introduction</title><link>https://new.halfrost.com/tls_1-3_introduction/</link><pubDate>Sat, 13 Oct 2018 23:58:00 +0000</pubDate><guid>https://new.halfrost.com/tls_1-3_introduction/</guid><description>一、TLS 协议的目的 TLS 的主要目标是为通信的双方提供一个安全的通道。对下层传输的唯一要求是一个可靠的有序的数据流。
+认证： 通道的 Server 端应该总是被认证的；Client 端是可选的被认证。认证可以通过非对称算法（例如，RSA, 椭圆曲线数字签名算法(ECDSA)，或 Edwards 曲线数字签名算法(EdDSA)）完成，或通过一个对称的预共享密钥（PSK)。
+机密性：在建立完成的通道上发送的数据只能对终端是可见的。TLS 协议并不能隐藏它传输的数据的长度，但是终端能够通过填充 TLS 记录来隐藏长度，以此来提升针对流量分析技术的防护。
+完整性：在建立完成的通道上面发送数据，不可能存在数据被篡改还没有发现的情况。即数据一旦被修改，对端会立即发现这个篡改。
+以上 3 点是必须要保证的，即使网络攻击者已经完全掌握了网络，发生了 RFC 3552 中发生的情况。关于 TLS 安全问题，下面有单独的文章专门再讨论。
+二、TLS 协议的组成 TLS 协议主要由 2 大组件组成：
+握手协议
+握手协议主要需要处理在通信双方之间进行认证的所有流程。包括密钥协商，参数协商，建立共享密钥。握手协议被设计用来抵抗篡改；如果连接未受到攻击，则活动攻击者不应该强制对等方协商不同的参数。
+记录协议
+使用由握手协议建立的参数来保护通信双方的流量。记录协议将流量分为一系列记录，每个记录独立地使用密钥来保护机密性。
+TLS 是一个独立的协议；高层协议可以透明地位于 TLS 之上。然而，TLS 标准并未指定协议如何增强 TLS 的安全，如何发起 TLS 握手以及如何理解认证证书交换，这些都留给运行在 TLS 之上的协议的设计者和实现者来判断。
+本文档定义了 TLS 1.3 版。虽然 TLS 1.3 不是直接的与之前的版本兼容，所有版本的TLS都包含一个版本控制机制，即允许客户端和服务器通过协商，选出通信过程中采用的 TLS 版本。</description></item><item><title>秘密的实质——密钥</title><link>https://new.halfrost.com/cipherkey/</link><pubDate>Sun, 07 Oct 2018 05:04:00 +0000</pubDate><guid>https://new.halfrost.com/cipherkey/</guid><description>一、为什么需要密钥？ 密码的本质就是将较长的秘密——消息——变成较短的秘密——密钥。
+—————布鲁斯 ● 施耐尔《网络信息安全的真相》
+在前面几篇文章中，我们知道对称密码，公钥密码，消息认证码，数字签名，公钥证书，这些密码技术都需要一个密钥。密钥保护了信息的机密性。密钥最重要的是密钥空间的大下。密钥的长度决定了密钥空间的大小。密钥空间越大，暴力破解越困难。
+二、什么是密钥？ 密钥仅仅是一个比特序列，但是它所具有的价值和明文等价。密钥的种类主要分为以下几种：
+1. 对称密码的密钥和公钥密码的密钥 在对称加密中，加密和解密都用同一个密钥，也被称为共享密钥密码。
+在公钥密码中，加密和解密都是不同的密钥。用于加密且能公开的密钥称为公钥。用于解密且不能公开的密钥称为私钥。
+2. 消息认证码的密钥和数字签名的密钥 在消息认证码中，发送者和接收者使用共享的密钥来进行认证。消息认证码只有持有合法密钥的人才能计算出来。通过对比消息认证码就可以识别消息是否被篡改或者伪装。
+在数字签名中，签名的生成和验证使用不同的密钥。只有持有私钥的本人才能够生成签名，但由于验证签名使用的是公钥，因此任何人都能够验证签名。
+3. 用于保密的密钥和用于认证的密钥 对称密钥和公钥密码的密钥都是用于确保机密性的密钥。如果不知道用于解密的合法密钥，就可以达到保密明文的效果。
+消息认证码和数字签名所使用的密钥是用于认证的密钥。如果不知道合法的密钥，就无法篡改数据，也无法伪装。
+4. 会话密钥和主密钥 在 HTTPS 中 TLS 握手中仅限于本次通信的一次性密钥，下次就不能使用了。这种每次通信只能使用一次的密钥叫会话密钥(session key)。
+由于每次会话都会产生新的会话密钥，即使密钥被窃听了，也只会影响本次会话。如果每次都使用相同的密钥叫主密钥(master key)。
+5. 用于加密内容的密钥和用于加密密钥的密钥 加密的对象是用户直接使用的信息(内容)，这个时候密钥被称为CEK(Contents Encrypting Key)。用于加密密钥的密钥被称为KEK(Key Encrypting Key)。
+会话密钥被作为 CEK 使用。主密钥被作为 KEK 使用的。
+三、生成、配送、更新密钥 1. 生成密钥 用随机数生成密钥。生成密钥的最好办法就是使用随机数。 用口令生成密钥。通常为了防止字典攻击，需要在口令上附加一串称为盐(salt)的随机数。这种方法称为基于口令的密码。 2. 配送密钥 事先共享密钥 使用密钥分配中心 使用公钥密码 Diffie-Hellman 密钥交换 3. 更新密钥 这种技术通常被用在共享密钥中。在共享密钥进行通信的过程中，定期(例如，每发送 1000 个字)改变密钥。当然，发送者和接收者改变的步调要一致。</description></item><item><title>无法预测的根源——随机数</title><link>https://new.halfrost.com/random_number/</link><pubDate>Sun, 23 Sep 2018 04:30:01 +0000</pubDate><guid>https://new.halfrost.com/random_number/</guid><description>一、为什么需要随机数？ 在之前文章说提到了好多密码学技术，在这些技术中，都会看见随机数的身影。
+生成密钥 用于对称密码和消息认证码 生成公钥密码 用于生成公钥密码和数字签名 生成初始化向量 IV 用于分组密码中的 CBC、CFB、OFB 模式 生成 nonce 用于防御重放攻击和分组密码中的 CTR 模式 生成盐
+用于基于口令密码的 PBE 等 用随机数的目的是为了提高密文的不可预测性，让攻击者无法一眼看穿。
+二、什么是随机数？ 给随机数下一个严密的定义很难。只能从性质去区分一些随机数的种类。
+随机性 —— 不存在统计学偏差，是完全杂乱的数列 不可预测性 —— 不能从过去的数列推测出下一个出现的数 不可重现性 —— 除非将数列本身保存下来，否则不能重现相同的数列 随机性 不可预测性 不可重现性 备注 生成器 弱伪随机数 ✅ ❌ ❌ 只具备随机性 不可用于密码技术❌ 伪随机数生成器 PRNG (Preudo Random Number Generator) 强伪随机数 ✅ ✅ ❌ 具备不可预测性 可用于密码技术✅ 密码学伪随机数生成器 CPRNG (Cryptography secure Preudo Random Number Generator) 真随机数 ✅ ✅ ✅ 具备不可重现性 可用于密码技术✅ 真随机数生成器 TRNG (True Random Number Generator) 密码技术上使用到的随机数至少要达到不可预测性这一等级，即至少是强伪随机数，最好是真随机数。</description></item><item><title>随处可见的公钥证书</title><link>https://new.halfrost.com/digital_certificate/</link><pubDate>Sat, 15 Sep 2018 09:01:00 +0000</pubDate><guid>https://new.halfrost.com/digital_certificate/</guid><description>一、为什么需要公钥证书？ 在上一篇文章中我们谈到了数字签名，数字签名可以识别篡改或者发送者身份是否被伪装，也就是验证消息的完整性，还可以对消息进行认证。还可以防止抵赖。看似一切完美，但是他的弱点也在他的优点上，数字签名需要用公钥来确认发送者的身份。
+我们需要从一个没有被伪装的发送者那里得到没有被篡改的公钥才行，为了验证得到的公钥是否合法，必须使用公钥证书。证书是将公钥当做一条消息，由一个可信的第三方对其签名后所得到的公钥。
+二、什么是公钥证书？ 公钥证书(Public-Key Certificate，PKC)记录着个人信息(姓名、组织、邮箱地址等个人信息)和个人公钥，并由认证机构(Certification Authority、Certifying Authority，CA)施加数字签名。公钥证书也简称为证书(certificate)。
+三、公钥证书标准规范 目前使用最广泛的是 ITU(International Telecommunication Union，国际电信联盟) 和 ISO(International Organization for Standardization，国际标准化组织) 制定的 X.509 规范(RFC3280)。基本上大多程序都是遵循这种证书生成和交换的标准规范。
+四、公钥证书应用场景 用一个例子来展现证书的应用场景。下图是 Alice 向 Bob 发送密文的场景，在生成密文时所使用的 Bob 的公钥是通过认证机构获取的。
+上图中步骤 1 - 7 是按照顺序来标识的。针对特殊步骤增加一些说明：
+第一步中，Bob 的密钥可以是自己生成的，也可以由认证机构代为生成。 第三步中，认证机构在拿到 Bob 的公钥以后会开始认证这个公钥是否是 Bob 的。有三种验证等级，Class 1 通过邮箱中的邮件进行确认本人身份；Class 2 通过第三方数据库来确认本人身份；Class 3 通过当面认证和身份来确认本人身份。等级越高，身份认证越严格。 第五步中，Alice 使用认证机构 Trent 的公钥对证书中的数字签名进行验证，如果验证成功，就确认了证书中所包含的公钥是 Bob 的。 第六步中，图上虽然标识的是“公钥加密”的方式，但实际上这一步用混合加密的方式也是可以的。 上图中的步骤 1、2、3、4 并不是每次都需要这样请求。1、2、3 步只需要在注册新的公钥的时候才会进行。第四步仅在第一次需要使用公钥密码的时候需要，之后保存到了电脑中，就不用每次都请求公钥了。
+五、什么是公钥基础设施 PKI？ 公钥基础设施(Public-Key Infrastructure)是为了能够更有效的运用公钥而制定的一系列规范和规格的总称。英文缩写 PKI。
+PKI 是一个总称，并非指某一个单独的规范或规格。RSA 公司制定的 PKCS(Public-Key Cryptography Standards，公钥密码标准)系列规范也是 PKI 的一种，互联网规格 RFC(Request for Comments)也是 PKI 的一种，X.</description></item><item><title>消息认证码是怎么一回事？</title><link>https://new.halfrost.com/message_authentication_code/</link><pubDate>Sat, 01 Sep 2018 12:01:00 +0000</pubDate><guid>https://new.halfrost.com/message_authentication_code/</guid><description>一、为什么需要消息认证码？ 还是举一个银行汇钱的例子：A 向 B 汇钱 100 万元。如果攻击者从中攻击，篡改这条消息，就可能变成 A 向攻击者汇钱 1000 万元。这里针对汇款消息，需要注意两个问题：消息的 “完整性” 和 “认证” 。
+消息的完整性，就叫消息的一致性，这个可以用上一篇文章中讲的消息指纹来判断，通过对比单向散列函数的 hash 值来判断这条消息的完整性，有没有被篡改。
+消息的认证，指的是，消息是否来自正确的发送者。如果确认汇款请求确实来自 A，就相当于对消息进行了认证，代表消息没有被伪装。
+如果同时需要识别出篡改和伪装，即要确认消息的完整性，又要对消息进行认证，这种情况下就需要消息认证码。
+二、什么是消息认证码？ 消息认证码(Message Authentication Code) 是一种确认完整性并进行认证的技术，简称 MAC。
+使用消息认证码可以确认自己收到的消息是否就是发送者的本意，也就是说可以判断消息是否被篡改，是否有人伪装成发送者发送了这条消息。
+消息认证码也是密码学家工具箱中的 6 大工具之一：对称密码、公钥密码、单向散列函数、消息认证码、数字签名和伪随机数生成器。
+消息认证码的输入包括任意长度的消息和一个发送者与接收者之间的共享密钥。输出固定长度的数据，输出的数据就是 MAC 值。
+消息认证码和单向散列函数的区别就在有没有这个共享密钥上了。所以消息认证码就是利用共享密钥进行认证的。消息认证码和单向散列函数的散列值一样，如果消息发生了 1 比特的变化，MAC 值也会发生变化。所以消息认证码正是用这个性质来进行完整性的。
+所以消息认证码可以理解为消息认证码是一种与密钥相关联的单向散列函数。
+三、消息认证码的使用步骤 如果银行之间汇款采用消息认证码，流程会如下：
+大体流程和验证单向散列函数基本一致，只不过消息认证码需要共享密钥来解出 MAC 值。
+不过消息认证码的共享密钥存在密钥配送问题。密钥在配送中不能被窃听者窃取。解决密钥配送问题需要用到上上篇文章中讲的公钥密码、Diffie-Hellman 密钥交换等其他安全的方式配送密钥。
+四、消息认证码使用现状 SWIFT（Society for Worldwide Interbank Financial Telecommunications&amp;mdash;环球同业银行金融电讯协会) 是一个目的为国际银行间的交易保驾护航的协会。银行和银行间通过 SWIFT 来传递交易消息，SWIFT 会利用消息认证码校验消息的完整性和对消息的验证。消息认证码的共享密钥是由人进行配送的。
+IPsec 是对 IP 协议增加安全性的一种方式，在 IPsec 中，对消息的认证和完整性校验也是用消息认证码的方式。
+SSL/TLS 对通信内容的认证和完整性校验也用了消息认证码。</description></item><item><title>消息的“指纹”是什么？</title><link>https://new.halfrost.com/one_way_hash/</link><pubDate>Sun, 26 Aug 2018 02:49:00 +0000</pubDate><guid>https://new.halfrost.com/one_way_hash/</guid><description>一、为什么需要“指纹”？ 在警察破案的时候，会经常接触到犯人的指纹。指纹能从生物的角度上判断它是不是某一个人。这么看来，指纹相当于一个人独一无二的东西，通过他就能找到对应唯一的一个人。
+在网络传输过程中，可能存在中间人。那人们就有了这样的想法：能不能找到消息的“指纹”？这样就可以知道消息是谁发送的，从而避免中间人的攻击。
+二、单向散列函数 开发者日常工作中会使用 git 命令。git diff 命令可以比对 2 次 commit，展示出两者不同的地方。那么相同的文件不会展示。那么 git diff 是如何对比两个文件的呢？如果一个文件巨大，能否有一个简单快捷的方式能判断文件是否被更改了呢？
+这个时候文件的“指纹”的作用就凸显出来了。从一一比对 2 个文件的每一行，到现在只需要比对文件的“指纹”信息，如果一个指纹信息就能检查文件完整性，该多么方便啊！
+单向散列函数就是一种采集文件“指纹”的技术。单向散列函数生成的散列值，就相当于消息的“指纹”。单向散列函数(one-way hash function)有一个输入和一个输出，其中输入成为消息(message)，输出成为散列值(hash value)。单向散列函数可以根据消息的内容计算散列值，而散列值就可以被用来检查消息的完整性。
+这个的消息可以是更加广义的消息，可以是图片，也可以是声音，单向散列函数并不需要关心消息实际代表的含义。在单向散列函数的眼里只有 0、1、0、1 比特流。
+单向散列函数计算出来的散列值的长度和消息的长短没有关系。以 SHA-256 为例，它计算出来的散列值永远都是 256 比特(32 字节)。
+单向散列函数有以下几点性质：
+1. 根据任意长度的消息计算出固定长度的散列值 2. 能够快速计算出散列值 3. 消息不同，散列值也不同 最后一点性质是最关键的。如果 2 个文件不同，算出的散列值却是相同的，那么单向散列函数的意义也就不存在了。实际上，两个不同的消息产生同一个散列值的情况称为**“碰撞(collision)”**。散列函数需要确保在不人为干涉的情况下，不存在碰撞的情况。密码学中所使用的单向散列函数，都需要具备抗碰撞性质。
+单向散列函数必须要确保要找到和该条消息具有相同散列值的另外一条消息是非常困难的，这一性质称为弱抗碰撞性，单向散列函数都必须具备弱抗碰撞性。
+要找到具有相同散列值但互不相同的两条消息是非常困难的，这一性质称为强抗碰撞性。这里的散列值可以是任意值。
+密码技术中所使用的单向散列函数，不仅要具备弱抗碰撞性，还必须具备强抗碰撞性。
+这里的弱抗碰撞性和强抗碰撞性是相对的概念，并不是说“很弱而不具备抗碰撞性”！
+4. 单向性 单向散列函数必须具备单向性，单向性指的是无法通过散列值反算出消息的性质。
+如上图所示，反算出消息的路是不通的。这也就是单向散列函数，单向两个字的来源。需要特别注意的一点是，单向散列函数并不是一种加密，所以它是无法通过解密的方法得到原消息的。
+单向散列函数也称为消息摘要函数(message digest function)、哈希函数、杂凑函数。输入单向函数的消息也称为原像(pre-image)。单向散列函数输出的散列值也称为消息摘要(message digest)或者指纹(fingerprint)。完整性也被称为一致性。
+对于攻击者来说，Hash 算法的破解难度是，强抗碰撞性&amp;lt;弱抗碰撞性&amp;lt;单向性。
+三、单向散列函数的实际应用 检测软件是否被篡改 基于口令的加密 单向散列函数也被用于基于口令的加密(Password Based Encryption，PBE)。PBE 的原理是将口令和盐(salt，通过伪随机数生成器产生的随机值)混合后计算其散列值，然后将这个散列值用作加密的密钥。通过这样的方法能够防御针对口令的字典攻击。</description></item><item><title>翱游公钥密码算法</title><link>https://new.halfrost.com/asymmetric_encryption/</link><pubDate>Sun, 19 Aug 2018 00:22:00 +0000</pubDate><guid>https://new.halfrost.com/asymmetric_encryption/</guid><description>一、引子 在对称加密中，例如一次性密码本，就存在密钥配送的问题。在 DES、AES 中也存在这个问题。由于加密和解密的密钥是相同的，所以必须向接收者配送密钥。如果使用公钥密钥，则无需向接收者配送用于解密的密钥，这样就解决了密钥配送的问题，可以说公钥密码是密码学历史上最伟大的发明。
+二、配送密钥问题 为了防止中间人截获密钥，安全的把密钥传递给通信对方。有以下 4 种方式：
+1. 事先共享密钥 这种方法虽然有效，但是具有局限性。在一次性密码本中，我们说过，大国之间的热线是用这种方式加密的，但是密钥是靠特工押送过去的。如果通讯对方在附近，提前共享密钥还比较方便。如果通讯对方在世界各地，这种方式也就存在局限性了。
+另外通讯量增大以后，密钥个数也会陡增。n 个人两两通讯，需要 n * (n-1) /2 个密钥。这点来看，也不现实。
+2. 密钥分配中心 为了解决事先共享密钥的密钥增多的问题。于是有人想出了密钥分配中心(Key Distribution Center, KDC)的办法。每次加密的密钥由密钥中心进行分配，每个人只要和密钥中心事先共享密钥就可以了。
+虽然这个方法解决了密钥增多的问题，但是又带来了新的问题。
+密钥中心存储和记录了所有的密钥，一旦它出现故障或者被攻击破坏，那么所有的加密都会瘫痪。这也是集中式管理的缺点。
+3. Diffie-Hellman 密钥交换 为了解决集中式管理的缺点，那么应该密钥的配送还是不能用集中式。于是有人想出了 Diffie-Hellman 密钥交换的方法。
+在 Diffie-Hellman 密钥交换中，加密通信双方需要交换一些信息，而这些信息即便被窃听者窃听，也不会有任何问题。
+根据交换的信息，双方各自生成相同的密钥。而窃听者无法生成相同的密钥。这种方式可行。不过这种方式不算是非对称加密，在本文中不详细讨论。
+4. 公钥密码 非对称加密有一个公钥和一个私钥。公钥可以在网上传播，被窃听者拿到也没有关系，由于没有私钥，他也无法解开密文。私钥只要掌握在接收者手上就不会导致密文被窃听。
+举个例子：超市里面的存包处，所有顾客有硬币就可以存包。硬币就是“公钥”，顾客把包放进箱子里，（明文加密），箱子锁上以后就没人能打开。这个时候窃听者也拿不走存进去的包。这个明文（包），只有私钥才能打开。客户存完包以后会生成一个私钥，只要这个钥匙在手，就可以随时开箱拿包。
+三、非对称加密 非对称加密一般指的是具有公钥密钥(public-key cryptography)的加密算法。密钥分为加密密钥和解密密钥两种。发送者用加密密钥对信息进行加密，接收者用解密密钥对密文进行解密。可以公开出去的叫公钥(public key)，保存在自己手上不公开的叫私钥(private key)。
+公钥和私钥是一一对应的。一对公钥和私钥统称为密钥对(key pair)。在数学的关系上，这两者不能单独生成。
+四、非对称加密存在的问题 公钥密码虽然解决了密钥配送的问题，但是并不意味着它解决了所有问题。公钥密码存在以下几个问题：
+公钥认证 处理速度不到对称加密的十分之一 五、RSA 算法流程 RSA 是一种公钥密码算法，它的名字是由它的三位开发者，即 Ron Rivest、Adi Shamir 和 Leonard Adleman 的姓氏的首字母组成的 (Rivest-Shamir-Adleman)。1983 年，RSA 公司为 RSA 算法在美国取得了权利，但是现在该专利已经过期了。
+RSA 可以被用于公钥密码和数字签名。</description></item><item><title>漫游对称加密算法</title><link>https://new.halfrost.com/symmetric_encryption/</link><pubDate>Sat, 11 Aug 2018 17:06:00 +0000</pubDate><guid>https://new.halfrost.com/symmetric_encryption/</guid><description>一、引子 在引出对称加密之前，有必要先介绍一种位运算，XOR。XOR 的全称是 exclusive or，中文翻译是异或。
+0 XOR 0 = 0 0 XOR 1 = 1 1 XOR 0 = 1 1 XOR 1 = 0 XOR 可以看成是“两个数相同，异或为 0 ，不同则异或为 1”。
+异或也叫半加运算，其运算法则相当于不带进位的二进制加法：二进制下用1表示真，0表示假，则异或的运算法则为：
+0 ⊕ 0 = 0 1 ⊕ 0 = 1 0 ⊕ 1 = 1 1 ⊕ 1 = 0 这些法则与加法是相同的，只是不带进位，所以异或常被认作不进位加法。由异或的这种特点，也就引出了它的一个常用特性，两个相同的数进行 XOR 运算的结果一定为 0。
+对应的，我们也可以得到如下的运算法则：
+1. a ⊕ a = 0 2. a ⊕ b = b ⊕ a 交换率 3.</description></item><item><title>密码学概述</title><link>https://new.halfrost.com/cryptography_overview/</link><pubDate>Sat, 04 Aug 2018 17:01:00 +0000</pubDate><guid>https://new.halfrost.com/cryptography_overview/</guid><description>一、为什么需要加密 每个人都有自己的秘密，如果不加密，在网上传输很容易被监听。如果涉及到金钱相关，密码泄露以后很容易造成损失。所以都会利用加密 cryptography 技术，保证信息的机密性 confidentiality。
+信息被加密以后变成了密文在网上传播，接收者拿到密文进行解密 cryptanalysis，解密以后就可以看到明文。
+进行破译密码的人叫破译者，破译者不一定都是坏人，密码学研究者为了研究密码强度，也会需要对密码进行破译，研究者在这种情况下也是破译者。
+加密与压缩的顺序？
+压缩一定在加密之前。因为加密以后，比特序列的冗余性消失，基本上无法再压缩了。在加密前进行压缩的做法不仅仅限于混合密码系统，而是对所有密码都适用。
+二、对称加密 对称密码 (symmetric cryptography)是指在加密和解密时使用同一密钥的方式。对应的加密方式是对称加密。目前广泛使用 AES。
+对称密码有多种别名，公共密钥密码(common-key cryptography)，传统密码(conventional cryptography)，私钥密码(secret-key cryptography)，共享密钥密码(shared-key cryptography)等。
+对称密码需要解决将解密密钥配送给接收者的密钥配送问题。
+三、非对称加密 公钥密码 (public-key cryptography)则是指在加密和解密时使用不同密钥的方式。对应的加密方式是非对称加密。目前广泛使用 RSA。(RSA、ElGamal、Rabin、DH、ECDH)
+公钥密码解决了密钥配送的问题，但是存在通过中间人攻击被伪装的风险，因此需要对带有数字签名的公钥进行认证。
+四、单向散列函数 网上很多免费的软件，为了防止软件被篡改，有安全意识的软件发布者会在发布软件的同时会发布这个版本软件的散列值 hash。散列值是用单向散列函数(one-way hash function)计算出来的数值。目前广泛使用 SHA-2(SHA-224、SHA-356、SHA-384、SHA-512) 和 具有全新结构的 SHA-3(Keccak 算法)
+散列值 hash，又被称为哈希值，密码校验和(cryptographic checksum)，指纹(fingerprint)，消息摘要(message digest)。
+单向散列函数并不是为了保证消息的机密性，而是完整性(integrity)。完整性指的是，数据是正确的，而不是伪造的。单向散列函数是保证信息的完整性的密码技术，它会检测数据是否被篡改。
+单向散列函数可以单独使用，也可以作为消息认证码、数字签名以及伪随机数生成器等技术的组成元素使用。
+五、消息认证码 为了确认消息是否来自期望的通信对象，可以通过使用消息认证码(message authentication code)。消息认证码主要是提供了认证(authentication)机制，与此同时它也能保证消息的完整性。
+消息认证码中最常用的单向散列函数是 HMAC。HMAC 的构成不依赖于某一种具体的单向散列函数算法。
+消息认证码能对通信对象进行认证，但无法对第三方进行认证。它也无法防止否认。消息认证码可以用来实现认证加密。
+六、数字签名 试想有这样一种情况，A 欠 B 100 万美刀，于是 A 向 B 打了一张欠条。一周以后，A 拿到钱以后就不承认那张欠条是自己写的，抵赖借钱了。
+这个时候就牵扯到密码学里面的防抵赖的技术 —— 数字签名。数字签名类似现实世界中的签名和盖章，数字签名是一种能防止用户抵赖，伪装，篡改和否认的密码技术。目前广泛使用的数字签名算法包括 RSA、ElGamal、DSA、椭圆曲线 DSA(ECDSA)、爱德华兹曲线 DSA(EDDSA)等。</description></item><item><title>本站开始支持 QUIC</title><link>https://new.halfrost.com/quic_start/</link><pubDate>Sun, 22 Jul 2018 00:33:00 +0000</pubDate><guid>https://new.halfrost.com/quic_start/</guid><description>一. QUIC 是什么 QUIC 是 Quick UDP Internet Connections 的缩写，谷歌发明的新传输协议。与 TCP 相比，QUIC 可以减少延迟。从表面上看，QUIC 非常类似于在 UDP 上实现的 TCP + TLS + HTTP/2。由于 TCP 是在操作系统内核和中间件固件中实现的，因此对 TCP 进行重大更改几乎是不可能的。但是，由于 QUIC 建立在 UDP 之上，因此没有这种限制。QUIC 可以实现可靠传输，而且相比于 TCP，它的流控功能在用户空间而不在内核空间，那么使用者就 不受限于 CUBIC 或是 BBR，而是可以自由选择，甚至根据应用场景自由调整优化。
+QUIC 与现有 TCP + TLS + HTTP/2 方案相比，有以下几点主要特征：
+利用缓存，显著减少连接建立时间 改善拥塞控制，拥塞控制从内核空间到用户空间 没有 head of line 阻塞的多路复用 前向纠错，减少重传 连接平滑迁移，网络状态的变更不会影响连接断线。 QUIC 在 UDP 之上，如果想要和 TCP/IP 体系类比，那么就是上图。QUIC 可以类比 TCP/IP 中的 TLS 一层。但是功能又不完全是 TLS ，还有一部分 HTTP/2 ，下面还包括一部分 TCP 的功能，比如 拥塞控制、丢包恢复、流量控制等特性。</description></item><item><title>深入浅出 FlatBuffers 之 FlexBuffers</title><link>https://new.halfrost.com/flatbuffers_flexbuffers/</link><pubDate>Sat, 16 Jun 2018 09:24:00 +0000</pubDate><guid>https://new.halfrost.com/flatbuffers_flexbuffers/</guid><description>一. FlexBuffers 是什么？ FlexBuffers 是 FlatBuffers 中一个 schema-less 的版本。它和 FlatBuffers 其他类型编码原理一样，所有的数据也都是通过偏移量来访问的，所有的标量都按照它们自己的大小对齐，并且所有的数据总是以小端格式存储。
+一个不同之处在于 FlexBuffers 是从前到后构建的，因此子项存储在父项之前，并且 root table 是从最后一个字节处开始。
+另一个区别是标量数据的存储位数 bit 是可变的（8/16/32/64）。当前宽度总是由父级确定，即如果标量位于数组中，则数组一次确定所有元素的所占字节宽度。为特定的数组选择最小 bit 位宽是编码器自动执行的操作，因此通常不需要用户担心它，但是了解此功能(当然不会在一个每个元素大小都是一个字节的数组中插入一个 double)更有助于提高效率。
+FlexBuffers 与 FlatBuffers 不同，它只有一种偏移量，它是一个无符号整数，用于表示自身地址（存储偏移量的地方）的负方向上的偏移的字节数。
+二. 为什么要发明 FlexBuffers ？ 有时候需要存储一些不符合 schema 格式的数据，因为无法提前知道需要存储哪些内容。出于此目的，FlexBuffers 就诞生了。FlatBuffers 有一个称为 FlexBuffers 的专用格式。这是一种二进制格式，可以与 FlatBuffers 一起使用（通过以 FlexBuffers 格式存储缓冲区的一部分），或者也可以作为自己独立的序列化格式。
+虽然失去了强大的类型功能，但仍然保留 FlatBuffers 在其他序列化格式（基于 schema 或不基于 schema）上最独特的优势：也可以在不解析/复制/分配对象的情况下访问 FlexBuffers。这在效率/内存友好性方面是一个优势，并且允许独特的用法，例如映射大量的自由格式数据。
+FlexBuffers 的设计和实现是一种非常紧凑的编码，将字符串的自动合并与容器大小结合在一起，自动跳转大小（8/16/32/64位）。许多值和 offset 可以用 8 位编码。虽然没有 schema 的结构，由于需要具有自描述性，所以通常体积会变得更大一些，但与常规 FlatBuffers 相比，FlexBuffers 在许多情况下会生成更小的二进制文件。
+需要注意的是，FlexBuffers 比普通的 FlatBuffers 还要慢，所以我们建议只在需要时使用它。
+三. FlexBuffers 中的 Vectors 如何表示一个 vectors 是 FlexBuffers 编码的核心。</description></item><item><title>深入浅出 FlatBuffers 之 Encode</title><link>https://new.halfrost.com/flatbuffers_encode/</link><pubDate>Sun, 10 Jun 2018 09:06:00 +0000</pubDate><guid>https://new.halfrost.com/flatbuffers_encode/</guid><description>一. FlatBuffers 生成二进制流 FlatBuffers 的使用和 Protocol buffers 基本类似。只不过功能比 Protocol buffers 多了一个解析 JSON 的功能。
+编写 schema 文件，描述数据结构和接口定义。 用 flatc 编译，生成相应语言的代码文件。 解析 JSON 数据，把数据存储成对应的 schema，并存入 FlatBuffers 二进制文件中。 使用 FlatBuffers 支持的语言（如C ++，Java等）生成的文件进行开发。 接下来简单的定义一个 schema 文件，来看看 FlatBuffers 的使用。
+// Example IDL file for our monster's schema. namespace MyGame.Sample; enum Color:byte { Red = 0, Green, Blue = 2 } union Equipment { Weapon } // Optionally add more tables. struct Vec3 { x:float; y:float; z:float; } table Monster { pos:Vec3; // Struct.</description></item><item><title>深入浅出 FlatBuffers 之 Schema</title><link>https://new.halfrost.com/flatbuffers_schema/</link><pubDate>Sun, 03 Jun 2018 09:02:00 +0000</pubDate><guid>https://new.halfrost.com/flatbuffers_schema/</guid><description>一. FlatBuffers 是什么？ FlatBuffers 是一个序列化开源库，实现了与 Protocol Buffers，Thrift，Apache Avro，SBE 和 Cap&amp;rsquo;n Proto 类似的序列化格式，主要由 Wouter van Oortmerssen 编写，并由 Google 开源。Oortmerssen 最初为 Android 游戏和注重性能的应用而开发了FlatBuffers。现在它具有C ++，C＃，C，Go，Java，PHP，Python 和 JavaScript 的端口。
+FlatBuffer 是一个二进制 buffer，它使用 offset 组织嵌套对象（struct，table，vectors，等），可以使数据像任何基于指针的数据结构一样，就地访问数据。然而 FlatBuffer 与大多数内存中的数据结构不同，它使用严格的对齐规则和字节顺序来确保 buffer 是跨平台的。此外，对于 table 对象，FlatBuffers 提供前向/后向兼容性和 optional 字段，以支持大多数格式的演变。
+FlatBuffers 的主要目标是避免反序列化。这是通过定义二进制数据协议来实现的，一种将定义好的将数据转换为二进制数据的方法。由该协议创建的二进制结构可以 wire 发送，并且无需进一步处理即可读取。相比较而言，在传输 JSON 时，我们需要将数据转换为字符串，通过 wire 发送，解析字符串，并将其转换为本地对象。Flatbuffers 不需要这些操作。你用二进制装入数据，发送相同的二进制文件，并直接从二进制文件读取。
+尽管 FlatBuffers 有自己的接口定义语言来定义要与之序列化的数据，但它也支持 Protocol Buffers 中的 .proto格式。
+在 schema 中定义对象类型，然后可以将它们编译为 C++ 或 Java 等各种主流语言，以实现零开销读写。FlatBuffers 还支持将 JSON 数据动态地分析到 buffer 中。
+除了解析效率以外，二进制格式还带来了另一个优势，数据的二进制表示通常更具有效率。我们可以使用 4 字节的 UInt 而不是 10 个字符来存储 10 位数字的整数。</description></item><item><title>高效的序列化/反序列化数据方式 Protobuf</title><link>https://new.halfrost.com/protobuf_decode/</link><pubDate>Sun, 27 May 2018 16:44:00 +0000</pubDate><guid>https://new.halfrost.com/protobuf_decode/</guid><description>一. protocol buffers 序列化 上篇文章中其实已经讲过了 encode 的过程，这篇文章以 golang 为例，从代码实现的层面讲讲序列化和反序列化的过程。
+举个 go 使用 protobuf 进行数据序列化和反序列化的例子，本篇文章从这个例子开始。
+先新建一个 example 的 message：
+syntax = &amp;#34;proto2&amp;#34;; package example; enum FOO { X = 17; }; message Test { required string label = 1; optional int32 type = 2 [default=77]; repeated int64 reps = 3; optional group OptionalGroup = 4 { required string RequiredField = 5; } }利用 protoc-gen-go 生成对应的 get/ set 方法。代码中就可以用生成的代码进行序列化和反序列化了。
+package main import ( &amp;#34;log&amp;#34; &amp;#34;github.</description></item><item><title>高效的数据压缩编码方式 Protobuf</title><link>https://new.halfrost.com/protobuf_encode/</link><pubDate>Thu, 24 May 2018 16:25:00 +0000</pubDate><guid>https://new.halfrost.com/protobuf_encode/</guid><description>一. protocol buffers 是什么？ Protocol buffers 是一种语言中立，平台无关，可扩展的序列化数据的格式，可用于通信协议，数据存储等。
+Protocol buffers 在序列化数据方面，它是灵活的，高效的。相比于 XML 来说，Protocol buffers 更加小巧，更加快速，更加简单。一旦定义了要处理的数据的数据结构之后，就可以利用 Protocol buffers 的代码生成工具生成相关的代码。甚至可以在无需重新部署程序的情况下更新数据结构。只需使用 Protobuf 对数据结构进行一次描述，即可利用各种不同语言或从各种不同数据流中对你的结构化数据轻松读写。
+Protocol buffers 很适合做数据存储或 RPC 数据交换格式。可用于通讯协议、数据存储等领域的语言无关、平台无关、可扩展的序列化结构数据格式。
+二. 为什么要发明 protocol buffers ？ 大家可能会觉得 Google 发明 protocol buffers 是为了解决序列化速度的，其实真实的原因并不是这样的。
+protocol buffers 最先开始是 google 用来解决索引服务器 request/response 协议的。没有 protocol buffers 之前，google 已经存在了一种 request/response 格式，用于手动处理 request/response 的编组和反编组。它也能支持多版本协议，不过代码比较丑陋：
+if (version == 3) { ... } else if (version &amp;gt; 4) { if (version == 5) { ... } .</description></item><item><title>全双工通信的 WebSocket</title><link>https://new.halfrost.com/websocket/</link><pubDate>Sat, 19 May 2018 15:30:00 +0000</pubDate><guid>https://new.halfrost.com/websocket/</guid><description>一. WebSocket 是什么？ WebSocket 是一种网络通信协议。在 2009 年诞生，于 2011 年被 IETF 定为标准 RFC 6455 通信标准。并由 RFC7936 补充规范。WebSocket API 也被 W3C 定为标准。
+WebSocket 是 HTML5 开始提供的一种在单个 TCP 连接上进行全双工(full-duplex)通讯的协议。没有了 Request 和 Response 的概念，两者地位完全平等，连接一旦建立，就建立了真•持久性连接，双方可以随时向对方发送数据。
+(HTML5 是 HTML 最新版本，包含一些新的标签和全新的 API。HTTP 是一种协议，目前最新版本是 HTTP/2 ，所以 WebSocket 和 HTTP 有一些交集，两者相异的地方还是很多。两者交集的地方在 HTTP 握手阶段，握手成功后，数据就直接从 TCP 通道传输。)
+二. 为什么要发明 WebSocket ？ 在没有 WebSocket 之前，Web 为了实现即时通信，有以下几种方案，最初的 polling ，到之后的 Long polling，最后的基于 streaming 方式，再到最后的 SSE，也是经历了几个不种的演进方式。
+(1) 最开始的短轮询 Polling 阶段 这种方式下，是不适合获取实时信息的，客户端和服务器之间会一直进行连接，每隔一段时间就询问一次。客户端会轮询，有没有新消息。这种方式连接数会很多，一个接受，一个发送。而且每次发送请求都会有 HTTP 的 Header，会很耗流量，也会消耗 CPU 的利用率。</description></item><item><title>TCP 进阶</title><link>https://new.halfrost.com/advance_tcp/</link><pubDate>Thu, 16 Feb 2017 11:24:00 +0000</pubDate><guid>https://new.halfrost.com/advance_tcp/</guid><description>一. 端口号 标准的端口号由 Internet 号码分配机构(IANA)分配。这组数字被划分为特定范围，包括 熟知端口号(0 - 1023)、注册端口号(1024 - 49151)和动态/私有端口号(49152 - 65535)。
+如果我们测试这些标准服务和其他 TCP/IP 服务(Telnet、 FTP、 SMTP等) 使用的端口号，会发现它们大多数是奇数。这是有历史原困的，这些端口号从 NCP 端口号派生而来(NCP 是网络控制协议，在 TCP 之前作为 ARPANET 的传输层协议)。NCP 虽然简单，但不是全双工的，困此每个应用需要两个连接，并为每个应用保留奇偶成对的端口号。当 TCP 和 UDP 成为标准的传输层协议时，每个应用只需要一个端口号，因此来自 NCP 的奇数端口号被使用。
+二. TCP 初始序列号 在 TCP 数据报中，有一个 序列号 (Sequence Number)。如果序列号被人猜出来，就会展现出 TCP 的脆弱性。
+如果选择合适的序列号、IP地址以及端口号，那么任何人都能伪造出一个 TCP 报文段，从而 打断 TCP 的正常连接[RFC5961]。一种抵御上述行为的方法是使初始序列号(或者临时端口 号[RFC6056])变得相对难以被猜出，而另一种方法则是加密。
+Linux 系统采用一个相对复杂的过程来选择它的初始序列号。它采用基于时钟的方案，并且针对每一个连接为时钟设置随机的偏移量。随机偏移量是在连接标识(由 2 个 IP 地址与 2 个端口号构成的 4 元组，即 4 元组)的基础上利用加密散列函数得到的。散列函数的输人每隔 5 分钟就会改变一次。在 32 位的初始序列号中，最高的 8 位是一个保密的序列号，而剩余的备位则由散列函数生成。上述方法所生成的序列号很难被猜出，但依然会随着时间而逐步增加。据报告显示， Windows 系统使用了一种基于 RC4[S94] 的类似方案。</description></item><item><title>TCP/IP 指南</title><link>https://new.halfrost.com/tcp_ip/</link><pubDate>Wed, 15 Feb 2017 10:31:00 +0000</pubDate><guid>https://new.halfrost.com/tcp_ip/</guid><description>一. OSI 模型 OSI 参考模型终究只是一个“模型”，它也只是对各层的作用做了一系列粗略的界定，并没有对协议和接口进行详细的定义。它对学习和设计协议只能起到一个引导的作用。因此，若想要了解协议的更多细节，还是有必要参考每个协议本身的具体规范。
+上图是 《图解 TCP/IP》书上对七层模型的定义。
+上图是一些协议在 OSI 模型中的位置。值得注意的是 DNS 是应用层协议，SSL 分别位于第五层会话层和第六层表示层。TLS 位于第五层会话层。（DNS、SSL、TLS 这些协议会在后面详细分析与说明）
+上图是 TCP/IP 模型和 OSI 模型的对比图。
+接下来放2张网络上的图，笔者对图上的内容持有争议，至于下面2张图哪里对哪里错，欢迎开 issue 讨论。
+上面这种图说 DNS 是网络层协议，笔者周围很多朋友都一致认为是应用层协议。还有一个错误是 SSL 是跨第六层和第七层的，这里画的还是不对。
+上面这种图中 DNS 位于应用层，这点赞同，并且也画出了 DNS 是基于 UDP 和 TCP 的。这点也非常不错！（至于有些人不知道 DNS 为何也是基于 TCP 的，这点在 DNS 那里详细分析）。但是上图中没有画出 SSL/TLS 是位于第几层的。
+笔者认为上面2张图，虽然看上去非常复杂，内容详尽，但是仔细推敲，还是都有不足和不对的地方。
+二. OSI 参考模型通信举例 上图是 5 层 TCP/IP 模型中通信时候的数据图。值得说明的一点，在数据链路层的以太网帧里面，除去以太网首部 14 字节，FCS 尾部 4 字节，中间的数据长度在 46-1500 字节之间。
+上图是 OSI 7 层模型中通信时候的数据图。从上图的 7 层模型中，物理层传输的是字节流，数据链路层中包的单位叫，帧。IP、TCP、UDP 网络层的包的单位叫，数据报。TCP、UDP 数据流中的信息叫，段。最后，应用层协议中数据的单位叫，消息。</description></item><item><title>HTTP 指南</title><link>https://new.halfrost.com/http/</link><pubDate>Tue, 14 Feb 2017 09:29:00 +0000</pubDate><guid>https://new.halfrost.com/http/</guid><description>Web 使用一种名为 HTTP (HyperText Transfer Protocol，超文本传输协议) 的协议作为规范的。
+HTTP 更加严谨的译名应该是 超文本转移协议。
+HTTP 于 1990 年问世。那时的 HTTP 并没有作为正式的标准，因为被称为 HTTP/0.9
+HTTP 正式作为标准被公布是 1996 年 5 月，版本命名为 HTTP/1.0，记载于 RFC1945
+HTTP 在 1997 年 1 月公布了当前最主流的版本，版本命名为 HTTP/1.1，记载于 RFC2616
+HTTP/2 于 2015 年 5 月 14 日发布，引入了服务器推送等多种功能，是目前最新的版本。记载于 RFC7540 (它不叫 HTTP/2.0，是因为标准委员会不打算再发布子版本了，下一个新版本将是 HTTP/3)
+一. HTTP 支持的方法 HTTP 是一种不保存状态，即 无状态（ stateless ）协议。HTTP 协议自身不对请求和响应之间的通信状态进行保存。也就是说在 HTTP 这个级别，协议对于发送过的请求或响应都不做持久化处理。这也是为了更快的处理大量事务，确保协议的可伸缩性。
+HTTP/1.1 虽然是无状态协议，但是为了实现期望的保持状态的功能，特意引入了 Cookie 技术。
+在HTTP/1.1规范中幂等性的定义是：
+Methods can also have the property of &amp;ldquo;idempotence&amp;rdquo; in that (aside from error or expiration issues) the side-effects of N &amp;gt; 0 identical requests is the same as for a single request.</description></item></channel></rss>

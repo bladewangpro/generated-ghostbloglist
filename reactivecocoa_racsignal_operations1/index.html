@@ -1,0 +1,903 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(上) | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(上)"><meta property="og:description" content="前言 在上篇文章中，详细分析了RACSignal是创建和订阅的详细过程。看到底层源码实现后，就能发现，ReactiveCocoa这个FRP的库，实现响应式（RP）是用Block闭包来实现的，而并不是用KVC / KVO实现的。
+在ReactiveCocoa整个库中，RACSignal占据着比较重要的位置，而RACSignal的变换操作更是整个RACStream流操作核心之一。在上篇文章中也详细分析了bind操作的实现。RACsignal很多变换操作都是基于bind操作来实现的。在开始本篇底层实现分析之前，先简单回顾一下上篇文章中分析的bind函数，这是这篇文章分析的基础。
+bind函数可以简单的缩写成下面这样子。
+- (RACSignal *)bind:(RACStreamBindBlock (^)(void))block; { return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) { RACStreamBindBlock bindBlock = block(); [self subscribeNext:^(id x) { //(1)  BOOL stop = NO; RACSignal *signal = (RACSignal *)bindBlock(x, &stop); //(2)  if (signal == nil || stop) { [subscriber sendCompleted]; } else { [signal subscribeNext:^(id x) { [subscriber sendNext:x]; //(3)  } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ }]; } } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ [subscriber sendCompleted]; }]; return nil; }]; } 当bind变换之后的信号被订阅，就开始执行bind函数中return的block闭包。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/reactivecocoa_racsignal_operations1/"><meta property="article:published_time" content="2016-11-26T00:42:12+00:00"><meta property="article:modified_time" content="2016-11-26T00:42:12+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(上)"><meta name=twitter:description content="前言 在上篇文章中，详细分析了RACSignal是创建和订阅的详细过程。看到底层源码实现后，就能发现，ReactiveCocoa这个FRP的库，实现响应式（RP）是用Block闭包来实现的，而并不是用KVC / KVO实现的。
+在ReactiveCocoa整个库中，RACSignal占据着比较重要的位置，而RACSignal的变换操作更是整个RACStream流操作核心之一。在上篇文章中也详细分析了bind操作的实现。RACsignal很多变换操作都是基于bind操作来实现的。在开始本篇底层实现分析之前，先简单回顾一下上篇文章中分析的bind函数，这是这篇文章分析的基础。
+bind函数可以简单的缩写成下面这样子。
+- (RACSignal *)bind:(RACStreamBindBlock (^)(void))block; { return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) { RACStreamBindBlock bindBlock = block(); [self subscribeNext:^(id x) { //(1)  BOOL stop = NO; RACSignal *signal = (RACSignal *)bindBlock(x, &stop); //(2)  if (signal == nil || stop) { [subscriber sendCompleted]; } else { [signal subscribeNext:^(id x) { [subscriber sendNext:x]; //(3)  } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ }]; } } error:^(NSError *error) { [subscriber sendError:error]; } completed:^{ [subscriber sendCompleted]; }]; return nil; }]; } 当bind变换之后的信号被订阅，就开始执行bind函数中return的block闭包。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/reactivecocoa_racsignal/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/reactivecocoa_racsignal_operations2/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&text=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&name=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%ef%bc%8c%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86RACSignal%e6%98%af%e5%88%9b%e5%bb%ba%e5%92%8c%e8%ae%a2%e9%98%85%e7%9a%84%e8%af%a6%e7%bb%86%e8%bf%87%e7%a8%8b%e3%80%82%e7%9c%8b%e5%88%b0%e5%ba%95%e5%b1%82%e6%ba%90%e7%a0%81%e5%ae%9e%e7%8e%b0%e5%90%8e%ef%bc%8c%e5%b0%b1%e8%83%bd%e5%8f%91%e7%8e%b0%ef%bc%8cReactiveCocoa%e8%bf%99%e4%b8%aaFRP%e7%9a%84%e5%ba%93%ef%bc%8c%e5%ae%9e%e7%8e%b0%e5%93%8d%e5%ba%94%e5%bc%8f%ef%bc%88RP%ef%bc%89%e6%98%af%e7%94%a8Block%e9%97%ad%e5%8c%85%e6%9d%a5%e5%ae%9e%e7%8e%b0%e7%9a%84%ef%bc%8c%e8%80%8c%e5%b9%b6%e4%b8%8d%e6%98%af%e7%94%a8KVC%20%2f%20KVO%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e5%9c%a8ReactiveCocoa%e6%95%b4%e4%b8%aa%e5%ba%93%e4%b8%ad%ef%bc%8cRACSignal%e5%8d%a0%e6%8d%ae%e7%9d%80%e6%af%94%e8%be%83%e9%87%8d%e8%a6%81%e7%9a%84%e4%bd%8d%e7%bd%ae%ef%bc%8c%e8%80%8cRACSignal%e7%9a%84%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e6%9b%b4%e6%98%af%e6%95%b4%e4%b8%aaRACStream%e6%b5%81%e6%93%8d%e4%bd%9c%e6%a0%b8%e5%bf%83%e4%b9%8b%e4%b8%80%e3%80%82%e5%9c%a8%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e4%b9%9f%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86bind%e6%93%8d%e4%bd%9c%e7%9a%84%e5%ae%9e%e7%8e%b0%e3%80%82RACsignal%e5%be%88%e5%a4%9a%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e9%83%bd%e6%98%af%e5%9f%ba%e4%ba%8ebind%e6%93%8d%e4%bd%9c%e6%9d%a5%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%e5%9c%a8%e5%bc%80%e5%a7%8b%e6%9c%ac%e7%af%87%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%85%88%e7%ae%80%e5%8d%95%e5%9b%9e%e9%a1%be%e4%b8%80%e4%b8%8b%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e5%88%86%e6%9e%90%e7%9a%84bind%e5%87%bd%e6%95%b0%ef%bc%8c%e8%bf%99%e6%98%af%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%88%86%e6%9e%90%e7%9a%84%e5%9f%ba%e7%a1%80%e3%80%82%0abind%e5%87%bd%e6%95%b0%e5%8f%af%e4%bb%a5%e7%ae%80%e5%8d%95%e7%9a%84%e7%bc%a9%e5%86%99%e6%88%90%e4%b8%8b%e9%9d%a2%e8%bf%99%e6%a0%b7%e5%ad%90%e3%80%82%0a-%20%28RACSignal%20%2a%29bind%3a%28RACStreamBindBlock%20%28%5e%29%28void%29%29block%3b%20%7b%20return%20%5bRACSignal%20createSignal%3a%5eRACDisposable%20%2a%28id%26lt%3bRACSubscriber%26gt%3b%20subscriber%29%20%7b%20RACStreamBindBlock%20bindBlock%20%3d%20block%28%29%3b%20%5bself%20subscribeNext%3a%5e%28id%20x%29%20%7b%20%2f%2f%281%29%20%c2%a0BOOL%20stop%20%3d%20NO%3b%20RACSignal%20%2asignal%20%3d%20%28RACSignal%20%2a%29bindBlock%28x%2c%20%26amp%3bstop%29%3b%20%2f%2f%282%29%20%c2%a0if%20%28signal%20%3d%3d%20nil%20%7c%7c%20stop%29%20%7b%20%5bsubscriber%20sendCompleted%5d%3b%20%7d%20else%20%7b%20%5bsignal%20subscribeNext%3a%5e%28id%20x%29%20%7b%20%5bsubscriber%20sendNext%3ax%5d%3b%20%2f%2f%283%29%20%c2%a0%7d%20error%3a%5e%28NSError%20%2aerror%29%20%7b%20%5bsubscriber%20sendError%3aerror%5d%3b%20%7d%20completed%3a%5e%7b%20%7d%5d%3b%20%7d%20%7d%20error%3a%5e%28NSError%20%2aerror%29%20%7b%20%5bsubscriber%20sendError%3aerror%5d%3b%20%7d%20completed%3a%5e%7b%20%5bsubscriber%20sendCompleted%5d%3b%20%7d%5d%3b%20return%20nil%3b%20%7d%5d%3b%20%7d%20%e5%bd%93bind%e5%8f%98%e6%8d%a2%e4%b9%8b%e5%90%8e%e7%9a%84%e4%bf%a1%e5%8f%b7%e8%a2%ab%e8%ae%a2%e9%98%85%ef%bc%8c%e5%b0%b1%e5%bc%80%e5%a7%8b%e6%89%a7%e8%a1%8cbind%e5%87%bd%e6%95%b0%e4%b8%adreturn%e7%9a%84block%e9%97%ad%e5%8c%85%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&t=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一变换操作>一.变换操作</a><ul><li><a href=#1map-在父类racstream中定义的>1.Map: (在父类RACStream中定义的)</a></li><li><a href=#2mapreplace-在父类racstream中定义的>2.MapReplace: (在父类RACStream中定义的)</a></li><li><a href=#3reduceeach--在父类racstream中定义的>3.reduceEach:  (在父类RACStream中定义的)</a></li><li><a href=#4-reduceapply>4. reduceApply</a></li><li><a href=#5-materialize>5. materialize</a></li><li><a href=#6-dematerialize>6. dematerialize</a></li><li><a href=#7-not>7. not</a></li><li><a href=#8-and>8. and</a></li><li><a href=#9-or>9. or</a></li><li><a href=#10-any>10. any:</a></li><li><a href=#11-any>11. any</a></li><li><a href=#12-all>12. all:</a></li><li><a href=#13-repeat>13. repeat</a></li><li><a href=#14-retry>14. retry:</a></li><li><a href=#15-retry>15. retry</a></li><li><a href=#16-scanwithstart-reducewithindex-在父类racstream中定义的>16. scanWithStart: reduceWithIndex: (在父类RACStream中定义的)</a></li><li><a href=#17-scanwithstart-reduce-在父类racstream中定义的>17. scanWithStart: reduce: (在父类RACStream中定义的)</a></li><li><a href=#18-aggregatewithstart-reducewithindex>18. aggregateWithStart: reduceWithIndex:</a></li><li><a href=#19-aggregatewithstart-reduce>19. aggregateWithStart: reduce:</a></li><li><a href=#20-aggregatewithstartfactory-reduce>20. aggregateWithStartFactory: reduce:</a></li><li><a href=#21-collect>21. collect</a></li></ul></li><li><a href=#二-时间操作>二. 时间操作</a><ul><li><a href=#1-throttlevaluespassingtest>1. throttle:valuesPassingTest:</a></li><li><a href=#2-throttle>2. throttle:</a></li><li><a href=#3-bufferwithtimeonscheduler>3. bufferWithTime:onScheduler:</a></li><li><a href=#4-delay>4. delay:</a></li><li><a href=#5-intervalonschedulerwithleeway>5. interval:onScheduler:withLeeway:</a></li><li><a href=#6-intervalonscheduler>6. interval:onScheduler:</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">ReactiveCocoa 中 RACSignal 所有变换操作底层实现分析(上)</h1><div class=meta><div class=postdate><time datetime="2016-11-26 00:42:12 +0000 UTC" itemprop=datePublished>Nov 26</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/rac>RAC</a>
+,
+<a class=category-link href=/categories/reactivecocoa>ReactiveCocoa</a>
+,
+<a class=category-link href=/categories/racsignal>RACSignal</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/rac rel=tag>RAC</a>
+,
+<a class=tag-link href=/tags/reactivecocoa rel=tag>ReactiveCocoa</a>
+,
+<a class=tag-link href=/tags/racsignal rel=tag>RACSignal</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>在<a href=https://halfrost.com/reactivecocoa_racsignal/>上篇文章</a>中，详细分析了RACSignal是创建和订阅的详细过程。看到底层源码实现后，就能发现，ReactiveCocoa这个FRP的库，实现响应式（RP）是用Block闭包来实现的，而并不是用KVC / KVO实现的。</p><p>在ReactiveCocoa整个库中，RACSignal占据着比较重要的位置，而RACSignal的变换操作更是整个RACStream流操作核心之一。在上篇文章中也详细分析了bind操作的实现。RACsignal很多变换操作都是基于bind操作来实现的。在开始本篇底层实现分析之前，先简单回顾一下上篇文章中分析的bind函数，这是这篇文章分析的基础。</p><p>bind函数可以简单的缩写成下面这样子。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>bind:</span>(RACStreamBindBlock (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block;
+{
+    <span style=color:#66d9ef>return</span> [RACSignal createSignal:<span style=color:#f92672>^</span>RACDisposable <span style=color:#f92672>*</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        
+        RACStreamBindBlock bindBlock <span style=color:#f92672>=</span> block();
+        [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {    <span style=color:#75715e>//(1)
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>BOOL</span> stop <span style=color:#f92672>=</span> NO;
+            RACSignal <span style=color:#f92672>*</span>signal <span style=color:#f92672>=</span> (RACSignal <span style=color:#f92672>*</span>)bindBlock(x, <span style=color:#f92672>&amp;</span>stop); <span style=color:#75715e>//(2)
+</span><span style=color:#75715e></span>            <span style=color:#66d9ef>if</span> (signal <span style=color:#f92672>==</span> nil <span style=color:#f92672>||</span> stop) {
+                [subscriber sendCompleted];
+            } <span style=color:#66d9ef>else</span> {
+                [signal subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+                    [subscriber sendNext:x];  <span style=color:#75715e>//(3)
+</span><span style=color:#75715e></span>                } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+                    [subscriber sendError:error];
+                } completed:<span style=color:#f92672>^</span>{
+                
+                }];
+            }
+        } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+            [subscriber sendError:error];
+        } completed:<span style=color:#f92672>^</span>{
+            [subscriber sendCompleted];
+        }];
+        <span style=color:#66d9ef>return</span> nil;
+    }];
+}
+
+
+</code></pre></div><p>当bind变换之后的信号被订阅，就开始执行bind函数中return的block闭包。</p><ol><li>在bind闭包中，先订阅原先的信号A。</li><li>在订阅原信号A的didSubscribe闭包中进行信号变换，变换中用到的block闭包是外部传递进来的，也就是bind函数的入参。变换结束，得到新的信号B</li><li>订阅新的信号B，拿到bind变化之后的信号的订阅者subscriber，对其发送新的信号值。</li></ol><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_1.png alt></p><p>简要的过程如上图，bind函数中进行了2次订阅的操作，第一次订阅是为了拿到signalA的值，第二次订阅是为了把signalB的新值发给bind变换之后得到的signalB的订阅者。</p><p>回顾完bind底层实现之后，就可以开始继续本篇文章的分析了。</p><h3 id=目录>目录</h3><ul><li>1.变换操作</li><li>2.时间操作</li></ul><h3 id=一变换操作>一.变换操作</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_2.png alt></p><p>我们都知道RACSignal是继承自RACStream的，而在底层的RACStream上也定义了一些基本的信号变换的操作，所以这些操作在RACSignal上同样适用。如果在RACsignal中没有重写这些方法，那么调用这些操作，实际是调用的父类RACStream的操作。下面分析的时候，会把实际调用父类RACStream的操作的地方都标注出来。</p><h4 id=1map-在父类racstream中定义的>1.Map: (在父类RACStream中定义的)</h4><p>map操作一般是用来信号变换的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACSignal <span style=color:#f92672>*</span>signalB <span style=color:#f92672>=</span> [signalA map:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span>value) {
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>[value intValue] <span style=color:#f92672>*</span> <span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>;
+    }];
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_3.png alt></p><p>来看看底层是如何实现的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>map:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> self.<span style=color:#66d9ef>class</span>;
+    
+    <span style=color:#66d9ef>return</span> [[self flattenMap:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> value) {
+        <span style=color:#66d9ef>return</span> [<span style=color:#66d9ef>class</span> <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>block(value)];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -map:&#34;</span>, self.name];
+}
+
+</code></pre></div><p>这里实现代码比较严谨，先判断self的类型。因为RACStream的子类中会有一些子类会重写这些方法，所以需要判断self的类型，在回调中可以回调到原类型的方法中去。</p><p>由于本篇文章中我们都分析RACSignal的操作，所以这里的self.class是RACDynamicSignal类型的。相应的在return返回值中也返回class，即RACDynamicSignal类型的信号。</p><p>从map实现代码上来看，map实现是用了flattenMap函数来实现的。把map的入参闭包，放到了flattenMap的返回值中。</p><p>在来看看flattenMap的实现：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>flattenMap:</span>(RACStream <span style=color:#f92672>*</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block {
+    <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> self.<span style=color:#66d9ef>class</span>;
+    
+    <span style=color:#66d9ef>return</span> [[self bind:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> value, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            <span style=color:#66d9ef>id</span> stream <span style=color:#f92672>=</span> block(value) <span style=color:#f92672>?:</span> [<span style=color:#66d9ef>class</span> empty];
+            NSCAssert([stream isKindOfClass:RACStream.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;Value returned from -flattenMap: is not a stream: %@&#34;</span>, stream);
+            
+            <span style=color:#66d9ef>return</span> stream;
+        };
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -flattenMap:&#34;</span>, self.name];
+}
+
+</code></pre></div><p>flattenMap算是对bind函数的一种封装。bind函数的入参是一个RACStreamBindBlock类型的闭包。而flattenMap函数的入参是一个value，返回值RACStream类型的闭包。</p><p>在flattenMap中，返回block(value)的信号，如果信号为nil，则返回[class empty]。</p><p>先来看看为空的情况。当block(value)为空，返回[RACEmptySignal empty]，empty就是创建了一个RACEmptySignal类型的信号：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>empty</span> {
+<span style=color:#75715e>#ifdef DEBUG
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// Create multiple instances of this class in DEBUG so users can set custom
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// names on each.
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>return</span> [[[self alloc] init] setNameWithFormat:<span style=color:#e6db74>@&#34;+empty&#34;</span>];
+<span style=color:#75715e>#else
+</span><span style=color:#75715e></span>    <span style=color:#66d9ef>static</span> <span style=color:#66d9ef>id</span> singleton;
+    <span style=color:#66d9ef>static</span> dispatch_once_t pred;
+    
+    dispatch_once(<span style=color:#f92672>&amp;</span>pred, <span style=color:#f92672>^</span>{
+        singleton <span style=color:#f92672>=</span> [[self alloc] init];
+    });
+    
+    <span style=color:#66d9ef>return</span> singleton;
+<span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>}
+
+
+</code></pre></div><p>RACEmptySignal类型的信号又是什么呢？</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>subscribe:</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span>)subscriber {
+    NSCParameterAssert(subscriber <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>return</span> [RACScheduler.subscriptionScheduler schedule:<span style=color:#f92672>^</span>{
+        [subscriber sendCompleted];
+    }];
+}
+
+</code></pre></div><p>RACEmptySignal是RACSignal的子类，一旦订阅它，它就会同步的发送completed完成信号给订阅者。</p><p>所以flattenMap返回一个信号，如果信号不存在，就返回一个completed完成信号给订阅者。</p><p>再来看看flattenMap返回的信号是怎么变换的。</p><p>block(value)会把原信号发送过来的value传递给flattenMap的入参。flattenMap的入参是一个闭包，闭包的参数也是value的：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> value) { <span style=color:#66d9ef>return</span> [<span style=color:#66d9ef>class</span> <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>block(value)]; }
+
+</code></pre></div><p>这个闭包返回一个信号，信号类型和原信号的类型一样，即RACDynamicSignal类型的，值是block(value)。这里的闭包是外面map传进来的：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span>value) { <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>[value intValue] <span style=color:#f92672>*</span> <span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>; }
+
+</code></pre></div><p>在这个闭包中把原信号的value值传进去进行变换，变换结束之后，包装成和原信号相同类型的信号，返回。返回的信号作为bind函数的闭包的返回值。这样订阅新的map之后的信号就会拿到变换之后的值。</p><h4 id=2mapreplace-在父类racstream中定义的>2.MapReplace: (在父类RACStream中定义的)</h4><p>一般用法如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACSignal <span style=color:#f92672>*</span>signalB <span style=color:#f92672>=</span> [signalA mapReplace:<span style=color:#e6db74>@&#34;A&#34;</span>];
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_4.png alt></p><p>效果是不管A信号发送什么值，都替换成@“A”。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>mapReplace:</span>(<span style=color:#66d9ef>id</span>)object {
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> _) {
+        <span style=color:#66d9ef>return</span> object;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -mapReplace: %@&#34;</span>, self.name, [object rac_description]];
+}
+
+</code></pre></div><p>看底层源码就知道，它并不去关心原信号发送的是什么值，原信号发送什么值，都返回入参object的值。</p><h4 id=3reduceeach--在父类racstream中定义的>3.reduceEach:  (在父类RACStream中定义的)</h4><p>reduce是减少，聚合在一起的意思，reduceEach就是每个信号内部都聚合在一起。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACSignal <span style=color:#f92672>*</span>signalB <span style=color:#f92672>=</span> [signalA reduceEach:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span>num1 , NSNumber <span style=color:#f92672>*</span>num2){
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>[num1 intValue] <span style=color:#f92672>+</span> [num2 intValue]<span style=color:#ae81ff>)</span>;
+    }];
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_5.png alt></p><p>reduceEach后面必须传入一个元组RACTuple类型，否则会报错。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>reduceEach:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)())reduceBlock {
+    NSCParameterAssert(reduceBlock <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>__weak</span> RACStream <span style=color:#f92672>*</span>stream __attribute__((unused)) <span style=color:#f92672>=</span> self;
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(RACTuple <span style=color:#f92672>*</span>t) {
+        NSCAssert([t isKindOfClass:RACTuple.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;Value from stream %@ is not a tuple: %@&#34;</span>, stream, t);
+        <span style=color:#66d9ef>return</span> [RACBlockTrampoline invokeBlock:reduceBlock withArguments:t];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -reduceEach:&#34;</span>, self.name];
+}
+
+
+</code></pre></div><p>这里有两个断言，一个是判断传入的reduceBlock闭包是否为空，另一个断言是判断闭包的入参是否是RACTuple类型的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>RACBlockTrampoline</span> : <span style=color:#a6e22e>NSObject</span>
+<span style=color:#66d9ef>@property</span> (<span style=color:#66d9ef>nonatomic</span>, <span style=color:#66d9ef>readonly</span>, <span style=color:#66d9ef>copy</span>) <span style=color:#66d9ef>id</span> block;
++ (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>invokeBlock:</span>(<span style=color:#66d9ef>id</span>)block <span style=color:#a6e22e>withArguments:</span>(RACTuple <span style=color:#f92672>*</span>)arguments;
+<span style=color:#66d9ef>@end</span>
+
+</code></pre></div><p>RACBlockTrampoline就是一个保存了一个block闭包的对象，它会根据传进来的参数，动态的构造一个NSInvocation，并执行。</p><p>reduceEach把入参reduceBlock作为RACBlockTrampoline的入参invokeBlock传进去，以及每个RACTuple也传到RACBlockTrampoline中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>invokeWithArguments:</span>(RACTuple <span style=color:#f92672>*</span>)arguments {
+    <span style=color:#66d9ef>SEL</span> selector <span style=color:#f92672>=</span> [self selectorForArgumentCount:arguments.count];
+    NSInvocation <span style=color:#f92672>*</span>invocation <span style=color:#f92672>=</span> [NSInvocation invocationWithMethodSignature:[self methodSignatureForSelector:selector]];
+    invocation.selector <span style=color:#f92672>=</span> selector;
+    invocation.target <span style=color:#f92672>=</span> self;
+    
+    <span style=color:#66d9ef>for</span> (NSUInteger i <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>; i <span style=color:#f92672>&lt;</span> arguments.count; i<span style=color:#f92672>++</span>) {
+        <span style=color:#66d9ef>id</span> arg <span style=color:#f92672>=</span> arguments[i];
+        NSInteger argIndex <span style=color:#f92672>=</span> (NSInteger)(i <span style=color:#f92672>+</span> <span style=color:#ae81ff>2</span>);
+        [invocation setArgument:<span style=color:#f92672>&amp;</span>arg atIndex:argIndex];
+    }
+    
+    [invocation invoke];
+    
+    __unsafe_unretained <span style=color:#66d9ef>id</span> returnVal;
+    [invocation getReturnValue:<span style=color:#f92672>&amp;</span>returnVal];
+    <span style=color:#66d9ef>return</span> returnVal;
+}
+
+</code></pre></div><p>第一步就是先计算入参一个元组RACTuple里面元素的个数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>SEL</span>)<span style=color:#a6e22e>selectorForArgumentCount:</span>(NSUInteger)count {
+    NSCParameterAssert(count <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>);
+    
+    <span style=color:#66d9ef>switch</span> (count) {
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>0</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> NULL;
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>1</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith:);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>2</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>3</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>4</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>5</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>6</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>7</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>8</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>9</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>10</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>11</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>12</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>13</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>14</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>::::::::::::::</span>);
+        <span style=color:#66d9ef>case</span> <span style=color:#ae81ff>15</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>@selector</span>(performWith<span style=color:#f92672>:::::::::::::::</span>);
+    }
+    
+    NSCAssert(NO, <span style=color:#e6db74>@&#34;The argument count is too damn high! Only blocks of up to 15 arguments are currently supported.&#34;</span>);
+    <span style=color:#66d9ef>return</span> NULL;
+}
+
+</code></pre></div><p>可以看到最多支持元组内元素的个数是15个。</p><p>这里我们假设以元组里面有2个元素为例。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>performWith:</span>(<span style=color:#66d9ef>id</span>)obj1 <span style=color:#f92672>:</span>(<span style=color:#66d9ef>id</span>)obj2 {
+    <span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>block)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>) <span style=color:#f92672>=</span> self.block;
+    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>block</span>(obj1, obj2);
+}
+
+</code></pre></div><p>对应的<a href=https://developer.apple.com/library/content/documentation/Cocoa/Conceptual/ObjCRuntimeGuide/Articles/ocrtTypeEncodings.html>Type Encoding</a>如下：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_6.png alt></p><p>argument0和argument1分别对应着隐藏参数self和_cmd，所以对应着的类型是@和：，从argument2开始，就是入参的Type Encoding了。</p><p>所以在构造invocation的参数的时候，argIndex是要偏移2个位置的。即从(i + 2)开始设置参数。</p><p>当动态构造了一个invocation方法之后，[invocation invoke]调用这个动态方法，也就是执行了外部的reduceBlock闭包，闭包里面是我们想要信号变换的规则。</p><p>闭包执行结束得到returnVal返回值。这个返回值就是整个RACBlockTrampoline的返回值了。这个返回值也作为了map闭包里面的返回值。</p><p>接下去的操作就完全转换成了map的操作了。上面已经分析过map操作了，这里就不赘述了。</p><h4 id=4-reduceapply>4. reduceApply</h4><p>举个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACSignal <span style=color:#f92672>*</span>signalA <span style=color:#f92672>=</span> [RACSignal createSignal:
+                         <span style=color:#f92672>^</span>RACDisposable <span style=color:#f92672>*</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber)
+                         {
+                             <span style=color:#66d9ef>id</span> block <span style=color:#f92672>=</span> <span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span>first,NSNumber <span style=color:#f92672>*</span>second,NSNumber <span style=color:#f92672>*</span>third) {
+                                 <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>first.integerValue <span style=color:#f92672>+</span> second.integerValue <span style=color:#f92672>*</span> third.integerValue<span style=color:#ae81ff>)</span>;
+                             };
+                             
+                             [subscriber sendNext:RACTuplePack(block,<span style=color:#ae81ff>@2</span> , <span style=color:#ae81ff>@3</span> , <span style=color:#ae81ff>@8</span>)];
+                             [subscriber sendNext:RACTuplePack((<span style=color:#66d9ef>id</span>)(<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span>x){<span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>x.intValue <span style=color:#f92672>*</span> <span style=color:#ae81ff>10</span><span style=color:#ae81ff>)</span>;}),<span style=color:#ae81ff>@9</span>,<span style=color:#ae81ff>@10</span>,<span style=color:#ae81ff>@30</span>)];
+
+                             [subscriber sendCompleted];
+                             <span style=color:#66d9ef>return</span> [RACDisposable disposableWithBlock:<span style=color:#f92672>^</span>{
+                                 NSLog(<span style=color:#e6db74>@&#34;signal dispose&#34;</span>);
+                             }];
+                         }];
+
+    RACSignal <span style=color:#f92672>*</span>signalB <span style=color:#f92672>=</span> [signalA reduceApply];
+
+
+</code></pre></div><p>使用reduceApply的条件也是需要信号里面的值是元组RACTuple。不过这里和reduceEach不同的是，原信号中每个元祖RACTuple的第0位必须要为一个闭包，后面n位为这个闭包的入参，第0位的闭包有几个参数，后面就需要跟几个参数。</p><p>如上述例子中，第一个元组第0位的闭包有3个参数，所以第一个元组后面还要跟3个参数。第二个元组的第0位的闭包只有一个参数，所以后面只需要跟一个参数。</p><p>当然后面可以跟更多的参数，如第二个元组，闭包后面跟了3个参数，但是只有第一个参数是有效值，后面那2个参数是无效不起作用的。唯一需要注意的就是后面跟的参数个数一定不能少于第0位闭包入参的个数，否则就会报错。</p><p>上面例子输出</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>26</span>  <span style=color:#e6db74>//</span> <span style=color:#ae81ff>26</span> = <span style=color:#ae81ff>2</span> + <span style=color:#ae81ff>3</span> * <span style=color:#ae81ff>8</span>；<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>90</span>  <span style=color:#e6db74>//</span> <span style=color:#ae81ff>90</span> = <span style=color:#ae81ff>9</span> * <span style=color:#ae81ff>10</span>；<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>看看底层实现：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>reduceApply</span> {
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(RACTuple <span style=color:#f92672>*</span>tuple) {
+        NSCAssert([tuple isKindOfClass:RACTuple.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-reduceApply must only be used on a signal of RACTuples. Instead, received: %@&#34;</span>, tuple);
+        NSCAssert(tuple.count <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>1</span>, <span style=color:#e6db74>@&#34;-reduceApply must only be used on a signal of RACTuples, with at least a block in tuple[0] and its first argument in tuple[1]&#34;</span>);
+        
+        <span style=color:#75715e>// We can&#39;t use -array, because we need to preserve RACTupleNil
+</span><span style=color:#75715e></span>        NSMutableArray <span style=color:#f92672>*</span>tupleArray <span style=color:#f92672>=</span> [NSMutableArray arrayWithCapacity:tuple.count];
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> val <span style=color:#66d9ef>in</span> tuple) {
+            [tupleArray addObject:val];
+        }
+        RACTuple <span style=color:#f92672>*</span>arguments <span style=color:#f92672>=</span> [RACTuple tupleWithObjectsFromArray:[tupleArray subarrayWithRange:NSMakeRange(<span style=color:#ae81ff>1</span>, tupleArray.count <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)]];
+        
+        <span style=color:#66d9ef>return</span> [RACBlockTrampoline invokeBlock:tuple[<span style=color:#ae81ff>0</span>] withArguments:arguments];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -reduceApply&#34;</span>, self.name];
+}
+
+
+</code></pre></div><p>这里也有2个断言，第一个是确保传入的参数是RACTuple类型，第二个断言是确保元组RACTuple里面的元素各种至少是2个。因为下面取参数是直接从1号位开始取的。</p><p>reduceApply做的事情和reduceEach基本是等效的，只不过变换规则的block闭包一个是外部传进去的，一个是直接打包在每个信号元组RACTuple中第0位中。</p><h4 id=5-materialize>5. materialize</h4><p>这个方法会把信号包装成RACEvent类型。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>materialize</span> {
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        <span style=color:#66d9ef>return</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+            [subscriber sendNext:[RACEvent eventWithValue:x]];
+        } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+            [subscriber sendNext:[RACEvent eventWithError:error]];
+            [subscriber sendCompleted];
+        } completed:<span style=color:#f92672>^</span>{
+            [subscriber sendNext:RACEvent.completedEvent];
+            [subscriber sendCompleted];
+        }];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -materialize&#34;</span>, self.name];
+}
+
+</code></pre></div><p>sendNext会包装成[RACEvent eventWithValue:x]，error会包装成[RACEvent eventWithError:error]，completed会被包装成RACEvent.completedEvent。注意，当原信号error和completed，新信号都会发送sendCompleted。</p><h4 id=6-dematerialize>6. dematerialize</h4><p>这个操作是materialize的逆向操作。它会把包装成RACEvent信号重新还原为正常的值信号。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>dematerialize</span> {
+    <span style=color:#66d9ef>return</span> [[self bind:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(RACEvent <span style=color:#f92672>*</span>event, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            <span style=color:#66d9ef>switch</span> (event.eventType) {
+                <span style=color:#66d9ef>case</span> RACEventTypeCompleted:
+                    <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                    <span style=color:#66d9ef>return</span> [RACSignal empty];
+                    
+                <span style=color:#66d9ef>case</span> RACEventTypeError:
+                    <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                    <span style=color:#66d9ef>return</span> [RACSignal error:event.error];
+                    
+                <span style=color:#66d9ef>case</span> RACEventTypeNext:
+                    <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>event.value];
+            }
+        };
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -dematerialize&#34;</span>, self.name];
+}
+
+</code></pre></div><p>这里的实现也用到了bind函数，它会把原信号进行一个变换。新的信号会根据event.eventType进行转换。RACEventTypeCompleted被转换成[RACSignal empty]，RACEventTypeError被转换成[RACSignal error:event.error]，RACEventTypeNext被转换成[RACSignal return:event.value]。</p><h4 id=7-not>7. not</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>not</span> {
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>value) {
+        NSCAssert([value isKindOfClass:NSNumber.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-not must only be used on a signal of NSNumbers. Instead, got: %@&#34;</span>, value);
+        
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span><span style=color:#f92672>!</span>value.boolValue<span style=color:#ae81ff>)</span>;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -not&#34;</span>, self.name];
+}
+
+
+</code></pre></div><p>not操作需要传入的值都是NSNumber类型的。不是NSNumber类型会报错。not操作会把每个NSNumber按照BOOL的规则，取非，当成新信号的值。</p><h4 id=8-and>8. and</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>and</span> {
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(RACTuple <span style=color:#f92672>*</span>tuple) {
+        NSCAssert([tuple isKindOfClass:RACTuple.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-and must only be used on a signal of RACTuples of NSNumbers. Instead, received: %@&#34;</span>, tuple);
+        NSCAssert(tuple.count <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>, <span style=color:#e6db74>@&#34;-and must only be used on a signal of RACTuples of NSNumbers, with at least 1 value in the tuple&#34;</span>);
+        
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>[tuple.rac_sequence all:<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>number) {
+            NSCAssert([number isKindOfClass:NSNumber.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-and must only be used on a signal of RACTuples of NSNumbers. Instead, tuple contains a non-NSNumber value: %@&#34;</span>, tuple);
+            
+            <span style=color:#66d9ef>return</span> number.boolValue;
+        }]);
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -and&#34;</span>, self.name];
+}
+
+</code></pre></div><p>and操作需要原信号的每个信号都是元组RACTuple类型的，因为只有这样，RACTuple类型里面的每个元素的值才能进行&运算。</p><p>and操作里面有3处断言。第一处，判断入参是不是元组RACTuple类型的。第二处，判断RACTuple类型里面至少包含一个NSNumber。第三处，判断RACTuple里面是否都是NSNumber类型，有一个不符合，都会报错。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSequence <span style=color:#f92672>*</span>)<span style=color:#a6e22e>rac_sequence</span> {
+    <span style=color:#66d9ef>return</span> [RACTupleSequence sequenceWithTupleBackingArray:self.backingArray offset:<span style=color:#ae81ff>0</span>];
+}
+
+</code></pre></div><p>RACTuple类型先转换成RACTupleSequence。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>sequenceWithTupleBackingArray:</span>(NSArray <span style=color:#f92672>*</span>)backingArray <span style=color:#a6e22e>offset:</span>(NSUInteger)offset {
+    NSCParameterAssert(offset <span style=color:#f92672>&lt;=</span> backingArray.count);
+    
+    <span style=color:#66d9ef>if</span> (offset <span style=color:#f92672>==</span> backingArray.count) <span style=color:#66d9ef>return</span> self.empty;
+    
+    RACTupleSequence <span style=color:#f92672>*</span>seq <span style=color:#f92672>=</span> [[self alloc] init];
+    seq<span style=color:#f92672>-&gt;</span>_tupleBackingArray <span style=color:#f92672>=</span> backingArray;
+    seq<span style=color:#f92672>-&gt;</span>_offset <span style=color:#f92672>=</span> offset;
+    <span style=color:#66d9ef>return</span> seq;
+}
+
+</code></pre></div><p>backingArray是一个数组NSArry。这里关于RACTupleSequence和RACTuple会在以后的文章中详细分析，本篇以分析RACSignal为主。</p><p>RACTuple类型先转换成RACTupleSequence，即存成了一个数组。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>all:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    NSNumber <span style=color:#f92672>*</span>result <span style=color:#f92672>=</span> [self foldLeftWithStart:<span style=color:#ae81ff>@YES</span> reduce:<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>accumulator, <span style=color:#66d9ef>id</span> value) {
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>accumulator.boolValue <span style=color:#f92672>&amp;&amp;</span> block(value)<span style=color:#ae81ff>)</span>;
+    }];
+    
+    <span style=color:#66d9ef>return</span> result.boolValue;
+}
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>foldLeftWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>))reduce {
+    NSCParameterAssert(reduce <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>if</span> (self.head <span style=color:#f92672>==</span> nil) <span style=color:#66d9ef>return</span> start;
+    
+    <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> value <span style=color:#66d9ef>in</span> self) {
+        start <span style=color:#f92672>=</span> reduce(start, value);
+    }
+    
+    <span style=color:#66d9ef>return</span> start;
+}
+
+</code></pre></div><p>for会遍历RACSequence里面存的每一个值，分别都去调用reduce( )闭包。start的初始值为YES。reduce( )闭包是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>accumulator, <span style=color:#66d9ef>id</span> value) { <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>accumulator.boolValue <span style=color:#f92672>&amp;&amp;</span> block(value)<span style=color:#ae81ff>)</span>; }
+
+</code></pre></div><p>这里又会去调用block( )闭包：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>number) { <span style=color:#66d9ef>return</span> number.boolValue; }
+
+</code></pre></div><p>number是原信号RACTuple的第一个值。第一次循环reduce( )闭包是拿YES和原信号RACTuple的第一个值进行&计算。第二个循环reduce( )闭包是拿原信号RACTuple的第一个值和第二个值进行&计算，得到的值参与下一次循环，与第三个值进行&计算，如此下去。这也是折叠函数的意思，foldLeft从左边开始折叠。fold函数会从左至右，把RACTuple转换成的数组里面每个值都一个接着一个进行&计算。</p><p>每个RACTuple都map成这样的一个BOOL值。接下去信号就map成了一个新的信号。</p><h4 id=9-or>9. or</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>or</span> {
+    <span style=color:#66d9ef>return</span> [[self map:<span style=color:#f92672>^</span>(RACTuple <span style=color:#f92672>*</span>tuple) {
+        NSCAssert([tuple isKindOfClass:RACTuple.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-or must only be used on a signal of RACTuples of NSNumbers. Instead, received: %@&#34;</span>, tuple);
+        NSCAssert(tuple.count <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0</span>, <span style=color:#e6db74>@&#34;-or must only be used on a signal of RACTuples of NSNumbers, with at least 1 value in the tuple&#34;</span>);
+        
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>[tuple.rac_sequence any:<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>number) {
+            NSCAssert([number isKindOfClass:NSNumber.<span style=color:#66d9ef>class</span>], <span style=color:#e6db74>@&#34;-or must only be used on a signal of RACTuples of NSNumbers. Instead, tuple contains a non-NSNumber value: %@&#34;</span>, tuple);
+            
+            <span style=color:#66d9ef>return</span> number.boolValue;
+        }]);
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -or&#34;</span>, self.name];
+}
+
+</code></pre></div><p>or操作的实现和and操作的实现大体类似。3处断言的作用和and操作完全一致，这里就不再赘述了。or操作的重点在any函数的实现上。or操作的入参也必须是RACTuple类型的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>BOOL</span>)<span style=color:#a6e22e>any:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [self objectPassingTest:block] <span style=color:#f92672>!=</span> nil;
+}
+
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>objectPassingTest:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [self filter:block].head;
+}
+
+
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>filter:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> value))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> self.<span style=color:#66d9ef>class</span>;
+    
+    <span style=color:#66d9ef>return</span> [[self flattenMap:<span style=color:#f92672>^</span> <span style=color:#66d9ef>id</span> (<span style=color:#66d9ef>id</span> value) {
+        <span style=color:#66d9ef>if</span> (block(value)) {
+            <span style=color:#66d9ef>return</span> [<span style=color:#66d9ef>class</span> <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>value];
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>class</span>.empty;
+        }
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -filter:&#34;</span>, self.name];
+}
+
+
+</code></pre></div><p>any会依次判断RACTupleSequence数组里面的值，依次每个进行filter。如果value对应的BOOL值是YES，就转换成一个RACTupleSequence信号。如果对应的是NO，则转换成一个empty信号。</p><p>只要RACTuple为NO，就一直返回empty信号，直到BOOL值为YES，就返回1。map变换信号后变成成1。找到了YES之后的值就不会再判断了。如果没有找到YES，中间都是NO的话，一直遍历到数组最后一个，信号只能返回0。</p><h4 id=10-any>10. any:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>any:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> object))predicateBlock {
+    NSCParameterAssert(predicateBlock <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [[[self materialize] bind:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(RACEvent <span style=color:#f92672>*</span>event, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            <span style=color:#66d9ef>if</span> (event.finished) {
+                <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@NO</span>];
+            }
+            
+            <span style=color:#66d9ef>if</span> (predicateBlock(event.value)) {
+                <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@YES</span>];
+            }
+            
+            <span style=color:#66d9ef>return</span> [RACSignal empty];
+        };
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -any:&#34;</span>, self.name];
+}
+
+</code></pre></div><p>原信号会先经过materialize转换包装成RACEvent事件。依次判断predicateBlock(event.value)值的BOOL值，如果返回YES，就包装成RACSignal的新信号，发送YES出去，并且stop接下来的信号。如果返回MO，就返回[RACSignal empty]空信号。直到event.finished，返回[RACSignal return:@NO]。</p><p>所以any:操作的目的是找到第一个满足predicateBlock条件的值。找到了就返回YES的RACSignal的信号，如果没有找到，返回NO的RACSignal。</p><h4 id=11-any>11. any</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>any</span> {
+    <span style=color:#66d9ef>return</span> [[self any:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+        <span style=color:#66d9ef>return</span> YES;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -any&#34;</span>, self.name];
+}
+
+</code></pre></div><p>any操作是any:操作中的一种情况。即predicateBlock闭包永远都返回YES，所以any操作之后永远都只能得到一个只发送一个YES的新信号。</p><h4 id=12-all>12. all:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>all:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> object))predicateBlock {
+    NSCParameterAssert(predicateBlock <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [[[self materialize] bind:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(RACEvent <span style=color:#f92672>*</span>event, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            <span style=color:#66d9ef>if</span> (event.eventType <span style=color:#f92672>==</span> RACEventTypeCompleted) {
+                <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@YES</span>];
+            }
+            
+            <span style=color:#66d9ef>if</span> (event.eventType <span style=color:#f92672>==</span> RACEventTypeError <span style=color:#f92672>||</span> <span style=color:#f92672>!</span>predicateBlock(event.value)) {
+                <span style=color:#f92672>*</span>stop <span style=color:#f92672>=</span> YES;
+                <span style=color:#66d9ef>return</span> [RACSignal <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span><span style=color:#ae81ff>@NO</span>];
+            }
+            
+            <span style=color:#66d9ef>return</span> [RACSignal empty];
+        };
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -all:&#34;</span>, self.name];
+}
+
+</code></pre></div><p>all:操作和any:有点类似。原信号会先经过materialize转换包装成RACEvent事件。对原信号发送的每个信号都依次判断predicateBlock(event.value)是否是NO 或者event.eventType == RACEventTypeError。如果predicateBlock(event.value)返回NO或者出现了错误，新的信号都返回NO。如果一直都没出现问题，在RACEventTypeCompleted的时候发送YES。</p><p>all:可以用来判断整个原信号发送过程中是否有错误事件RACEventTypeError，或者是否存在predicateBlock为NO的情况。可以把predicateBlock设置成一个正确条件。如果原信号出现错误事件，或者不满足设置的错误条件，都会发送新信号返回NO。如果全过程都没有出错，或者都满足predicateBlock设置的条件，则一直到RACEventTypeCompleted，发送YES的新信号。</p><h4 id=13-repeat>13. repeat</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>repeat</span> {
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        <span style=color:#66d9ef>return</span> subscribeForever(self,
+                                <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+                                    [subscriber sendNext:x];
+                                },
+                                <span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error, RACDisposable <span style=color:#f92672>*</span>disposable) {
+                                    [disposable dispose];
+                                    [subscriber sendError:error];
+                                },
+                                <span style=color:#f92672>^</span>(RACDisposable <span style=color:#f92672>*</span>disposable) {
+                                    <span style=color:#75715e>// Resubscribe.
+</span><span style=color:#75715e></span>                                });
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -repeat&#34;</span>, self.name];
+}
+
+</code></pre></div><p>repeat操作返回一个subscribeForever闭包，闭包里面要传入4个参数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> RACDisposable <span style=color:#f92672>*</span><span style=color:#a6e22e>subscribeForever</span> (RACSignal <span style=color:#f92672>*</span>signal, <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>next)(<span style=color:#66d9ef>id</span>), <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>error)(NSError <span style=color:#f92672>*</span>, RACDisposable <span style=color:#f92672>*</span>), <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>completed)(RACDisposable <span style=color:#f92672>*</span>)) {
+    next <span style=color:#f92672>=</span> [next <span style=color:#66d9ef>copy</span>];
+    error <span style=color:#f92672>=</span> [error <span style=color:#66d9ef>copy</span>];
+    completed <span style=color:#f92672>=</span> [completed <span style=color:#66d9ef>copy</span>];
+    
+    RACCompoundDisposable <span style=color:#f92672>*</span>compoundDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+    
+    RACSchedulerRecursiveBlock recursiveBlock <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>recurse)(<span style=color:#66d9ef>void</span>)) {
+        RACCompoundDisposable <span style=color:#f92672>*</span>selfDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+        [compoundDisposable addDisposable:selfDisposable];
+        
+        <span style=color:#66d9ef>__weak</span> RACDisposable <span style=color:#f92672>*</span>weakSelfDisposable <span style=color:#f92672>=</span> selfDisposable;
+        
+        RACDisposable <span style=color:#f92672>*</span>subscriptionDisposable <span style=color:#f92672>=</span> [signal subscribeNext:next error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>e) {
+            <span style=color:#66d9ef>@autoreleasepool</span> {
+                error(e, compoundDisposable);
+                [compoundDisposable removeDisposable:weakSelfDisposable];
+            }
+            
+            recurse();
+        } completed:<span style=color:#f92672>^</span>{
+            <span style=color:#66d9ef>@autoreleasepool</span> {
+                completed(compoundDisposable);
+                [compoundDisposable removeDisposable:weakSelfDisposable];
+            }
+            
+            recurse();
+        }];
+        
+        [selfDisposable addDisposable:subscriptionDisposable];
+    };
+    
+    <span style=color:#75715e>// Subscribe once immediately, and then use recursive scheduling for any
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// further resubscriptions.
+</span><span style=color:#75715e></span>    recursiveBlock(<span style=color:#f92672>^</span>{
+        RACScheduler <span style=color:#f92672>*</span>recursiveScheduler <span style=color:#f92672>=</span> RACScheduler.currentScheduler <span style=color:#f92672>?:</span> [RACScheduler scheduler];
+        
+        RACDisposable <span style=color:#f92672>*</span>schedulingDisposable <span style=color:#f92672>=</span> [recursiveScheduler scheduleRecursiveBlock:recursiveBlock];
+        [compoundDisposable addDisposable:schedulingDisposable];
+    });
+    
+    <span style=color:#66d9ef>return</span> compoundDisposable;
+}
+
+
+</code></pre></div><p>subscribeForever有4个参数，第一个参数是原信号，第二个是传入的next闭包，第三个是error闭包，最后一个是completed闭包。</p><p>subscribeForever一进入这个函数就会调用recursiveBlock( )闭包，闭包中有一个recurse( )的入参的参数。在recursiveBlock( )闭包中对原信号RACSignal进行订阅。next，error，completed分别会先调用传进来的闭包。然后error，completed执行完error( )和completed( )闭包之后，还会继续再执行recurse( )，recurse( )是recursiveBlock的入参。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>scheduleRecursiveBlock:</span>(RACSchedulerRecursiveBlock)recursiveBlock {
+    RACCompoundDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+    
+    [self scheduleRecursiveBlock:[recursiveBlock <span style=color:#66d9ef>copy</span>] addingToDisposable:disposable];
+    <span style=color:#66d9ef>return</span> disposable;
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>scheduleRecursiveBlock:</span>(RACSchedulerRecursiveBlock)recursiveBlock <span style=color:#a6e22e>addingToDisposable:</span>(RACCompoundDisposable <span style=color:#f92672>*</span>)disposable {
+    <span style=color:#66d9ef>@autoreleasepool</span> {
+        RACCompoundDisposable <span style=color:#f92672>*</span>selfDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+        [disposable addDisposable:selfDisposable];
+        
+        <span style=color:#66d9ef>__weak</span> RACDisposable <span style=color:#f92672>*</span>weakSelfDisposable <span style=color:#f92672>=</span> selfDisposable;
+        
+        RACDisposable <span style=color:#f92672>*</span>schedulingDisposable <span style=color:#f92672>=</span> [self schedule:<span style=color:#f92672>^</span>{ <span style=color:#75715e>// 此处省略 }];
+</span><span style=color:#75715e></span>        
+        [selfDisposable addDisposable:schedulingDisposable];
+    }
+}
+</code></pre></div><p>先取到当前的currentScheduler，即recursiveScheduler，执行scheduleRecursiveBlock，在这个函数中，会调用schedule函数。这里的recursiveScheduler是RACQueueScheduler类型的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>schedule:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    RACDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> [[RACDisposable alloc] init];
+    
+    dispatch_async(self.queue, <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>if</span> (disposable.disposed) <span style=color:#66d9ef>return</span>;
+        [self performAsCurrentScheduler:block];
+    });
+    
+    <span style=color:#66d9ef>return</span> disposable;
+}
+
+</code></pre></div><p>如果原信号没有disposed，dispatch_async会继续执行block，在这个block中还会继续原信号的发送。所以原信号只要没有error信号，disposable.disposed就不会返回YES，就会一直调用block。所以在subscribeForever的error和completed的最后都会调用recurse( )闭包。error调用recurse( )闭包是为了结束调用block，结束所有的信号。completed调用recurse( )闭包是为了继续调用block( )闭包，也就是repeat的本质。原信号会继续发送信号，如此无限循环下去。</p><h4 id=14-retry>14. retry:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>retry:</span>(NSInteger)retryCount {
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        <span style=color:#66d9ef>__block</span> NSInteger currentRetryCount <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+        <span style=color:#66d9ef>return</span> subscribeForever(self,
+                                <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+                                    [subscriber sendNext:x];
+                                },
+                                <span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error, RACDisposable <span style=color:#f92672>*</span>disposable) {
+                                    <span style=color:#66d9ef>if</span> (retryCount <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span> <span style=color:#f92672>||</span> currentRetryCount <span style=color:#f92672>&lt;</span> retryCount) {
+                                        <span style=color:#75715e>// Resubscribe.
+</span><span style=color:#75715e></span>                                        currentRetryCount<span style=color:#f92672>++</span>;
+                                        <span style=color:#66d9ef>return</span>;
+                                    }
+                                    
+                                    [disposable dispose];
+                                    [subscriber sendError:error];
+                                },
+                                <span style=color:#f92672>^</span>(RACDisposable <span style=color:#f92672>*</span>disposable) {
+                                    [disposable dispose];
+                                    [subscriber sendCompleted];
+                                });
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -retry: %lu&#34;</span>, self.name, (<span style=color:#66d9ef>unsigned</span> <span style=color:#66d9ef>long</span>)retryCount];
+}
+
+
+</code></pre></div><p>在retry:的实现中，和repeat实现的区别是中间加入了一个currentRetryCount值。如果currentRetryCount > retryCount的话，就会在error中调用[disposable dispose]，这样subscribeForever就不会再无限循环下去了。</p><p>所以retry:操作的用途就是在原信号在出现error的时候，重试retryCount的次数，如果依旧error，那么就会停止重试。</p><p>如果原信号没有发生错误，那么原信号在发送结束，subscribeForever也就结束了。retry:操作对于没有任何error的信号相当于什么都没有发生。</p><h4 id=15-retry>15. retry</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>retry</span> {
+    <span style=color:#66d9ef>return</span> [[self retry:<span style=color:#ae81ff>0</span>] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -retry&#34;</span>, self.name];
+}
+
+</code></pre></div><p>这里的retry操作就是一个无限重试的操作。因为retryCount设置成0之后，在error的闭包中中，retryCount 永远等于 0，原信号永远都不会被dispose，所以subscribeForever会一直无限重试下去。</p><p>同样的，如果对一个没有error的信号调用retry操作，也是不起任何作用的。</p><h4 id=16-scanwithstart-reducewithindex-在父类racstream中定义的>16. scanWithStart: reduceWithIndex: (在父类RACStream中定义的)</h4><p>先写出测试代码:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    RACSignal <span style=color:#f92672>*</span>signalA <span style=color:#f92672>=</span> [RACSignal createSignal:<span style=color:#f92672>^</span>RACDisposable <span style=color:#f92672>*</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber)
+                         {
+                             [subscriber sendNext:<span style=color:#ae81ff>@1</span>];
+                             [subscriber sendNext:<span style=color:#ae81ff>@1</span>];
+                             [subscriber sendNext:<span style=color:#ae81ff>@4</span>];
+                             <span style=color:#66d9ef>return</span> [RACDisposable disposableWithBlock:<span style=color:#f92672>^</span>{
+                             }];
+                         }];
+
+    RACSignal <span style=color:#f92672>*</span>signalB <span style=color:#f92672>=</span> [signalA scanWithStart:<span style=color:#ae81ff>@(</span><span style=color:#ae81ff>2</span><span style=color:#ae81ff>)</span> reduceWithIndex:<span style=color:#f92672>^</span><span style=color:#66d9ef>id</span>(NSNumber <span style=color:#f92672>*</span> running, NSNumber <span style=color:#f92672>*</span> next, NSUInteger index) {
+        <span style=color:#66d9ef>return</span> <span style=color:#ae81ff>@(</span>running.intValue <span style=color:#f92672>*</span> next.intValue <span style=color:#f92672>+</span> index<span style=color:#ae81ff>)</span>;
+    }];
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>2</span>    <span style=color:#e6db74>//</span> <span style=color:#ae81ff>2</span> * <span style=color:#ae81ff>1</span> + <span style=color:#ae81ff>0</span> = <span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>3</span>    <span style=color:#e6db74>//</span> <span style=color:#ae81ff>2</span> * <span style=color:#ae81ff>1</span> + <span style=color:#ae81ff>1</span> = <span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>14</span>   <span style=color:#e6db74>//</span> <span style=color:#ae81ff>3</span> * <span style=color:#ae81ff>4</span> + <span style=color:#ae81ff>2</span> = <span style=color:#ae81ff>14</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_7.png alt></p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>scanWithStart:</span>(<span style=color:#66d9ef>id</span>)startingValue <span style=color:#a6e22e>reduceWithIndex:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>, NSUInteger))reduceBlock {
+    NSCParameterAssert(reduceBlock <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>Class</span> <span style=color:#66d9ef>class</span> <span style=color:#f92672>=</span> self.<span style=color:#66d9ef>class</span>;
+    
+    <span style=color:#66d9ef>return</span> [[self bind:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>id</span> running <span style=color:#f92672>=</span> startingValue;
+        <span style=color:#66d9ef>__block</span> NSUInteger index <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+        
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> value, <span style=color:#66d9ef>BOOL</span> <span style=color:#f92672>*</span>stop) {
+            running <span style=color:#f92672>=</span> reduceBlock(running, value, index<span style=color:#f92672>++</span>);
+            <span style=color:#66d9ef>return</span> [<span style=color:#66d9ef>class</span> <span style=color:#66d9ef>return</span><span style=color:#f92672>:</span>running];
+        };
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -scanWithStart: %@ reduceWithIndex:&#34;</span>, self.name, [startingValue rac_description]];
+}
+
+</code></pre></div><p>scanWithStart这个变换由初始值，变换函数reduceBlock( )，和index步进的变量组成。原信号的每个信号都会由变换函数reduceBlock( )进行变换。index每次都是自增。变换的初始值是由入参startingValue传入的。</p><h4 id=17-scanwithstart-reduce-在父类racstream中定义的>17. scanWithStart: reduce: (在父类RACStream中定义的)</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>instancetype</span>)<span style=color:#a6e22e>scanWithStart:</span>(<span style=color:#66d9ef>id</span>)startingValue <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> running, <span style=color:#66d9ef>id</span> next))reduceBlock {
+    NSCParameterAssert(reduceBlock <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>return</span> [[self
+             scanWithStart:startingValue
+             reduceWithIndex:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> running, <span style=color:#66d9ef>id</span> next, NSUInteger index) {
+                 <span style=color:#66d9ef>return</span> reduceBlock(running, next);
+             }]
+            setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -scanWithStart: %@ reduce:&#34;</span>, self.name, [startingValue rac_description]];
+}
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_8.png alt></p><p>scanWithStart: reduce:就是scanWithStart: reduceWithIndex: 的缩略版。变换函数也是外面闭包reduceBlock( )传进来的。只不过变换过程中不会使用index自增的这个变量。</p><p><strong>通过使用scan这一系列的操作，可以有效的消除副作用操作！</strong></p><h4 id=18-aggregatewithstart-reducewithindex>18. aggregateWithStart: reduceWithIndex:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>aggregateWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduceWithIndex:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>, NSUInteger))reduceBlock {
+    <span style=color:#66d9ef>return</span> [[[[self
+               scanWithStart:start reduceWithIndex:reduceBlock]
+              startWith:start]
+             takeLast:<span style=color:#ae81ff>1</span>]
+            setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -aggregateWithStart: %@ reduceWithIndex:&#34;</span>, self.name, [start rac_description]];
+}
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_9.png alt></p><p>aggregate是合计的意思。所以最后变换出来的信号只有最后一个值。
+aggregateWithStart: reduceWithIndex:操作调用了scanWithStart: reduceWithIndex:，原理和它完全一致。不同的是多了两步额外的操作，一个是startWith:，一个是takeLast:1。startWith:是在scanWithStart: reduceWithIndex:变换之后的信号之前加上start信号。takeLast:1是取最后一个信号。takeLast:和startWith:的详细分析文章下面会详述。</p><p>值得注意的一点是，原信号如果没有发送complete信号，那么该函数就不会输出新的信号值。因为在一直等待结束。</p><h4 id=19-aggregatewithstart-reduce>19. aggregateWithStart: reduce:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>aggregateWithStart:</span>(<span style=color:#66d9ef>id</span>)start <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> running, <span style=color:#66d9ef>id</span> next))reduceBlock {
+    <span style=color:#66d9ef>return</span> [[self
+             aggregateWithStart:start
+             reduceWithIndex:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> running, <span style=color:#66d9ef>id</span> next, NSUInteger index) {
+                 <span style=color:#66d9ef>return</span> reduceBlock(running, next);
+             }]
+            setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -aggregateWithStart: %@ reduce:&#34;</span>, self.name, [start rac_description]];
+}
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_10.png alt></p><p>aggregateWithStart: reduce:调用aggregateWithStart: reduceWithIndex:函数，只不过没有只用index值。同样，如果原信号没有发送complete信号，也不会输出任何信号。</p><h4 id=20-aggregatewithstartfactory-reduce>20. aggregateWithStartFactory: reduce:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>aggregateWithStartFactory:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))startFactory <span style=color:#a6e22e>reduce:</span>(<span style=color:#66d9ef>id</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> running, <span style=color:#66d9ef>id</span> next))reduceBlock {
+    NSCParameterAssert(startFactory <span style=color:#f92672>!=</span> NULL);
+    NSCParameterAssert(reduceBlock <span style=color:#f92672>!=</span> NULL);
+    
+    <span style=color:#66d9ef>return</span> [[RACSignal defer:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> [self aggregateWithStart:startFactory() reduce:reduceBlock];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -aggregateWithStartFactory:reduce:&#34;</span>, self.name];
+}
+
+
+</code></pre></div><p>aggregateWithStartFactory: reduce:内部实现就是调用aggregateWithStart: reduce:，只不过入参多了一个产生start的startFactory( )闭包罢了。</p><h4 id=21-collect>21. collect</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>collect</span> {
+    <span style=color:#66d9ef>return</span> [[self aggregateWithStartFactory:<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> [[NSMutableArray alloc] init];
+    } reduce:<span style=color:#f92672>^</span>(NSMutableArray <span style=color:#f92672>*</span>collectedValues, <span style=color:#66d9ef>id</span> x) {
+        [collectedValues addObject:(x <span style=color:#f92672>?:</span> NSNull.null)];
+        <span style=color:#66d9ef>return</span> collectedValues;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -collect&#34;</span>, self.name];
+}
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_11.png alt></p><p>collect函数会调用aggregateWithStartFactory: reduce:方法。把所有原信号的值收集起来，保存在NSMutableArray中。</p><h3 id=二-时间操作>二. 时间操作</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_12.png alt></p><h4 id=1-throttlevaluespassingtest>1. throttle:valuesPassingTest:</h4><p>这个操作传入一个时间间隔NSTimeInterval，和一个判断条件的闭包predicate。原信号在一个时间间隔NSTimeInterval之间发送的信号，如果还能满足predicate，则原信号都被“吞”了，直到一个时间间隔NSTimeInterval结束，会再次判断predicate，如果不满足了，原信号就会被发送出来。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/32_13.png alt></p><p>如上图，原信号发送1以后，间隔NSTimeInterval的时间内，没有信号发出，并且predicate也为YES，就把1变换成新的信号发出去。接下去由于原信号发送2，3，4的过程中，都在间隔NSTimeInterval的时间内，所以都被“吞”了。直到原信号发送5之后，间隔NSTimeInterval的时间内没有新的信号发出，所以把原信号的5发送出来。原信号的6也是如此。</p><p>再来看看具体实现：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>throttle:</span>(NSTimeInterval)interval <span style=color:#a6e22e>valuesPassingTest:</span>(<span style=color:#66d9ef>BOOL</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> next))predicate {
+    NSCParameterAssert(interval <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>0</span>);
+    NSCParameterAssert(predicate <span style=color:#f92672>!=</span> nil);
+    
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        RACCompoundDisposable <span style=color:#f92672>*</span>compoundDisposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+      
+        RACScheduler <span style=color:#f92672>*</span>scheduler <span style=color:#f92672>=</span> [RACScheduler scheduler];
+       
+        <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>id</span> nextValue <span style=color:#f92672>=</span> nil;
+        <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>BOOL</span> hasNextValue <span style=color:#f92672>=</span> NO;
+        RACSerialDisposable <span style=color:#f92672>*</span>nextDisposable <span style=color:#f92672>=</span> [[RACSerialDisposable alloc] init];
+        
+        <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>flushNext)(<span style=color:#66d9ef>BOOL</span> send) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>BOOL</span> send) { <span style=color:#75715e>// 暂时省略 };
+</span><span style=color:#75715e></span>        
+        RACDisposable <span style=color:#f92672>*</span>subscriptionDisposable <span style=color:#f92672>=</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+            <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>        } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+            [compoundDisposable dispose];
+            [subscriber sendError:error];
+        } completed:<span style=color:#f92672>^</span>{
+            flushNext(YES);
+            [subscriber sendCompleted];
+        }];
+        
+        [compoundDisposable addDisposable:subscriptionDisposable];
+        <span style=color:#66d9ef>return</span> compoundDisposable;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -throttle: %f valuesPassingTest:&#34;</span>, self.name, (<span style=color:#66d9ef>double</span>)interval];
+}
+
+
+</code></pre></div><p>看这段实现，里面有2处断言。会先判断传入的interval是否大于0，小于0当然是不行的。还有一个就是传入的predicate闭包不能为空，这个是接下来用来控制流程的。</p><p>接下来的实现还是按照套路来，返回值是一个信号，新信号的闭包里面再订阅原信号进行变换。</p><p>那么整个变换的重点就落在了flushNext闭包和订阅原信号subscribeNext闭包中了。</p><p>当新的信号一旦被订阅，闭包执行到此处，就会对原信号进行订阅。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+    RACScheduler <span style=color:#f92672>*</span>delayScheduler <span style=color:#f92672>=</span> RACScheduler.currentScheduler <span style=color:#f92672>?:</span> scheduler;
+    <span style=color:#66d9ef>BOOL</span> shouldThrottle <span style=color:#f92672>=</span> predicate(x);
+    
+    <span style=color:#66d9ef>@synchronized</span> (compoundDisposable) {   
+        flushNext(NO);
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>shouldThrottle) {
+            [subscriber sendNext:x];
+            <span style=color:#66d9ef>return</span>;
+        }
+        nextValue <span style=color:#f92672>=</span> x;
+        hasNextValue <span style=color:#f92672>=</span> YES;
+        nextDisposable.disposable <span style=color:#f92672>=</span> [delayScheduler afterDelay:interval schedule:<span style=color:#f92672>^</span>{
+            flushNext(YES);
+        }];
+    }
+}
+
+
+</code></pre></div><ol><li><p>首先先创建一个delayScheduler。先判断当前的currentScheduler是否存在，不存在就取之前创建的[RACScheduler scheduler]。这里虽然两处都是RACTargetQueueScheduler类型的，但是currentScheduler是com.ReactiveCocoa.RACScheduler.mainThreadScheduler，而[RACScheduler scheduler]创建的是com.ReactiveCocoa.RACScheduler.backgroundScheduler。</p></li><li><p>调用predicate( )闭包，传入原信号发来的信号值x，经过predicate判断以后，得到是否打开节流开关的BOOL变量shouldThrottle。</p></li><li><p>之所以把RACCompoundDisposable作为线程间互斥信号量，因为RACCompoundDisposable里面会加入所有的RACDisposable信号。接着下面的操作用@synchronized给线程间加锁。</p></li><li><p>flushNext( )这个闭包是为了hook住原信号的发送。</p></li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>flushNext)(<span style=color:#66d9ef>BOOL</span> send) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>BOOL</span> send) {
+    <span style=color:#66d9ef>@synchronized</span> (compoundDisposable) {
+        [nextDisposable.disposable dispose];
+        
+        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>hasNextValue) <span style=color:#66d9ef>return</span>;
+        <span style=color:#66d9ef>if</span> (send) [subscriber sendNext:nextValue];
+        
+        nextValue <span style=color:#f92672>=</span> nil;
+        hasNextValue <span style=color:#f92672>=</span> NO;
+    }
+};
+
+</code></pre></div><p>这个闭包中如果传入的是NO，那么原信号就无法立即sendNext。如果传入的是YES，并且hasNextValue = YES，原信号待发送的还有值，那么就发送原信号。</p><p>shouldThrottle是一个阀门，随时控制原信号是否可以被发送。</p><p>小结一下，每个原信号发送过来，通过在throttle:valuesPassingTest:里面的did subscriber闭包中进行订阅。这个闭包中主要干了4件事情：</p><ol><li>调用flushNext(NO)闭包判断能否发送原信号的值。入参为NO，不发送原信号的值。</li><li>判断阀门条件predicate(x)能否发送原信号的值。</li><li>如果以上两个条件都满足，nextValue中进行赋值为原信号发来的值，hasNextValue = YES代表当前有要发送的值。</li><li>开启一个delayScheduler，延迟interval的时间，发送原信号的这个值，即调用flushNext(YES)。</li></ol><p>现在再来分析一下整个throttle:valuesPassingTest:的全过程</p><p>原信号发出第一个值，如果在interval的时间间隔内，没有新的信号发送，那么delayScheduler延迟interval的时间，执行flushNext(YES)，发送原信号的这个第一个值。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>afterDelay:</span>(NSTimeInterval)delay <span style=color:#a6e22e>schedule:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    <span style=color:#66d9ef>return</span> [self after:[NSDate dateWithTimeIntervalSinceNow:delay] schedule:block];
+}
+
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>after:</span>(NSDate <span style=color:#f92672>*</span>)date <span style=color:#a6e22e>schedule:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    NSCParameterAssert(date <span style=color:#f92672>!=</span> nil);
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    RACDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> [[RACDisposable alloc] init];
+    
+    dispatch_after([self.<span style=color:#66d9ef>class</span> wallTimeWithDate:date], self.queue, <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>if</span> (disposable.disposed) <span style=color:#66d9ef>return</span>;
+        [self performAsCurrentScheduler:block];
+    });
+    
+    <span style=color:#66d9ef>return</span> disposable;
+}
+
+
+</code></pre></div><p>注意，在dispatch_after闭包里面之前[self performAsCurrentScheduler:block]之前，有一个关键的判断：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>if</span> (disposable.disposed) <span style=color:#66d9ef>return</span>;
+
+</code></pre></div><p>这个判断就是用来判断从第一个信号发出，在间隔interval的时间之内，还有没有其他信号存在。如果有，第一个信号肯定会disposed，这里会执行return，所以也就不会把第一个信号发送出来了。</p><p>这样也就达到了节流的目的：原来每个信号都会创建一个delayScheduler，都会延迟interval的时间，在这个时间内，如果原信号再没有发送新值，即原信号没有disposed，就把原信号的值发出来；如果在这个时间内，原信号还发送了一个新值，那么第一个值就被丢弃。在发送过程中，每个信号都要判断一次predicate( )，这个是阀门的开关，如果随时都不节流了，原信号发的值就需要立即被发送出来。</p><p>还有二点需要注意的是，第一点，正好在interval那一时刻，有新信号发送出来，原信号也会被丢弃，即只有在>=interval的时间之内，原信号没有发送新值，原来的这个值才能发送出来。第二点，原信号发送completed时，会立即执行flushNext(YES)，把原信号的最后一个值发送出来。</p><h4 id=2-throttle>2. throttle:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>throttle:</span>(NSTimeInterval)interval {
+    <span style=color:#66d9ef>return</span> [[self throttle:interval valuesPassingTest:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> _) {
+        <span style=color:#66d9ef>return</span> YES;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -throttle: %f&#34;</span>, self.name, (<span style=color:#66d9ef>double</span>)interval];
+}
+
+</code></pre></div><p>这个操作其实就是调用了throttle:valuesPassingTest:方法，传入时间间隔interval，predicate( )闭包则永远返回YES，原信号的每个信号都执行节流操作。</p><h4 id=3-bufferwithtimeonscheduler>3. bufferWithTime:onScheduler:</h4><p>这个操作的实现是类似于throttle:valuesPassingTest:的实现。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>bufferWithTime:</span>(NSTimeInterval)interval <span style=color:#a6e22e>onScheduler:</span>(RACScheduler <span style=color:#f92672>*</span>)scheduler {
+    NSCParameterAssert(scheduler <span style=color:#f92672>!=</span> nil);
+    NSCParameterAssert(scheduler <span style=color:#f92672>!=</span> RACScheduler.immediateScheduler);
+    
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        RACSerialDisposable <span style=color:#f92672>*</span>timerDisposable <span style=color:#f92672>=</span> [[RACSerialDisposable alloc] init];
+        NSMutableArray <span style=color:#f92672>*</span>values <span style=color:#f92672>=</span> [NSMutableArray array];
+        
+        <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>flushValues)() <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+            <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>        };
+        
+        RACDisposable <span style=color:#f92672>*</span>selfDisposable <span style=color:#f92672>=</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+            <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>        } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+            [subscriber sendError:error];
+        } completed:<span style=color:#f92672>^</span>{
+            flushValues();
+            [subscriber sendCompleted];
+        }];
+        
+        <span style=color:#66d9ef>return</span> [RACDisposable disposableWithBlock:<span style=color:#f92672>^</span>{
+            [selfDisposable dispose];
+            [timerDisposable dispose];
+        }];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -bufferWithTime: %f onScheduler: %@&#34;</span>, self.name, (<span style=color:#66d9ef>double</span>)interval, scheduler];
+}
+
+
+</code></pre></div><p>bufferWithTime:onScheduler:的实现和throttle:valuesPassingTest:的实现给出类似。开始有2个断言，2个都是判断scheduler的，第一个断言是判断scheduler是否为nil。第二个断言是判断scheduler的类型的，scheduler类型不能是immediateScheduler类型的，因为这个方法是要缓存一些信号的，所以不能是immediateScheduler类型的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACDisposable <span style=color:#f92672>*</span>selfDisposable <span style=color:#f92672>=</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+    <span style=color:#66d9ef>@synchronized</span> (values) {
+        <span style=color:#66d9ef>if</span> (values.count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) {
+            timerDisposable.disposable <span style=color:#f92672>=</span> [scheduler afterDelay:interval schedule:flushValues];
+        }
+        [values addObject:x <span style=color:#f92672>?:</span> RACTupleNil.tupleNil];
+    }
+}
+
+</code></pre></div><p>在subscribeNext中，当数组里面是没有存任何原信号的值，就会开启一个scheduler，延迟interval时间，执行flushValues闭包。如果里面有值了，就继续加到values的数组中。关键的也是闭包里面的内容，代码如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>flushValues)() <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>{
+    <span style=color:#66d9ef>@synchronized</span> (values) {
+        [timerDisposable.disposable dispose];
+        
+        <span style=color:#66d9ef>if</span> (values.count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>) <span style=color:#66d9ef>return</span>;
+        
+        RACTuple <span style=color:#f92672>*</span>tuple <span style=color:#f92672>=</span> [RACTuple tupleWithObjectsFromArray:values];
+        [values removeAllObjects];
+        [subscriber sendNext:tuple];
+    }
+};
+
+</code></pre></div><p>flushValues( )闭包里面主要是把数组包装成一个元组，并且全部发送出来，原数组里面就全部清空了。这也是bufferWithTime:onScheduler:的作用，在interval时间内，把这个时间间隔内的原信号都缓存起来，并且在interval的那一刻，把这些缓存的信号打包成一个元组，发送出来。</p><p>和throttle:valuesPassingTest:方法一样，在原信号completed的时候，立即执行flushValues( )闭包，把里面存的值都发送出来。</p><h4 id=4-delay>4. delay:</h4><p>delay:函数的操作和上面几个套路都是一样的，实现方式也都是模板式的，唯一的不同都在subscribeNext中，和一个判断是否发送的闭包中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>delay:</span>(NSTimeInterval)interval {
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        RACCompoundDisposable <span style=color:#f92672>*</span>disposable <span style=color:#f92672>=</span> [RACCompoundDisposable compoundDisposable];
+        
+        <span style=color:#75715e>// We may never use this scheduler, but we need to set it up ahead of
+</span><span style=color:#75715e></span>        <span style=color:#75715e>// time so that our scheduled blocks are run serially if we do.
+</span><span style=color:#75715e></span>        RACScheduler <span style=color:#f92672>*</span>scheduler <span style=color:#f92672>=</span> [RACScheduler scheduler];
+        
+        <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>schedule)(dispatch_block_t) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(dispatch_block_t block) {
+            <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>        };
+        
+        RACDisposable <span style=color:#f92672>*</span>subscriptionDisposable <span style=color:#f92672>=</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+            <span style=color:#75715e>// 暂时省略
+</span><span style=color:#75715e></span>        } error:<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+            [subscriber sendError:error];
+        } completed:<span style=color:#f92672>^</span>{
+            schedule(<span style=color:#f92672>^</span>{
+                [subscriber sendCompleted];
+            });
+        }];
+        
+        [disposable addDisposable:subscriptionDisposable];
+        <span style=color:#66d9ef>return</span> disposable;
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;[%@] -delay: %f&#34;</span>, self.name, (<span style=color:#66d9ef>double</span>)interval];
+}
+
+</code></pre></div><p>在delay:的subscribeNext中，就单纯的执行了schedule的闭包。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+        RACDisposable <span style=color:#f92672>*</span>subscriptionDisposable <span style=color:#f92672>=</span> [self subscribeNext:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> x) {
+            schedule(<span style=color:#f92672>^</span>{
+                [subscriber sendNext:x];
+            });
+        }
+
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+  <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>schedule)(dispatch_block_t) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(dispatch_block_t block) {
+          RACScheduler <span style=color:#f92672>*</span>delayScheduler <span style=color:#f92672>=</span> RACScheduler.currentScheduler <span style=color:#f92672>?:</span> scheduler;
+          RACDisposable <span style=color:#f92672>*</span>schedulerDisposable <span style=color:#f92672>=</span> [delayScheduler afterDelay:interval schedule:block];
+          [disposable addDisposable:schedulerDisposable];
+      };
+
+</code></pre></div><p>在schedule闭包中做的时间就是延迟interval的时间发送原信号的值。</p><h4 id=5-intervalonschedulerwithleeway>5. interval:onScheduler:withLeeway:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
++ (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>interval:</span>(NSTimeInterval)interval <span style=color:#a6e22e>onScheduler:</span>(RACScheduler <span style=color:#f92672>*</span>)scheduler <span style=color:#a6e22e>withLeeway:</span>(NSTimeInterval)leeway {
+    NSCParameterAssert(scheduler <span style=color:#f92672>!=</span> nil);
+    NSCParameterAssert(scheduler <span style=color:#f92672>!=</span> RACScheduler.immediateScheduler);
+    
+    <span style=color:#66d9ef>return</span> [[RACSignal createSignal:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span><span style=color:#f92672>&lt;</span>RACSubscriber<span style=color:#f92672>&gt;</span> subscriber) {
+        <span style=color:#66d9ef>return</span> [scheduler after:[NSDate dateWithTimeIntervalSinceNow:interval] repeatingEvery:interval withLeeway:leeway schedule:<span style=color:#f92672>^</span>{
+            [subscriber sendNext:[NSDate date]];
+        }];
+    }] setNameWithFormat:<span style=color:#e6db74>@&#34;+interval: %f onScheduler: %@ withLeeway: %f&#34;</span>, (<span style=color:#66d9ef>double</span>)interval, scheduler, (<span style=color:#66d9ef>double</span>)leeway];
+}
+
+</code></pre></div><p>在这个操作中，实现代码不难。先来看看2个断言，都是保护入参类型的，scheduler不能为空，且不能是immediateScheduler的类型，原因和上面是一样的，这里是延迟操作。</p><p>主要的实现就在after:repeatingEvery:withLeeway:schedule:上了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (RACDisposable <span style=color:#f92672>*</span>)<span style=color:#a6e22e>after:</span>(NSDate <span style=color:#f92672>*</span>)date <span style=color:#a6e22e>repeatingEvery:</span>(NSTimeInterval)interval <span style=color:#a6e22e>withLeeway:</span>(NSTimeInterval)leeway <span style=color:#a6e22e>schedule:</span>(<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>void</span>))block {
+    NSCParameterAssert(date <span style=color:#f92672>!=</span> nil);
+    NSCParameterAssert(interval <span style=color:#f92672>&gt;</span> <span style=color:#ae81ff>0.0</span> <span style=color:#f92672>&amp;&amp;</span> interval <span style=color:#f92672>&lt;</span> INT64_MAX <span style=color:#f92672>/</span> NSEC_PER_SEC);
+    NSCParameterAssert(leeway <span style=color:#f92672>&gt;=</span> <span style=color:#ae81ff>0.0</span> <span style=color:#f92672>&amp;&amp;</span> leeway <span style=color:#f92672>&lt;</span> INT64_MAX <span style=color:#f92672>/</span> NSEC_PER_SEC);
+    NSCParameterAssert(block <span style=color:#f92672>!=</span> NULL);
+    
+    uint64_t intervalInNanoSecs <span style=color:#f92672>=</span> (uint64_t)(interval <span style=color:#f92672>*</span> NSEC_PER_SEC);
+    uint64_t leewayInNanoSecs <span style=color:#f92672>=</span> (uint64_t)(leeway <span style=color:#f92672>*</span> NSEC_PER_SEC);
+    
+    dispatch_source_t timer <span style=color:#f92672>=</span> dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, <span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>0</span>, self.queue);
+    dispatch_source_set_timer(timer, [self.<span style=color:#66d9ef>class</span> wallTimeWithDate:date], intervalInNanoSecs, leewayInNanoSecs);
+    dispatch_source_set_event_handler(timer, block);
+    dispatch_resume(timer);
+    
+    <span style=color:#66d9ef>return</span> [RACDisposable disposableWithBlock:<span style=color:#f92672>^</span>{
+        dispatch_source_cancel(timer);
+    }];
+}
+
+
+</code></pre></div><p>这里的实现就是用GCD在self.queue上创建了一个Timer，时间间隔是interval，修正时间是leeway。</p><p>leeway这个参数是为dispatch source指定一个期望的定时器事件精度，让系统能够灵活地管理并唤醒内核。例如系统可以使用leeway值来提前或延迟触发定时器，使其更好地与其它系统事件结合。创建自己的定时器时，应该尽量指定一个leeway值。不过就算指定leeway值为0，也不能完完全全期望定时器能够按照精确的纳秒来触发事件。</p><p>这个定时器在interval执行sendNext操作，也就是发送原信号的值。</p><h4 id=6-intervalonscheduler>6. interval:onScheduler:</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
++ (RACSignal <span style=color:#f92672>*</span>)<span style=color:#a6e22e>interval:</span>(NSTimeInterval)interval <span style=color:#a6e22e>onScheduler:</span>(RACScheduler <span style=color:#f92672>*</span>)scheduler {
+    <span style=color:#66d9ef>return</span> [[RACSignal interval:interval onScheduler:scheduler withLeeway:<span style=color:#ae81ff>0.0</span>] setNameWithFormat:<span style=color:#e6db74>@&#34;+interval: %f onScheduler: %@&#34;</span>, (<span style=color:#66d9ef>double</span>)interval, scheduler];
+}
+
+</code></pre></div><p>这个操作就是调用上一个方法interval:onScheduler:withLeeway:，只不过leeway = 0.0。具体实现上面已经分析过了，这里不再赘述。</p><h3 id=最后>最后</h3><p>本来想穷尽分析每一个RACSignal的操作的实现，但是发现所有操作加起来实在太多，用一篇文章全部写完篇幅太长了，还是拆成几篇，RACSignal还剩过滤操作，多信号组合操作，冷热信号转换操作，高阶信号操作，下篇接着继续分析。最后请大家多多指教。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一变换操作>一.变换操作</a><ul><li><a href=#1map-在父类racstream中定义的>1.Map: (在父类RACStream中定义的)</a></li><li><a href=#2mapreplace-在父类racstream中定义的>2.MapReplace: (在父类RACStream中定义的)</a></li><li><a href=#3reduceeach--在父类racstream中定义的>3.reduceEach:  (在父类RACStream中定义的)</a></li><li><a href=#4-reduceapply>4. reduceApply</a></li><li><a href=#5-materialize>5. materialize</a></li><li><a href=#6-dematerialize>6. dematerialize</a></li><li><a href=#7-not>7. not</a></li><li><a href=#8-and>8. and</a></li><li><a href=#9-or>9. or</a></li><li><a href=#10-any>10. any:</a></li><li><a href=#11-any>11. any</a></li><li><a href=#12-all>12. all:</a></li><li><a href=#13-repeat>13. repeat</a></li><li><a href=#14-retry>14. retry:</a></li><li><a href=#15-retry>15. retry</a></li><li><a href=#16-scanwithstart-reducewithindex-在父类racstream中定义的>16. scanWithStart: reduceWithIndex: (在父类RACStream中定义的)</a></li><li><a href=#17-scanwithstart-reduce-在父类racstream中定义的>17. scanWithStart: reduce: (在父类RACStream中定义的)</a></li><li><a href=#18-aggregatewithstart-reducewithindex>18. aggregateWithStart: reduceWithIndex:</a></li><li><a href=#19-aggregatewithstart-reduce>19. aggregateWithStart: reduce:</a></li><li><a href=#20-aggregatewithstartfactory-reduce>20. aggregateWithStartFactory: reduce:</a></li><li><a href=#21-collect>21. collect</a></li></ul></li><li><a href=#二-时间操作>二. 时间操作</a><ul><li><a href=#1-throttlevaluespassingtest>1. throttle:valuesPassingTest:</a></li><li><a href=#2-throttle>2. throttle:</a></li><li><a href=#3-bufferwithtimeonscheduler>3. bufferWithTime:onScheduler:</a></li><li><a href=#4-delay>4. delay:</a></li><li><a href=#5-intervalonschedulerwithleeway>5. interval:onScheduler:withLeeway:</a></li><li><a href=#6-intervalonscheduler>6. interval:onScheduler:</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&text=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&title=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&name=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%ef%bc%8c%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86RACSignal%e6%98%af%e5%88%9b%e5%bb%ba%e5%92%8c%e8%ae%a2%e9%98%85%e7%9a%84%e8%af%a6%e7%bb%86%e8%bf%87%e7%a8%8b%e3%80%82%e7%9c%8b%e5%88%b0%e5%ba%95%e5%b1%82%e6%ba%90%e7%a0%81%e5%ae%9e%e7%8e%b0%e5%90%8e%ef%bc%8c%e5%b0%b1%e8%83%bd%e5%8f%91%e7%8e%b0%ef%bc%8cReactiveCocoa%e8%bf%99%e4%b8%aaFRP%e7%9a%84%e5%ba%93%ef%bc%8c%e5%ae%9e%e7%8e%b0%e5%93%8d%e5%ba%94%e5%bc%8f%ef%bc%88RP%ef%bc%89%e6%98%af%e7%94%a8Block%e9%97%ad%e5%8c%85%e6%9d%a5%e5%ae%9e%e7%8e%b0%e7%9a%84%ef%bc%8c%e8%80%8c%e5%b9%b6%e4%b8%8d%e6%98%af%e7%94%a8KVC%20%2f%20KVO%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e5%9c%a8ReactiveCocoa%e6%95%b4%e4%b8%aa%e5%ba%93%e4%b8%ad%ef%bc%8cRACSignal%e5%8d%a0%e6%8d%ae%e7%9d%80%e6%af%94%e8%be%83%e9%87%8d%e8%a6%81%e7%9a%84%e4%bd%8d%e7%bd%ae%ef%bc%8c%e8%80%8cRACSignal%e7%9a%84%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e6%9b%b4%e6%98%af%e6%95%b4%e4%b8%aaRACStream%e6%b5%81%e6%93%8d%e4%bd%9c%e6%a0%b8%e5%bf%83%e4%b9%8b%e4%b8%80%e3%80%82%e5%9c%a8%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e4%b9%9f%e8%af%a6%e7%bb%86%e5%88%86%e6%9e%90%e4%ba%86bind%e6%93%8d%e4%bd%9c%e7%9a%84%e5%ae%9e%e7%8e%b0%e3%80%82RACsignal%e5%be%88%e5%a4%9a%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e9%83%bd%e6%98%af%e5%9f%ba%e4%ba%8ebind%e6%93%8d%e4%bd%9c%e6%9d%a5%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%e5%9c%a8%e5%bc%80%e5%a7%8b%e6%9c%ac%e7%af%87%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%85%88%e7%ae%80%e5%8d%95%e5%9b%9e%e9%a1%be%e4%b8%80%e4%b8%8b%e4%b8%8a%e7%af%87%e6%96%87%e7%ab%a0%e4%b8%ad%e5%88%86%e6%9e%90%e7%9a%84bind%e5%87%bd%e6%95%b0%ef%bc%8c%e8%bf%99%e6%98%af%e8%bf%99%e7%af%87%e6%96%87%e7%ab%a0%e5%88%86%e6%9e%90%e7%9a%84%e5%9f%ba%e7%a1%80%e3%80%82%0abind%e5%87%bd%e6%95%b0%e5%8f%af%e4%bb%a5%e7%ae%80%e5%8d%95%e7%9a%84%e7%bc%a9%e5%86%99%e6%88%90%e4%b8%8b%e9%9d%a2%e8%bf%99%e6%a0%b7%e5%ad%90%e3%80%82%0a-%20%28RACSignal%20%2a%29bind%3a%28RACStreamBindBlock%20%28%5e%29%28void%29%29block%3b%20%7b%20return%20%5bRACSignal%20createSignal%3a%5eRACDisposable%20%2a%28id%26lt%3bRACSubscriber%26gt%3b%20subscriber%29%20%7b%20RACStreamBindBlock%20bindBlock%20%3d%20block%28%29%3b%20%5bself%20subscribeNext%3a%5e%28id%20x%29%20%7b%20%2f%2f%281%29%20%c2%a0BOOL%20stop%20%3d%20NO%3b%20RACSignal%20%2asignal%20%3d%20%28RACSignal%20%2a%29bindBlock%28x%2c%20%26amp%3bstop%29%3b%20%2f%2f%282%29%20%c2%a0if%20%28signal%20%3d%3d%20nil%20%7c%7c%20stop%29%20%7b%20%5bsubscriber%20sendCompleted%5d%3b%20%7d%20else%20%7b%20%5bsignal%20subscribeNext%3a%5e%28id%20x%29%20%7b%20%5bsubscriber%20sendNext%3ax%5d%3b%20%2f%2f%283%29%20%c2%a0%7d%20error%3a%5e%28NSError%20%2aerror%29%20%7b%20%5bsubscriber%20sendError%3aerror%5d%3b%20%7d%20completed%3a%5e%7b%20%7d%5d%3b%20%7d%20%7d%20error%3a%5e%28NSError%20%2aerror%29%20%7b%20%5bsubscriber%20sendError%3aerror%5d%3b%20%7d%20completed%3a%5e%7b%20%5bsubscriber%20sendCompleted%5d%3b%20%7d%5d%3b%20return%20nil%3b%20%7d%5d%3b%20%7d%20%e5%bd%93bind%e5%8f%98%e6%8d%a2%e4%b9%8b%e5%90%8e%e7%9a%84%e4%bf%a1%e5%8f%b7%e8%a2%ab%e8%ae%a2%e9%98%85%ef%bc%8c%e5%b0%b1%e5%bc%80%e5%a7%8b%e6%89%a7%e8%a1%8cbind%e5%87%bd%e6%95%b0%e4%b8%adreturn%e7%9a%84block%e9%97%ad%e5%8c%85%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_racsignal_operations1%2f&t=ReactiveCocoa%20%e4%b8%ad%20RACSignal%20%e6%89%80%e6%9c%89%e5%8f%98%e6%8d%a2%e6%93%8d%e4%bd%9c%e5%ba%95%e5%b1%82%e5%ae%9e%e7%8e%b0%e5%88%86%e6%9e%90%28%e4%b8%8a%29"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

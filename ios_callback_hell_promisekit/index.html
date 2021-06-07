@@ -1,0 +1,477 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>iOS 如何优雅的处理“回调地狱 Callback hell ”(一) —— 使用 PromiseKit | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="iOS 如何优雅的处理“回调地狱 Callback hell ”(一) —— 使用 PromiseKit"><meta property="og:description" content="####前言 最近看了一些Swift关于封装异步操作过程的文章，比如RxSwift，RAC等等，因为回调地狱我自己也写过，很有感触，于是就翻出了Promise来研究学习一下。现将自己的一些收获分享一下，有错误欢迎大家多多指教。
+####目录
+ 1.PromiseKit简介 2.PromiseKit安装和使用 3.PromiseKit主要函数的使用方法 4.PromiseKit的源码解析 5.使用PromiseKit优雅的处理回调地狱  ####一.PromiseKit简介 PromiseKit是iOS/OS X 中一个用来处理异步编程框架。这个框架是由Max Howell(Mac下Homebrew的作者，传说中因为&#34;不会&#34;写反转二叉树而没有拿到Google offer)大神级人物开发出来的。
+在PromiseKit中，最重要的一个概念就是Promise的概念，Promise是异步操作后的future的一个值。
+ A promise represents the future value of an asynchronous task. A promise is an object that wraps an asynchronous task
+ Promise也是一个包装着异步操作的一个对象。使用PromiseKit，能够编写出整洁，有序的代码，逻辑简单的，将Promise作为参数，模块化的从一个异步任务到下一个异步任务中去。用PromiseKit写出的代码就是这样：
+[self login].then(^{ // our login method wrapped an async task in a promise  return [API fetchData]; }).then(^(NSArray *fetchedData){ // our API class wraps our API and returns promises  // fetchedData returned a promise that resolves with an array of data  self."><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/ios_callback_hell_promisekit/"><meta property="article:published_time" content="2016-06-10T03:51:00+00:00"><meta property="article:modified_time" content="2016-06-10T03:51:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="iOS 如何优雅的处理“回调地狱 Callback hell ”(一) —— 使用 PromiseKit"><meta name=twitter:description content="####前言 最近看了一些Swift关于封装异步操作过程的文章，比如RxSwift，RAC等等，因为回调地狱我自己也写过，很有感触，于是就翻出了Promise来研究学习一下。现将自己的一些收获分享一下，有错误欢迎大家多多指教。
+####目录
+ 1.PromiseKit简介 2.PromiseKit安装和使用 3.PromiseKit主要函数的使用方法 4.PromiseKit的源码解析 5.使用PromiseKit优雅的处理回调地狱  ####一.PromiseKit简介 PromiseKit是iOS/OS X 中一个用来处理异步编程框架。这个框架是由Max Howell(Mac下Homebrew的作者，传说中因为&#34;不会&#34;写反转二叉树而没有拿到Google offer)大神级人物开发出来的。
+在PromiseKit中，最重要的一个概念就是Promise的概念，Promise是异步操作后的future的一个值。
+ A promise represents the future value of an asynchronous task. A promise is an object that wraps an asynchronous task
+ Promise也是一个包装着异步操作的一个对象。使用PromiseKit，能够编写出整洁，有序的代码，逻辑简单的，将Promise作为参数，模块化的从一个异步任务到下一个异步任务中去。用PromiseKit写出的代码就是这样：
+[self login].then(^{ // our login method wrapped an async task in a promise  return [API fetchData]; }).then(^(NSArray *fetchedData){ // our API class wraps our API and returns promises  // fetchedData returned a promise that resolves with an array of data  self."><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/ios_coredata_to_realm/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/jekyll/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&text=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&is_video=false&description=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&name=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit&description=%23%23%23%23%e5%89%8d%e8%a8%80%20%e6%9c%80%e8%bf%91%e7%9c%8b%e4%ba%86%e4%b8%80%e4%ba%9bSwift%e5%85%b3%e4%ba%8e%e5%b0%81%e8%a3%85%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e8%bf%87%e7%a8%8b%e7%9a%84%e6%96%87%e7%ab%a0%ef%bc%8c%e6%af%94%e5%a6%82RxSwift%ef%bc%8cRAC%e7%ad%89%e7%ad%89%ef%bc%8c%e5%9b%a0%e4%b8%ba%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%e6%88%91%e8%87%aa%e5%b7%b1%e4%b9%9f%e5%86%99%e8%bf%87%ef%bc%8c%e5%be%88%e6%9c%89%e6%84%9f%e8%a7%a6%ef%bc%8c%e4%ba%8e%e6%98%af%e5%b0%b1%e7%bf%bb%e5%87%ba%e4%ba%86Promise%e6%9d%a5%e7%a0%94%e7%a9%b6%e5%ad%a6%e4%b9%a0%e4%b8%80%e4%b8%8b%e3%80%82%e7%8e%b0%e5%b0%86%e8%87%aa%e5%b7%b1%e7%9a%84%e4%b8%80%e4%ba%9b%e6%94%b6%e8%8e%b7%e5%88%86%e4%ba%ab%e4%b8%80%e4%b8%8b%ef%bc%8c%e6%9c%89%e9%94%99%e8%af%af%e6%ac%a2%e8%bf%8e%e5%a4%a7%e5%ae%b6%e5%a4%9a%e5%a4%9a%e6%8c%87%e6%95%99%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.PromiseKit%e7%ae%80%e4%bb%8b%202.PromiseKit%e5%ae%89%e8%a3%85%e5%92%8c%e4%bd%bf%e7%94%a8%203.PromiseKit%e4%b8%bb%e8%a6%81%e5%87%bd%e6%95%b0%e7%9a%84%e4%bd%bf%e7%94%a8%e6%96%b9%e6%b3%95%204.PromiseKit%e7%9a%84%e6%ba%90%e7%a0%81%e8%a7%a3%e6%9e%90%205.%e4%bd%bf%e7%94%a8PromiseKit%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20%20%23%23%23%23%e4%b8%80.PromiseKit%e7%ae%80%e4%bb%8b%20PromiseKit%e6%98%afiOS%2fOS%20X%20%e4%b8%ad%e4%b8%80%e4%b8%aa%e7%94%a8%e6%9d%a5%e5%a4%84%e7%90%86%e5%bc%82%e6%ad%a5%e7%bc%96%e7%a8%8b%e6%a1%86%e6%9e%b6%e3%80%82%e8%bf%99%e4%b8%aa%e6%a1%86%e6%9e%b6%e6%98%af%e7%94%b1Max%20Howell%28Mac%e4%b8%8bHomebrew%e7%9a%84%e4%bd%9c%e8%80%85%ef%bc%8c%e4%bc%a0%e8%af%b4%e4%b8%ad%e5%9b%a0%e4%b8%ba%26quot%3b%e4%b8%8d%e4%bc%9a%26quot%3b%e5%86%99%e5%8f%8d%e8%bd%ac%e4%ba%8c%e5%8f%89%e6%a0%91%e8%80%8c%e6%b2%a1%e6%9c%89%e6%8b%bf%e5%88%b0Google%20offer%29%e5%a4%a7%e7%a5%9e%e7%ba%a7%e4%ba%ba%e7%89%a9%e5%bc%80%e5%8f%91%e5%87%ba%e6%9d%a5%e7%9a%84%e3%80%82%0a%e5%9c%a8PromiseKit%e4%b8%ad%ef%bc%8c%e6%9c%80%e9%87%8d%e8%a6%81%e7%9a%84%e4%b8%80%e4%b8%aa%e6%a6%82%e5%bf%b5%e5%b0%b1%e6%98%afPromise%e7%9a%84%e6%a6%82%e5%bf%b5%ef%bc%8cPromise%e6%98%af%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e5%90%8e%e7%9a%84future%e7%9a%84%e4%b8%80%e4%b8%aa%e5%80%bc%e3%80%82%0a%20A%c2%a0promise%c2%a0represents%20the%20future%20value%20of%20an%20asynchronous%20task.%20A%20promise%20is%20an%20object%20that%20wraps%20an%20asynchronous%20task%0a%20Promise%e4%b9%9f%e6%98%af%e4%b8%80%e4%b8%aa%e5%8c%85%e8%a3%85%e7%9d%80%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e7%9a%84%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e3%80%82%e4%bd%bf%e7%94%a8PromiseKit%ef%bc%8c%e8%83%bd%e5%a4%9f%e7%bc%96%e5%86%99%e5%87%ba%e6%95%b4%e6%b4%81%ef%bc%8c%e6%9c%89%e5%ba%8f%e7%9a%84%e4%bb%a3%e7%a0%81%ef%bc%8c%e9%80%bb%e8%be%91%e7%ae%80%e5%8d%95%e7%9a%84%ef%bc%8c%e5%b0%86Promise%e4%bd%9c%e4%b8%ba%e5%8f%82%e6%95%b0%ef%bc%8c%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e4%bb%8e%e4%b8%80%e4%b8%aa%e5%bc%82%e6%ad%a5%e4%bb%bb%e5%8a%a1%e5%88%b0%e4%b8%8b%e4%b8%80%e4%b8%aa%e5%bc%82%e6%ad%a5%e4%bb%bb%e5%8a%a1%e4%b8%ad%e5%8e%bb%e3%80%82%e7%94%a8PromiseKit%e5%86%99%e5%87%ba%e7%9a%84%e4%bb%a3%e7%a0%81%e5%b0%b1%e6%98%af%e8%bf%99%e6%a0%b7%ef%bc%9a%0a%5bself%20login%5d.then%28%5e%7b%20%2f%2f%20our%20login%20method%20wrapped%20an%20async%20task%20in%20a%20promise%20%c2%a0return%20%5bAPI%20fetchData%5d%3b%20%7d%29.then%28%5e%28NSArray%20%2afetchedData%29%7b%20%2f%2f%20our%20API%20class%20wraps%20our%20API%20and%20returns%20promises%20%c2%a0%2f%2f%20fetchedData%20returned%20a%20promise%20that%20resolves%20with%20an%20array%20of%20data%20%c2%a0self."><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&t=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">iOS 如何优雅的处理“回调地狱 Callback hell ”(一) —— 使用 PromiseKit</h1><div class=meta><div class=postdate><time datetime="2016-06-10 03:51:00 +0000 UTC" itemprop=datePublished>Jun 10</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/callback-hell>Callback hell</a>
+,
+<a class=category-link href=/categories/%E5%9B%9E%E8%B0%83%E5%9C%B0%E7%8B%B1>回调地狱</a>
+,
+<a class=category-link href=/categories/promisekit>PromiseKit</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/callback-hell rel=tag>Callback hell</a>
+,
+<a class=tag-link href=/tags/%E5%9B%9E%E8%B0%83%E5%9C%B0%E7%8B%B1 rel=tag>回调地狱</a>
+,
+<a class=tag-link href=/tags/promisekit rel=tag>PromiseKit</a></div></div></header><div class=content itemprop=articleBody><p>####前言
+最近看了一些Swift关于封装异步操作过程的文章，比如RxSwift，RAC等等，因为回调地狱我自己也写过，很有感触，于是就翻出了Promise来研究学习一下。现将自己的一些收获分享一下，有错误欢迎大家多多指教。</p><p>####目录</p><ul><li>1.PromiseKit简介</li><li>2.PromiseKit安装和使用</li><li>3.PromiseKit主要函数的使用方法</li><li>4.PromiseKit的源码解析</li><li>5.使用PromiseKit优雅的处理回调地狱</li></ul><p>####一.PromiseKit简介
+PromiseKit是iOS/OS X 中一个用来处理异步编程框架。这个框架是由Max Howell(Mac下Homebrew的作者，传说中因为"不会"写反转二叉树而没有拿到Google offer)大神级人物开发出来的。</p><p>在PromiseKit中，最重要的一个概念就是Promise的概念，Promise是异步操作后的future的一个值。</p><blockquote><p>A <a href=http://wikipedia.org/wiki/Promise_%28programming%29>promise</a> represents the future value of an asynchronous task.
+A promise is an object that wraps an asynchronous task</p></blockquote><p>Promise也是一个包装着异步操作的一个对象。使用PromiseKit，能够编写出整洁，有序的代码，逻辑简单的，将Promise作为参数，模块化的从一个异步任务到下一个异步任务中去。用PromiseKit写出的代码就是这样：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[self login].then(<span style=color:#f92672>^</span>{
+                  
+     <span style=color:#75715e>// our login method wrapped an async task in a promise
+</span><span style=color:#75715e></span>     <span style=color:#66d9ef>return</span> [API fetchData];
+                  
+}).then(<span style=color:#f92672>^</span>(NSArray <span style=color:#f92672>*</span>fetchedData){
+                          
+     <span style=color:#75715e>// our API class wraps our API and returns promises
+</span><span style=color:#75715e></span>     <span style=color:#75715e>// fetchedData returned a promise that resolves with an array of data
+</span><span style=color:#75715e></span>     self.datasource <span style=color:#f92672>=</span> fetchedData;
+     [self.tableView reloadData];
+                          
+}).catch(<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error){
+                                   
+     <span style=color:#75715e>// any errors in any of the above promises land here
+</span><span style=color:#75715e></span>     [[[UIAlertView alloc] init<span style=color:#960050;background-color:#1e0010>…</span>] show];
+                                   
+});
+</code></pre></div><p>PromiseKit就是用来干净简洁的代码，来解决异步操作，和奇怪的错误处理回调的。它将异步操作变成了链式的调用，简单的错误处理方式。</p><p>PromiseKit里面目前有2个类，一个是Promise(Swift)，一个是AnyPromise(Objective-C)，2者的区别就在2种语言的特性上，Promise是定义精确严格的，AnyPromise是定义宽松，灵活，动态的。</p><p>在异步编程中，有一个最最典型的例子就是回调地狱CallBack hell，要是处理的不优雅，就会出现下图这样:</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/11_2.jpg alt></p><p>上图的代码是真实存在的，也是朋友告诉我的，来自<a href=http://www.kuaidadi.com/assets/js/animate.js>快的的代码</a>，当然现在人家肯定改掉了。虽然这种代码看着像这样：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/11_3.png alt></p><p>代码虽然看上去不优雅，功能都是正确的，但是这种代码基本大家都自己写过，我自己也写过很多。今天就让我们动起手来，用PromiseKit来优雅的处理掉Callback hell吧。</p><p>####二.PromiseKit安装和使用
+1.下载安装CocoaPods</p><p>在墙外的安装步骤:<br>在Terminal里面输入</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#a6e22e>sudo</span> <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>install</span> <span style=color:#a6e22e>cocoapods</span> &amp;&amp; <span style=color:#a6e22e>pod</span> <span style=color:#a6e22e>setup</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>大多数在墙内的同学应该看如下步骤了:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#e6db74>//</span><span style=color:#a6e22e>移除原有的墙外Ruby</span> <span style=color:#a6e22e>默认源</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>sources</span> --<span style=color:#a6e22e>remove</span> <span style=color:#a6e22e>https</span>:<span style=color:#e6db74>//</span><span style=color:#a6e22e>rubygems</span>.<span style=color:#a6e22e>org</span>/<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span><span style=color:#a6e22e>添加现有的墙内的淘宝源</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>sources</span> -<span style=color:#a6e22e>a</span> <span style=color:#a6e22e>https</span>:<span style=color:#e6db74>//</span><span style=color:#a6e22e>ruby</span>.<span style=color:#a6e22e>taobao</span>.<span style=color:#a6e22e>org</span>/<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span><span style=color:#a6e22e>验证新源是否替换成功</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>sources</span> -<span style=color:#a6e22e>l</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span><span style=color:#a6e22e>下载安装cocoapods</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span> <span style=color:#a6e22e>OS</span> <span style=color:#ae81ff>10</span>.<span style=color:#ae81ff>11</span>之前<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>sudo</span> <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>install</span> <span style=color:#a6e22e>cocoapods</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span><span style=color:#a6e22e>mark</span>：<span style=color:#a6e22e>OS</span> <span style=color:#a6e22e>升级</span> <span style=color:#a6e22e>OS</span> <span style=color:#a6e22e>X</span> <span style=color:#a6e22e>EL</span> <span style=color:#a6e22e>Capitan</span> <span style=color:#a6e22e>后命令应该为</span>:<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>sudo</span> <span style=color:#a6e22e>gem</span> <span style=color:#a6e22e>install</span> -<span style=color:#a6e22e>n</span> <span style=color:#e6db74>/usr/</span><span style=color:#a6e22e>local</span>/<span style=color:#a6e22e>bin</span> <span style=color:#a6e22e>cocoapods</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#e6db74>//</span><span style=color:#a6e22e>设置cocoapods</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>$ <span style=color:#a6e22e>pod</span> <span style=color:#a6e22e>setup</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>2.找到项目的路径，进入项目文件夹下面，执行：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim>$ <span style=color:#a6e22e>touch</span> <span style=color:#a6e22e>Podfile</span> &amp;&amp; <span style=color:#a6e22e>open</span> -<span style=color:#a6e22e>e</span> <span style=color:#a6e22e>Podfile</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>此时会打开TextEdit，然后输入一下命令:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#a6e22e>platform</span>:<span style=color:#a6e22e>ios</span>, ‘<span style=color:#ae81ff>7</span>.<span style=color:#ae81ff>0</span>’<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>target</span> <span style=color:#e6db74>&#39;PromisekitDemo&#39;</span> <span style=color:#a6e22e>do</span>  <span style=color:#e6db74>//</span><span style=color:#a6e22e>由于最新版cocoapods的要求</span>，<span style=color:#a6e22e>所以必须加入这句话</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span>    <span style=color:#a6e22e>pod</span> <span style=color:#e6db74>&#39;PromiseKit&#39;</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>end</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><blockquote><p>Tips：感谢qinfensky大神提醒，其实这里也可以用init命令
+Podfile是CocoaPods的特殊文件，在其中可以列入在项目中想要使用的开源库，若想创建Podfile，有2种方法：
+1.在项目目录中创建空文本文件，命名为Podfile
+2.或者可以再项目目录中运行“$ pod init “，来创建功能性文件（终端中输入cd 文件夹地址，然后再输入 pod init）
+两种方法都可以创建Podfile，使用你最喜欢使用的方法</p></blockquote><p>3.安装PromiseKit</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim>$ <span style=color:#a6e22e>pod</span> <span style=color:#a6e22e>install</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>安装完成之后，退出终端，打开新生成的.xcworkspace文件即可</p><p>####三.PromiseKit主要函数的使用方法</p><ol><li>then
+经常我们会写出这样的代码:</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>showUndoRedoAlert:</span>(UndoRedoState <span style=color:#f92672>*</span>)state
+{
+     UIAlertView <span style=color:#f92672>*</span>alert <span style=color:#f92672>=</span> [[UIAlertView alloc] initWithTitle:<span style=color:#960050;background-color:#1e0010>……</span>];
+     alert.delegate <span style=color:#f92672>=</span> self; 
+     self.state <span style=color:#f92672>=</span> state;
+     [alert show];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>alertView:</span>(UIAlertView <span style=color:#f92672>*</span>)alertView <span style=color:#a6e22e>clickedButtonAtIndex:</span>(NSInteger)buttonIndex
+{
+    <span style=color:#66d9ef>if</span> (buttonIndex <span style=color:#f92672>==</span> <span style=color:#ae81ff>1</span>) {
+        [self.state <span style=color:#66d9ef>do</span>];
+    }
+
+}
+
+</code></pre></div><p>上面的写法也不是错误的，就是它在调用函数中保存了一个属性，在调用alertView会使用到这个属性。其实这个中间属性是不需要存储的。接下来我们就用then来去掉这个中间变量。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>showUndoRedoAlert:</span>(UndoRedoState <span style=color:#f92672>*</span>)state
+ {
+    UIAlertView <span style=color:#f92672>*</span>alert <span style=color:#f92672>=</span> [[UIAlertView alloc] initWithTitle:<span style=color:#960050;background-color:#1e0010>……</span>];
+    [alert promise].then(<span style=color:#f92672>^</span>(NSNumber <span style=color:#f92672>*</span>dismissedButtonIndex){
+        [state <span style=color:#66d9ef>do</span>];
+    });
+}
+</code></pre></div><p>这时就有人问了，为啥能调用[alert promise]这个方法？后面点语法跟着then是什么？我来解释一下，原因其实只要打开Promise源码就一清二楚了。在pormise源码中</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@interface</span> <span style=color:#a6e22e>UIAlertView</span> (PromiseKit)
+
+<span style=color:#75715e>/**
+</span><span style=color:#75715e> Displays the alert view.
+</span><span style=color:#75715e>
+</span><span style=color:#75715e> @return A promise the fulfills with two parameters:
+</span><span style=color:#75715e> 1) The index of the button that was tapped to dismiss the alert.
+</span><span style=color:#75715e> 2) This alert view.
+</span><span style=color:#75715e>*/</span>
+- (PMKPromise <span style=color:#f92672>*</span>)<span style=color:#a6e22e>promise</span>;
+</code></pre></div><p>对应的实现是这样的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (PMKPromise <span style=color:#f92672>*</span>)<span style=color:#a6e22e>promise</span> {
+    PMKAlertViewDelegater <span style=color:#f92672>*</span>d <span style=color:#f92672>=</span> [PMKAlertViewDelegater new];
+    PMKRetain(d);
+    self.delegate <span style=color:#f92672>=</span> d;
+    [self show];
+    <span style=color:#66d9ef>return</span> [PMKPromise new:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> fulfiller, <span style=color:#66d9ef>id</span> rejecter){
+        d<span style=color:#f92672>-&gt;</span>fulfiller <span style=color:#f92672>=</span> fulfiller;
+    }];
+}
+</code></pre></div><p>调用[alert promise]返回还是一个promise对象，在promise的方法中有then的方法，所以上面可以那样链式的调用。上面代码里面的fulfiller放在源码分析里面去讲讲。</p><p>在PromiseKit里面，其实就默认给你创建了几个类的延展，如下图</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/11_4.png alt></p><p>这些扩展类里面就封装了一些常用的生成promise方法，调用这些方法就可以愉快的一路.then执行下去了！</p><p>2.dispatch_promise
+项目中我们经常会异步的下载图片</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>typedefvoid(<span style=color:#f92672>^</span>onImageReady) (UIImage<span style=color:#f92672>*</span> image);
+
++ (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>getImageWithURL:</span>(NSURL <span style=color:#f92672>*</span>)url <span style=color:#a6e22e>onCallback:</span>(onImageReady)callback
+{
+    dispatch_queue_t queue <span style=color:#f92672>=</span> dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, <span style=color:#ae81ff>0ul</span>);
+    dispatch_async(queue, <span style=color:#f92672>^</span>{
+        NSData <span style=color:#f92672>*</span> imageData <span style=color:#f92672>=</span> [NSData dataWithContentsOfURL:url];
+        dispatch_async(dispatch_get_main_queue(), <span style=color:#f92672>^</span>{
+            UIImage <span style=color:#f92672>*</span>image <span style=color:#f92672>=</span> [UIImage imageWithData:imageData];
+            callback(image);
+        });
+    });
+}
+</code></pre></div><p>使用dispatch_promise，我们可以将它改变成下面这样:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>    dispatch_promise(<span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>return</span> [NSData dataWithContentsOfURL:url];     
+    }).then(<span style=color:#f92672>^</span>(NSData <span style=color:#f92672>*</span> imageData){ 
+        self.imageView.image <span style=color:#f92672>=</span> [UIImage imageWithData:imageData];  
+    }).then(<span style=color:#f92672>^</span>{
+        <span style=color:#75715e>// add code to happen next here
+</span><span style=color:#75715e></span>    });
+</code></pre></div><p>我们看看源码，看看调用的异步过程对不对</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (PMKPromise <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))<span style=color:#a6e22e>then</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> block){
+        <span style=color:#66d9ef>return</span> self.thenOn(dispatch_get_main_queue(), block);
+    };
+}
+
+PMKPromise <span style=color:#f92672>*</span><span style=color:#a6e22e>dispatch_promise</span>(<span style=color:#66d9ef>id</span> block) {
+    <span style=color:#66d9ef>return</span> dispatch_promise_on(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, <span style=color:#ae81ff>0</span>), block);
+}
+</code></pre></div><p>看了源码就知道上述是正确的。</p><p>3.catch
+在异步操作中，处理错误也是一件很头疼的事情，如下面这段代码，每次异步请求回来都必须要处理错误。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>errorHandler)(NSError <span style=color:#f92672>*</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+    [[UIAlertView <span style=color:#960050;background-color:#1e0010>…</span>] show];
+};
+[NSURLConnection sendAsynchronousRequest:rq queue:q completionHandler:<span style=color:#f92672>^</span>(NSURLResponse <span style=color:#f92672>*</span>response, NSData <span style=color:#f92672>*</span>data, NSError <span style=color:#f92672>*</span>connectionError) {
+    <span style=color:#66d9ef>if</span> (connectionError) {
+        errorHandler(connectionError);
+    } <span style=color:#66d9ef>else</span> {
+        NSError <span style=color:#f92672>*</span>jsonError <span style=color:#f92672>=</span> nil;
+        NSDictionary <span style=color:#f92672>*</span>json <span style=color:#f92672>=</span> [NSJSONSerialization JSONObjectWithData:data options:<span style=color:#ae81ff>0</span> error:<span style=color:#f92672>&amp;</span>jsonError];
+        <span style=color:#66d9ef>if</span> (jsonError) {
+            errorHandler(jsonError);
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#66d9ef>id</span> rq <span style=color:#f92672>=</span> [NSURLRequest requestWithURL:[NSURL URLWithString:json[<span style=color:#e6db74>@&#34;avatar_url&#34;</span>]]];
+            [NSURLConnection sendAsynchronousRequest:rq queue:q completionHandler:<span style=color:#f92672>^</span>(NSURLResponse <span style=color:#f92672>*</span>response, NSData <span style=color:#f92672>*</span>data, NSError <span style=color:#f92672>*</span>connectionError) {
+                UIImage <span style=color:#f92672>*</span>image <span style=color:#f92672>=</span> [UIImage imageWithData:data];
+                <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>image) {
+                    errorHandler(nil); <span style=color:#75715e>// NSError TODO!
+</span><span style=color:#75715e></span>                } <span style=color:#66d9ef>else</span> {
+                    self.imageView.image <span style=color:#f92672>=</span> image;
+                }
+            }];
+        }
+    }
+}];
+</code></pre></div><p>我们可以用promise的catch来解决上面的错误处理的问题</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>//oc版
+</span><span style=color:#75715e></span>[NSURLSession GET:url].then(<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>json){
+    <span style=color:#66d9ef>return</span> [NSURLConnection GET:json[<span style=color:#e6db74>@&#34;avatar_url&#34;</span>]];
+}).then(<span style=color:#f92672>^</span>(UIImage <span style=color:#f92672>*</span>image){
+    self.imageView.image <span style=color:#f92672>=</span> image;
+}).catch(<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error){
+    [[UIAlertView <span style=color:#960050;background-color:#1e0010>…</span>] show];
+})
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-swift data-lang=swift><span style=color:#75715e>//swift版</span>
+firstly {
+    NSURLSession.GET(url)
+}.then { (json: NSDictionary) <span style=color:#66d9ef>in</span>
+    NSURLConnection.GET(json[<span style=color:#e6db74>&#34;avatar_url&#34;</span>])
+}.then { (image: UIImage) <span style=color:#66d9ef>in</span>
+    <span style=color:#66d9ef>self</span>.imageView.image = image
+}.error { error <span style=color:#66d9ef>in</span>
+    UIAlertView(<span style=color:#960050;background-color:#1e0010>…</span>).show()
+}
+</code></pre></div><p>用了catch以后，在传递promise的链中，一旦中间任何一环产生了错误，都会传递到catch去执行Error Handler。</p><p>4.when
+通常我们有这种需求:
+在执行一个A任务之前还有1，2个异步的任务，在全部异步操作完成之前，需要阻塞A任务。代码可能会写的像下面这样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>int</span> x <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>completionHandler)(<span style=color:#66d9ef>id</span>, <span style=color:#66d9ef>id</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(MKLocalSearchResponse <span style=color:#f92672>*</span>response, NSError <span style=color:#f92672>*</span>error){
+    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>++</span>x <span style=color:#f92672>==</span> <span style=color:#ae81ff>2</span>) {
+        [self finish];
+    }
+};
+[[[MKLocalSearch alloc] initWithRequest:rq1] startWithCompletionHandler:completionHandler];
+[[[MKLocalSearch alloc] initWithRequest:rq2] startWithCompletionHandler:completionHandler];
+</code></pre></div><p>这里就可以使用when来优雅的处理这种情况:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> search1 <span style=color:#f92672>=</span> [[[MKLocalSearch alloc] initWithRequest:rq1] promise];
+<span style=color:#66d9ef>id</span> search2 <span style=color:#f92672>=</span> [[[MKLocalSearch alloc] initWithRequest:rq2] promise];
+
+PMKWhen(<span style=color:#ae81ff>@[</span>search1, search2<span style=color:#ae81ff>]</span>).then(<span style=color:#f92672>^</span>(NSArray <span style=color:#f92672>*</span>results){
+    <span style=color:#75715e>//…
+</span><span style=color:#75715e></span>}).catch(<span style=color:#f92672>^</span>{
+    <span style=color:#75715e>// called if either search fails
+</span><span style=color:#75715e></span>});
+</code></pre></div><p>在when后面传入一个数组，里面是2个promise，只有当这2个promise都执行完，才会去执行后面的then的操作。这样就达到了之前所说的需求。</p><p>这里when还有2点要说的，when的参数还可以是字典。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>id</span> coffeeSearch <span style=color:#f92672>=</span> [[MKLocalSearch alloc] initWithRequest:rq1];
+<span style=color:#66d9ef>id</span> beerSearch <span style=color:#f92672>=</span> [[MKLocalSearch alloc] initWithRequest:rq2];
+<span style=color:#66d9ef>id</span> input <span style=color:#f92672>=</span> <span style=color:#ae81ff>@{</span><span style=color:#e6db74>@&#34;coffee&#34;</span><span style=color:#f92672>:</span> coffeeSearch, <span style=color:#e6db74>@&#34;beer&#34;</span><span style=color:#f92672>:</span> beerSearch<span style=color:#ae81ff>}</span>;
+
+PMKWhen(input).then(<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>results){
+    <span style=color:#66d9ef>id</span> coffeeResults <span style=color:#f92672>=</span> results[<span style=color:#e6db74>@&#34;coffee&#34;</span>];
+});
+</code></pre></div><p>这个例子里面when传入了一个input字典，处理完成之后依旧可以生成新的promise传递到下一个then中，在then中可以去到results的字典，获得结果。传入字典的工作原理放在第四章会解释。</p><p>when传入的参数还可以是一个可变的属性：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>@property</span> <span style=color:#66d9ef>id</span> dataSource;
+
+- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>dataSource</span> {
+    <span style=color:#66d9ef>return</span> dataSource <span style=color:#f92672>?:</span> [PMKPromise new:<span style=color:#960050;background-color:#1e0010>…</span>];
+}
+
+- (<span style=color:#66d9ef>void</span>)<span style=color:#a6e22e>viewDidAppear</span> {
+    [PMKPromise when:self.dataSource].then(<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> result){
+        <span style=color:#75715e>// cache the result
+</span><span style=color:#75715e></span>        self.dataSource <span style=color:#f92672>=</span> result;
+    });
+}
+</code></pre></div><p>dataSource如果为空就新建一个promise，传入到when中，执行完之后，在then中拿到result，并把result赋值给dataSource，这样dataSource就有数据了。由此看来，when的使用非常灵活！</p><p>5.always & finally</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec><span style=color:#75715e>//oc版
+</span><span style=color:#75715e></span>[UIApplication sharedApplication].networkActivityIndicatorVisible <span style=color:#f92672>=</span> YES;
+[self myPromise].then(<span style=color:#f92672>^</span>{
+    <span style=color:#75715e>//…
+</span><span style=color:#75715e></span>}).finally(<span style=color:#f92672>^</span>{
+    [UIApplication sharedApplication].networkActivityIndicatorVisible <span style=color:#f92672>=</span> NO;
+})
+</code></pre></div><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-swift data-lang=swift><span style=color:#75715e>//swift版</span>
+UIApplication.sharedApplication().networkActivityIndicatorVisible = <span style=color:#66d9ef>true</span>
+myPromise().then {
+    <span style=color:#75715e>//…</span>
+}.always {
+    UIApplication.sharedApplication().networkActivityIndicatorVisible = <span style=color:#66d9ef>false</span>
+}
+</code></pre></div><p>在我们执行完then，处理完error之后，还有一些操作，那么就可以放到finally和always里面去执行。</p><p>####四.PromiseKit的源码解析
+经过上面对promise的方法的学习，我们已经可以了解到，在异步操作我们可以通过不断的返回promise，传递给后面的then来形成链式调用，所以重点就在then的实现了。在讨论then之前，我先说一下promise的状态和传递机制。</p><p>一个promise可能有三种状态：等待（pending）、已完成（fulfilled）、已拒绝（rejected）。<br>一个promise的状态只可能从“等待”转到“完成”态或者“拒绝”态，不能逆向转换，同时“完成”态和“拒绝”态不能相互转换。<br>promise必须实现then方法（可以说，then就是promise的核心），而且then必须返回一个promise，同一个promise的then可以调用多次，并且回调的执行顺序跟它们被定义时的顺序一致
+then方法接受两个参数，第一个参数是成功时的回调，在promise由“等待”态转换到“完成”态时调用，另一个是失败时的回调，在promise由“等待”态转换到“拒绝”态时调用。同时，then可以接受另一个promise传入，也接受一个“类then”的对象或方法，即thenable对象</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/11_5.png alt></p><p>总结起来就是上图，pending状态的promise对象既可转换为带着一个成功值的 fulfilled 状态，也可变为带着一个 error 信息的 rejected 状态。当状态发生转换时， promise.then 绑定的方法就会被调用。(当绑定方法时，如果 promise 对象已经处于 fulfilled 或 rejected 状态，那么相应的方法将会被立刻调用， 所以在异步操作的完成情况和它的绑定方法之间不存在竞争关系。)从Pending转换为fulfilled或Rejected之后， 这个promise对象的状态就不会再发生任何变化。因此 then是只被调用一次的函数，从而也能说明，then生成的是一个新的promise，而不是原来的那个。</p><p>了解完流程之后，就可以开始继续研究源码了。在PromiseKit当中，最常用的当属then，thenInBackground，catch，finally</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (PMKPromise <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))<span style=color:#a6e22e>then</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> block){
+        <span style=color:#66d9ef>return</span> self.thenOn(dispatch_get_main_queue(), block);
+    };
+}
+
+- (PMKPromise <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))<span style=color:#a6e22e>thenInBackground</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> block){
+        <span style=color:#66d9ef>return</span> self.thenOn(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, <span style=color:#ae81ff>0</span>), block);
+    };
+}
+
+- (PMKPromise <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span>))<span style=color:#a6e22e>catch</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> block){
+        <span style=color:#66d9ef>return</span> self.catchOn(dispatch_get_main_queue(), block);
+    };
+}
+
+- (PMKPromise <span style=color:#f92672>*</span>(<span style=color:#f92672>^</span>)(dispatch_block_t))<span style=color:#a6e22e>finally</span> {
+    <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(dispatch_block_t block) {
+        <span style=color:#66d9ef>return</span> self.finallyOn(dispatch_get_main_queue(), block);
+    };
+}
+</code></pre></div><p>这四个方法底层调用了各自的thenon，catchon，finallyon方法，这些on的方法实现基本都差不多，那我就以最重要的thenon来分析一下。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+- (PMKResolveOnQueueBlock)<span style=color:#a6e22e>thenOn</span> {
+    <span style=color:#66d9ef>return</span> [self resolved:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> result) {
+        <span style=color:#66d9ef>if</span> (IsPromise(result))
+            <span style=color:#66d9ef>return</span> ((PMKPromise <span style=color:#f92672>*</span>)result).thenOn;
+
+        <span style=color:#66d9ef>if</span> (IsError(result)) <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(dispatch_queue_t q, <span style=color:#66d9ef>id</span> block) {
+            <span style=color:#66d9ef>return</span> [PMKPromise promiseWithValue:result];
+        };
+
+        <span style=color:#66d9ef>return</span> <span style=color:#f92672>^</span>(dispatch_queue_t q, <span style=color:#66d9ef>id</span> block) {
+            block <span style=color:#f92672>=</span> [block <span style=color:#66d9ef>copy</span>];
+            <span style=color:#66d9ef>return</span> dispatch_promise_on(q, <span style=color:#f92672>^</span>{
+                <span style=color:#66d9ef>return</span> pmk_safely_call_block(block, result);
+            });
+        };
+    }
+    pending:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> result, PMKPromise <span style=color:#f92672>*</span>next, dispatch_queue_t q, <span style=color:#66d9ef>id</span> block, <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>resolve)(<span style=color:#66d9ef>id</span>)) {
+        <span style=color:#66d9ef>if</span> (IsError(result))
+            PMKResolve(next, result);
+        <span style=color:#66d9ef>else</span> dispatch_async(q, <span style=color:#f92672>^</span>{
+            resolve(pmk_safely_call_block(block, result));
+        });
+    }];
+}
+</code></pre></div><p>这个thenon就是返回一个方法，所以继续往下看</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>- (<span style=color:#66d9ef>id</span>)<span style=color:#a6e22e>resolved:</span>(PMKResolveOnQueueBlock(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> result))mkresolvedCallback
+       <span style=color:#a6e22e>pending:</span>(<span style=color:#66d9ef>void</span>(<span style=color:#f92672>^</span>)(<span style=color:#66d9ef>id</span> result, PMKPromise <span style=color:#f92672>*</span>next, dispatch_queue_t q, <span style=color:#66d9ef>id</span> block, <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>resolver)(<span style=color:#66d9ef>id</span>)))mkpendingCallback
+{
+    <span style=color:#66d9ef>__block</span> PMKResolveOnQueueBlock callBlock;
+    <span style=color:#66d9ef>__block</span> <span style=color:#66d9ef>id</span> result;
+    
+    dispatch_sync(_promiseQueue, <span style=color:#f92672>^</span>{
+        <span style=color:#66d9ef>if</span> ((result <span style=color:#f92672>=</span> _result))
+            <span style=color:#66d9ef>return</span>;
+
+        callBlock <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(dispatch_queue_t q, <span style=color:#66d9ef>id</span> block) {
+
+            block <span style=color:#f92672>=</span> [block <span style=color:#66d9ef>copy</span>];
+
+            <span style=color:#66d9ef>__block</span> PMKPromise <span style=color:#f92672>*</span>next <span style=color:#f92672>=</span> nil;
+
+            dispatch_barrier_sync(_promiseQueue, <span style=color:#f92672>^</span>{
+                <span style=color:#66d9ef>if</span> ((result <span style=color:#f92672>=</span> _result))
+                    <span style=color:#66d9ef>return</span>;
+
+                <span style=color:#66d9ef>__block</span> PMKPromiseFulfiller resolver;
+                next <span style=color:#f92672>=</span> [PMKPromise new:<span style=color:#f92672>^</span>(PMKPromiseFulfiller fulfill, PMKPromiseRejecter reject) {
+                    resolver <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> o){
+                        <span style=color:#66d9ef>if</span> (IsError(o)) reject(o); <span style=color:#66d9ef>else</span> fulfill(o);
+                    };
+                }];
+                [_handlers addObject:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> value){
+                    mkpendingCallback(value, next, q, block, resolver);
+                }];
+            });
+
+            <span style=color:#66d9ef>return</span> next <span style=color:#f92672>?:</span> mkresolvedCallback(result)(q, block);
+        };
+    });
+
+    <span style=color:#75715e>// We could just always return the above block, but then every caller would
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// trigger a barrier_sync on the promise queue. Instead, if we know that the
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// promise is resolved (since that makes it immutable), we can return a simpler
+</span><span style=color:#75715e></span>    <span style=color:#75715e>// block that doesn&#39;t use a barrier in those cases.
+</span><span style=color:#75715e></span>
+    <span style=color:#66d9ef>return</span> callBlock <span style=color:#f92672>?:</span> mkresolvedCallback(result);
+}
+</code></pre></div><p>这个方法看上去很复杂，仔细看看，函数的形参其实就是2个block，一个是resolved的block，还有一个是pending的block。当一个promise经历过resolved之后，可能是fulfill，也可能是reject，之后生成next新的promise，传入到下一个then中，并且状态会变成pending。上面代码中第一个return，如果next为nil，那么意味着promise没有生成，这是会再调用一次mkresolvedCallback，并传入参数result，生成的PMKResolveOnQueueBlock，再次传入(q, block)，直到next的promise生成，并把pendingCallback存入到handler当中。这个handler存了所有待执行的block，如果把这个数组里面的block都执行，那么就相当于依次完成了上面的所有异步操作。第二个return是在callblock为nil的时候，还会再调一次mkresolvedCallback(result)，保证一定要生成next的promise。</p><p>这个函数里面的这里dispatch_barrier_sync这个方法，就是promise后面可以链式调用then的原因，因为GCD的这个方法，让后面then变得像一行行的then顺序执行了。</p><p>可能会有人问了，并没有看到各个block执行，仅仅只是加到handler数组里了，这个问题的答案，就是promise的核心了。promise执行block的操作是放在resove里面的。先来看看源码</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>static</span> <span style=color:#66d9ef>void</span> <span style=color:#a6e22e>PMKResolve</span>(PMKPromise <span style=color:#f92672>*</span>this, <span style=color:#66d9ef>id</span> result) {
+    <span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>set)(<span style=color:#66d9ef>id</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> r){
+        NSArray <span style=color:#f92672>*</span>handlers <span style=color:#f92672>=</span> PMKSetResult(this, r);
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>handler)(<span style=color:#66d9ef>id</span>) <span style=color:#66d9ef>in</span> handlers)
+            handler(r);
+    };
+
+    <span style=color:#66d9ef>if</span> (IsPromise(result)) {
+        PMKPromise <span style=color:#f92672>*</span>next <span style=color:#f92672>=</span> result;
+        dispatch_barrier_sync(next<span style=color:#f92672>-&gt;</span>_promiseQueue, <span style=color:#f92672>^</span>{
+            <span style=color:#66d9ef>id</span> nextResult <span style=color:#f92672>=</span> next<span style=color:#f92672>-&gt;</span>_result;
+            
+            <span style=color:#66d9ef>if</span> (nextResult <span style=color:#f92672>==</span> nil) {  <span style=color:#75715e>// ie. pending
+</span><span style=color:#75715e></span>                [next<span style=color:#f92672>-&gt;</span>_handlers addObject:<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> o){
+                    PMKResolve(this, o);
+                }];
+            } <span style=color:#66d9ef>else</span>
+                set(nextResult);
+        });
+    } <span style=color:#66d9ef>else</span>
+        set(result);
+}
+</code></pre></div><p>这是一个递归函数，能形成递归的条件就是那句PMKResolve(this, o);当nextResult = nil的时候，就代表了这个promise还是pending状态，还没有被执行，这个时候就要递归调用，直到nextResult不为nil。不为nil，就会调用set方法，set方法是一个匿名函数，里面的for循环会依次循环，执行handler数组里面的每一个block。里面的那个if语句，是先判断result是否是一个promise，如果不是promise，就去执行set方法，依次调用各个block。</p><p>至此，一个then的执行原理就到此结束了。接下来我们再看看when的原理。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>    <span style=color:#66d9ef>return</span> newPromise <span style=color:#f92672>=</span> [PMKPromise new:<span style=color:#f92672>^</span>(PMKPromiseFulfiller fulfiller, PMKPromiseRejecter rejecter){
+        NSPointerArray <span style=color:#f92672>*</span>results <span style=color:#f92672>=</span> nil;
+      <span style=color:#75715e>#if TARGET_OS_IPHONE
+</span><span style=color:#75715e></span>        results <span style=color:#f92672>=</span> [NSPointerArray strongObjectsPointerArray];
+      <span style=color:#75715e>#else
+</span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> ([[NSPointerArray <span style=color:#66d9ef>class</span>] respondsToSelector:<span style=color:#66d9ef>@selector</span>(strongObjectsPointerArray)]) {
+            results <span style=color:#f92672>=</span> [NSPointerArray strongObjectsPointerArray];
+        } <span style=color:#66d9ef>else</span> {
+          <span style=color:#75715e>#pragma clang diagnostic push
+</span><span style=color:#75715e></span>          <span style=color:#75715e>#pragma clang diagnostic ignored &#34;-Wdeprecated-declarations&#34;
+</span><span style=color:#75715e></span>            results <span style=color:#f92672>=</span> [NSPointerArray pointerArrayWithStrongObjects];
+          <span style=color:#75715e>#pragma clang diagnostic pop
+</span><span style=color:#75715e></span>        }
+      <span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>        results.count <span style=color:#f92672>=</span> count;
+
+        NSUInteger ii <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+
+        <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>__strong</span> PMKPromise <span style=color:#f92672>*</span>promise <span style=color:#66d9ef>in</span> promises) {
+            <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[promise isKindOfClass:[PMKPromise <span style=color:#66d9ef>class</span>]])
+                promise <span style=color:#f92672>=</span> [PMKPromise promiseWithValue:promise];
+            promise.catch(rejecter(<span style=color:#ae81ff>@(</span>ii<span style=color:#ae81ff>)</span>));
+            promise.then(<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> o){
+                [results replacePointerAtIndex:ii withPointer:(<span style=color:#66d9ef>__bridge</span> <span style=color:#66d9ef>void</span> <span style=color:#f92672>*</span>)(o <span style=color:#f92672>?:</span> [NSNull null])];
+                <span style=color:#66d9ef>if</span> (<span style=color:#f92672>--</span>count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>)
+                    fulfiller(results.allObjects);
+            });
+            ii<span style=color:#f92672>++</span>;
+        }
+    }];
+</code></pre></div><p>这里只截取了return的部分，理解了then，这里再看when就好理解了。when就是在传入的promises的数组里面，依次执行各个promise，结果最后传给新生成的一个promise，作为返回值返回。</p><p>这里要额外提一点的就是如果给when传入一个字典，它会如何处理的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    <span style=color:#66d9ef>if</span> ([promises isKindOfClass:[NSDictionary <span style=color:#66d9ef>class</span>]])
+        <span style=color:#66d9ef>return</span> newPromise <span style=color:#f92672>=</span> [PMKPromise new:<span style=color:#f92672>^</span>(PMKPromiseFulfiller fulfiller, PMKPromiseRejecter rejecter){
+            NSMutableDictionary <span style=color:#f92672>*</span>results <span style=color:#f92672>=</span> [NSMutableDictionary new];
+            <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>id</span> key <span style=color:#66d9ef>in</span> promises) {
+                PMKPromise <span style=color:#f92672>*</span>promise <span style=color:#f92672>=</span> promises[key];
+                <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span>[promise isKindOfClass:[PMKPromise <span style=color:#66d9ef>class</span>]])
+                    promise <span style=color:#f92672>=</span> [PMKPromise promiseWithValue:promise];
+                promise.catch(rejecter(key));
+                promise.then(<span style=color:#f92672>^</span>(<span style=color:#66d9ef>id</span> o){
+                    <span style=color:#66d9ef>if</span> (o)
+                        results[key] <span style=color:#f92672>=</span> o;
+                    <span style=color:#66d9ef>if</span> (<span style=color:#f92672>--</span>count <span style=color:#f92672>==</span> <span style=color:#ae81ff>0</span>)
+                        fulfiller(results);
+                });
+            }
+        }];
+</code></pre></div><p>方式和when的数组方式基本一样，只不过多了一步，就是从字典里面先取出promise[key]，然后再继续对这个promise执行操作而已。所以when可以传入以promise为value的字典。</p><p>####五.使用PromiseKit优雅的处理回调地狱
+这里我就举个例子，大家一起来感受感受用promise的简洁。
+先描述一下环境，假设有这样一个提交按钮，当你点击之后，就会提交一次任务。首先要先判断是否有权限提交，没有权限就弹出错误。有权限提交之后，还要请求一次，判断当前任务是否已经存在，如果存在，弹出错误。如果不存在，这个时候就可以安心提交任务了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>void</span> (<span style=color:#f92672>^</span>errorHandler)(NSError <span style=color:#f92672>*</span>) <span style=color:#f92672>=</span> <span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error) {
+    [[UIAlertView <span style=color:#960050;background-color:#1e0010>…</span>] show];
+};
+[NSURLConnection sendAsynchronousRequest:rq queue:q completionHandler:<span style=color:#f92672>^</span>(NSURLResponse <span style=color:#f92672>*</span>response, NSData <span style=color:#f92672>*</span>data, NSError <span style=color:#f92672>*</span>connectionError) {
+    <span style=color:#66d9ef>if</span> (connectionError) {
+        errorHandler(connectionError);
+    } <span style=color:#66d9ef>else</span> {
+        NSError <span style=color:#f92672>*</span>jsonError <span style=color:#f92672>=</span> nil;
+        NSDictionary <span style=color:#f92672>*</span>json <span style=color:#f92672>=</span> [NSJSONSerialization JSONObjectWithData:data options:<span style=color:#ae81ff>0</span> error:<span style=color:#f92672>&amp;</span>jsonError];
+        <span style=color:#66d9ef>if</span> (jsonError) {
+            errorHandler(jsonError);
+        } <span style=color:#66d9ef>else</span> {
+            <span style=color:#66d9ef>id</span> rq <span style=color:#f92672>=</span> [NSURLRequest requestWithURL:[NSURL URLWithString:json[<span style=color:#e6db74>@&#34;have_authority&#34;</span>]]];
+            [NSURLConnection sendAsynchronousRequest:rq queue:q completionHandler:<span style=color:#f92672>^</span>(NSURLResponse <span style=color:#f92672>*</span>response, NSData <span style=color:#f92672>*</span>data, NSError <span style=color:#f92672>*</span>connectionError) {
+                
+                NSError <span style=color:#f92672>*</span>jsonError <span style=color:#f92672>=</span> nil;
+                NSDictionary <span style=color:#f92672>*</span>json <span style=color:#f92672>=</span> [NSJSONSerialization JSONObjectWithData:data options:<span style=color:#ae81ff>0</span> error:<span style=color:#f92672>&amp;</span>jsonError];
+                
+                <span style=color:#66d9ef>if</span> (jsonError) {
+                    errorHandler(jsonError);
+                } <span style=color:#66d9ef>else</span> {
+                    <span style=color:#66d9ef>id</span> rq <span style=color:#f92672>=</span> [NSURLRequest requestWithURL:[NSURL URLWithString:json[<span style=color:#e6db74>@&#34;exist&#34;</span>]]];
+                    [NSURLConnection sendAsynchronousRequest:rq queue:q completionHandler:<span style=color:#f92672>^</span>(NSURLResponse <span style=color:#f92672>*</span>response, NSData <span style=color:#f92672>*</span>data, NSError <span style=color:#f92672>*</span>connectionError) {
+                        
+                        NSError <span style=color:#f92672>*</span>jsonError <span style=color:#f92672>=</span> nil;
+                        NSDictionary <span style=color:#f92672>*</span>json <span style=color:#f92672>=</span> [NSJSONSerialization JSONObjectWithData:data options:<span style=color:#ae81ff>0</span> error:<span style=color:#f92672>&amp;</span>jsonError];
+                        
+                        <span style=color:#66d9ef>if</span> (jsonError) {
+                            errorHandler(jsonError);
+                        } <span style=color:#66d9ef>else</span> {
+                            <span style=color:#66d9ef>if</span> ([json[<span style=color:#e6db74>@&#34;status&#34;</span>] isEqualToString:<span style=color:#e6db74>@&#34;OK&#34;</span>]) {
+                                [self submitTask];
+                            } <span style=color:#66d9ef>else</span> {
+                                errorHandler(json[<span style=color:#e6db74>@&#34;status&#34;</span>]);
+                            }
+                        }
+                    }];
+                }
+            }];
+        }
+    }
+}];
+</code></pre></div><p>上面的代码里面有3层回调，看上去就很晕，接下来我们用promise来整理一下。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+[NSURLSession GET:url].then(<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>json){
+    <span style=color:#66d9ef>return</span> [NSURLConnection GET:json[<span style=color:#e6db74>@&#34;have_authority&#34;</span>]];
+}).then(<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>json){
+    <span style=color:#66d9ef>return</span> [NSURLConnection GET:json[<span style=color:#e6db74>@&#34;exist&#34;</span>]];
+}).then(<span style=color:#f92672>^</span>(NSDictionary <span style=color:#f92672>*</span>json){
+    <span style=color:#66d9ef>if</span> ([json[<span style=color:#e6db74>@&#34;status&#34;</span>] isEqualToString:<span style=color:#e6db74>@&#34;OK&#34;</span>]) {
+        <span style=color:#66d9ef>return</span> [NSURLConnection GET:submitJson];
+    } <span style=color:#66d9ef>else</span>
+        <span style=color:#66d9ef>@throw</span> [NSError errorWithDomain:<span style=color:#960050;background-color:#1e0010>…</span> code:<span style=color:#960050;background-color:#1e0010>…</span> userInfo:json[<span style=color:#e6db74>@&#34;status&#34;</span>]];
+}).catch(<span style=color:#f92672>^</span>(NSError <span style=color:#f92672>*</span>error){
+    [[UIAlertView <span style=color:#960050;background-color:#1e0010>…</span>] show];
+})
+</code></pre></div><p>之前将近40行代码就一下子变成15行左右，看上去比原来清爽多了，可读性更高。</p><p>####最后
+看完上面关于PromiseKit的使用方法之后，其实对于PromiseKit，我个人的理解它就是一个Monad（这是最近很火的一个概念，4月底在上海SwiftCon 2016中，唐巧大神分享的主题就是关于Monad，还不是很了解这个概念的可以去他博客看看，或者找视频学习学习。）Promise就是一个盒子里面封装了一堆操作，then对应的就是一组flatmap或map操作。不过缺点也还是有，如果网络用的AFNetWorking，网络请求很有可能会回调多次，这时用PromiseKit，就需要自己封装一个属于自己的promise了。PromiseKit原生的是用的OMGHTTPURLRQ这个网络框架。PromiseKit里面自带的封装的网络请求也还是基于NSURLConnection的。所以用了AFNetWorking的同学，要想再优雅的处理掉网络请求引起的回调地狱的时候，自己还是需要先封装一个自己的Promise，然后优雅的then一下。很多人可能看到这里，觉得我引入一个框架，本来是来解决问题的，但是现在还需要我再次封装才能解决问题，有点不值得。</p><p>我自己的看法是，PromiseKit是个解决异步问题很优秀的一个开源库，尤其是解决回调嵌套，回调地狱的问题，效果非常明显。虽然需要自己封装AFNetWorking的promise，但是它的思想非常值得我们学习的！这也是接下来第二篇想和大家一起分享的内容，利用promise的思想，自己来优雅的处理回调地狱！这一篇PromiseKit先分享到这里。</p><p>如有错误，还请大家请多多指教。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&text=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&is_video=false&description=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&title=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&name=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit&description=%23%23%23%23%e5%89%8d%e8%a8%80%20%e6%9c%80%e8%bf%91%e7%9c%8b%e4%ba%86%e4%b8%80%e4%ba%9bSwift%e5%85%b3%e4%ba%8e%e5%b0%81%e8%a3%85%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e8%bf%87%e7%a8%8b%e7%9a%84%e6%96%87%e7%ab%a0%ef%bc%8c%e6%af%94%e5%a6%82RxSwift%ef%bc%8cRAC%e7%ad%89%e7%ad%89%ef%bc%8c%e5%9b%a0%e4%b8%ba%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%e6%88%91%e8%87%aa%e5%b7%b1%e4%b9%9f%e5%86%99%e8%bf%87%ef%bc%8c%e5%be%88%e6%9c%89%e6%84%9f%e8%a7%a6%ef%bc%8c%e4%ba%8e%e6%98%af%e5%b0%b1%e7%bf%bb%e5%87%ba%e4%ba%86Promise%e6%9d%a5%e7%a0%94%e7%a9%b6%e5%ad%a6%e4%b9%a0%e4%b8%80%e4%b8%8b%e3%80%82%e7%8e%b0%e5%b0%86%e8%87%aa%e5%b7%b1%e7%9a%84%e4%b8%80%e4%ba%9b%e6%94%b6%e8%8e%b7%e5%88%86%e4%ba%ab%e4%b8%80%e4%b8%8b%ef%bc%8c%e6%9c%89%e9%94%99%e8%af%af%e6%ac%a2%e8%bf%8e%e5%a4%a7%e5%ae%b6%e5%a4%9a%e5%a4%9a%e6%8c%87%e6%95%99%e3%80%82%0a%23%23%23%23%e7%9b%ae%e5%bd%95%0a%201.PromiseKit%e7%ae%80%e4%bb%8b%202.PromiseKit%e5%ae%89%e8%a3%85%e5%92%8c%e4%bd%bf%e7%94%a8%203.PromiseKit%e4%b8%bb%e8%a6%81%e5%87%bd%e6%95%b0%e7%9a%84%e4%bd%bf%e7%94%a8%e6%96%b9%e6%b3%95%204.PromiseKit%e7%9a%84%e6%ba%90%e7%a0%81%e8%a7%a3%e6%9e%90%205.%e4%bd%bf%e7%94%a8PromiseKit%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20%20%23%23%23%23%e4%b8%80.PromiseKit%e7%ae%80%e4%bb%8b%20PromiseKit%e6%98%afiOS%2fOS%20X%20%e4%b8%ad%e4%b8%80%e4%b8%aa%e7%94%a8%e6%9d%a5%e5%a4%84%e7%90%86%e5%bc%82%e6%ad%a5%e7%bc%96%e7%a8%8b%e6%a1%86%e6%9e%b6%e3%80%82%e8%bf%99%e4%b8%aa%e6%a1%86%e6%9e%b6%e6%98%af%e7%94%b1Max%20Howell%28Mac%e4%b8%8bHomebrew%e7%9a%84%e4%bd%9c%e8%80%85%ef%bc%8c%e4%bc%a0%e8%af%b4%e4%b8%ad%e5%9b%a0%e4%b8%ba%26quot%3b%e4%b8%8d%e4%bc%9a%26quot%3b%e5%86%99%e5%8f%8d%e8%bd%ac%e4%ba%8c%e5%8f%89%e6%a0%91%e8%80%8c%e6%b2%a1%e6%9c%89%e6%8b%bf%e5%88%b0Google%20offer%29%e5%a4%a7%e7%a5%9e%e7%ba%a7%e4%ba%ba%e7%89%a9%e5%bc%80%e5%8f%91%e5%87%ba%e6%9d%a5%e7%9a%84%e3%80%82%0a%e5%9c%a8PromiseKit%e4%b8%ad%ef%bc%8c%e6%9c%80%e9%87%8d%e8%a6%81%e7%9a%84%e4%b8%80%e4%b8%aa%e6%a6%82%e5%bf%b5%e5%b0%b1%e6%98%afPromise%e7%9a%84%e6%a6%82%e5%bf%b5%ef%bc%8cPromise%e6%98%af%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e5%90%8e%e7%9a%84future%e7%9a%84%e4%b8%80%e4%b8%aa%e5%80%bc%e3%80%82%0a%20A%c2%a0promise%c2%a0represents%20the%20future%20value%20of%20an%20asynchronous%20task.%20A%20promise%20is%20an%20object%20that%20wraps%20an%20asynchronous%20task%0a%20Promise%e4%b9%9f%e6%98%af%e4%b8%80%e4%b8%aa%e5%8c%85%e8%a3%85%e7%9d%80%e5%bc%82%e6%ad%a5%e6%93%8d%e4%bd%9c%e7%9a%84%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e3%80%82%e4%bd%bf%e7%94%a8PromiseKit%ef%bc%8c%e8%83%bd%e5%a4%9f%e7%bc%96%e5%86%99%e5%87%ba%e6%95%b4%e6%b4%81%ef%bc%8c%e6%9c%89%e5%ba%8f%e7%9a%84%e4%bb%a3%e7%a0%81%ef%bc%8c%e9%80%bb%e8%be%91%e7%ae%80%e5%8d%95%e7%9a%84%ef%bc%8c%e5%b0%86Promise%e4%bd%9c%e4%b8%ba%e5%8f%82%e6%95%b0%ef%bc%8c%e6%a8%a1%e5%9d%97%e5%8c%96%e7%9a%84%e4%bb%8e%e4%b8%80%e4%b8%aa%e5%bc%82%e6%ad%a5%e4%bb%bb%e5%8a%a1%e5%88%b0%e4%b8%8b%e4%b8%80%e4%b8%aa%e5%bc%82%e6%ad%a5%e4%bb%bb%e5%8a%a1%e4%b8%ad%e5%8e%bb%e3%80%82%e7%94%a8PromiseKit%e5%86%99%e5%87%ba%e7%9a%84%e4%bb%a3%e7%a0%81%e5%b0%b1%e6%98%af%e8%bf%99%e6%a0%b7%ef%bc%9a%0a%5bself%20login%5d.then%28%5e%7b%20%2f%2f%20our%20login%20method%20wrapped%20an%20async%20task%20in%20a%20promise%20%c2%a0return%20%5bAPI%20fetchData%5d%3b%20%7d%29.then%28%5e%28NSArray%20%2afetchedData%29%7b%20%2f%2f%20our%20API%20class%20wraps%20our%20API%20and%20returns%20promises%20%c2%a0%2f%2f%20fetchedData%20returned%20a%20promise%20that%20resolves%20with%20an%20array%20of%20data%20%c2%a0self."><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2fios_callback_hell_promisekit%2f&t=iOS%20%e5%a6%82%e4%bd%95%e4%bc%98%e9%9b%85%e7%9a%84%e5%a4%84%e7%90%86%e2%80%9c%e5%9b%9e%e8%b0%83%e5%9c%b0%e7%8b%b1%20Callback%20hell%20%e2%80%9d%28%e4%b8%80%29%20%e2%80%94%e2%80%94%20%e4%bd%bf%e7%94%a8%20PromiseKit"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

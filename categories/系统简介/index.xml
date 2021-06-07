@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>系统简介 on prometheus</title><link>https://new.halfrost.com/categories/%E7%B3%BB%E7%BB%9F%E7%AE%80%E4%BB%8B/</link><description>Recent content in 系统简介 on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Wed, 29 Jul 2015 16:43:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/categories/%E7%B3%BB%E7%BB%9F%E7%AE%80%E4%BB%8B/index.xml" rel="self" type="application/rss+xml"/><item><title>欢迎使用 Ghost 博客系统</title><link>https://new.halfrost.com/welcome-to-ghost/</link><pubDate>Wed, 29 Jul 2015 16:43:00 +0000</pubDate><guid>https://new.halfrost.com/welcome-to-ghost/</guid><description>Yeah，博客上线了！这篇文章的目的是向你介绍 Ghost 编辑器并帮你快速上手。通过 &amp;lt;your blog URL&amp;gt;/ghost/ 链接就可以登录系统后台管理你的博客内容了。当你进入后台，你就能看到左侧文章列表处列出的这篇文章，右侧就是这篇文章的预览效果。点击预览栏右上角的铅笔图标就能进入内容编辑页面。
+快速入门 Ghost 使用 Markdown 语法书写内容。简单来说，Markdown 就是一种简化的书写格式！
+用 Markdown 语法写作是很容易的。在编辑界面的左侧就是你写作的地方。在你认为需要的时候，可以使用以下这些语法来格式化你的内容。例如下面这个无序列表：
+Item number one Item number two A nested item A final item 还可以是有序列表：
+Remember to buy some milk Drink the milk Tweet that I remembered to buy the milk, and drank it 链接 如果要链接其它页面，可以直接把页面的 URL 粘贴过来，例如 http://www.ghostchina.com - 会被自动识别为链接。但是，如果你想自定义链接文本，可以像这样： Ghost 中文网。很简单吧！
+图片 插入图片也没问题！前提是你事先知道图片的 URL，然后像下面这样：
+如果图片在本地的硬盘里怎么办？也很简单！像下面这样书写就能为图片预留一个位置，然后你可以继续写作，回头再通过拖拽的方式把图片上传到服务器上。
+![一张图片]
+引用 有些时候我们需要引用别人说的话，可以这样：</description></item></channel></rss>

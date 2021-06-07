@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>FRP on prometheus</title><link>https://new.halfrost.com/tags/frp/</link><description>Recent content in FRP on prometheus</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><copyright>halfrost</copyright><lastBuildDate>Sun, 24 Jul 2016 10:54:00 +0000</lastBuildDate><atom:link href="https://new.halfrost.com/tags/frp/index.xml" rel="self" type="application/rss+xml"/><item><title>函数响应式编程(FRP)从入门到"放弃"——图解RACSignal篇</title><link>https://new.halfrost.com/ios_rac_racsignal/</link><pubDate>Sun, 24 Jul 2016 10:54:00 +0000</pubDate><guid>https://new.halfrost.com/ios_rac_racsignal/</guid><description>目录 1.RACSignal的创建 2.RACSignal的订阅 3.RACSignal各类操作 ####一.RACSignal的创建
+1.创建单元信号
+NSError *errorObject = [NSError errorWithDomain:@&amp;quot;Something wrong&amp;quot; code:500 userInfo:nil]; //基本的4种创建方法 RACSignal *signal1 = [RACSignal return:@&amp;quot;Some Value&amp;quot;]; RACSignal *signal2 = [RACSignal error:errorObject]; RACSignal *signal3 = [RACSignal empty]; RACSignal *signal4 = [RACSignal never]; 2.创建动态信号
+RACSignal *signal5 = [RACSignal createSignal: ^RACDisposable *(id&amp;lt;RACSubscriber&amp;gt; subscriber) { [subscriber sendNext:@1]; [subscriber sendNext:@2]; [subscriber sendError:errorObject]; [subscriber sendCompleted]; return [RACDisposable disposableWithBlock:^{ }]; }]; 3.通过Cocoa桥接方式获得一个信号
+RACSignal *signal6 = [view rac_signalForSelector:@selector(setFrame:)]; RACSignal *signal7 = [view rac_signalForControlEvents:UIControlEventTouchUpInside]; RACSignal *signal8 = [view rac_willDeallocSignal]; //KVO的原理实现 RACSignal *signal9 = RACObserve(view, backgroundColor); 4.</description></item><item><title>函数响应式编程 ( FRP ) 从入门到"放弃"——基础概念篇</title><link>https://new.halfrost.com/functional_reactive_programming_concept/</link><pubDate>Mon, 11 Jul 2016 01:24:00 +0000</pubDate><guid>https://new.halfrost.com/functional_reactive_programming_concept/</guid><description>前言 研究ReactiveCocoa一段时间了，是时候总结一下学到的一些知识了。
+一.函数响应式编程 说道函数响应式编程，就不得不提到函数式编程，它们俩到底有什么关系呢？今天我们就详细的解析一下他们的关系。
+现在有下面4个概念，需要我们理清一下它们之间的关系：
+面向对象编程 Object Oriented Programming
+响应式编程 Reactive Programming
+函数式编程 Functional Programming
+函数响应式编程 Functional Reactive Programming
+我们先来说说什么是函数式编程Functional Programming，我们先来看看wikipedia上的相关定义：
+Functional Programming is a programming paradigm
+treats computation as the evaluation of mathematical functions. avoids changing-state and mutable data 总结一下函数式编程具有以下几个特点：
+函数是&amp;quot;第一等公民&amp;rdquo; 闭包和高阶函数 不改变状态(由此延伸出”引用透明”的概念) 递归 只用&amp;quot;表达式&amp;rdquo;，不用&amp;quot;语句&amp;rdquo;，没有副作用 接下来我们依次说明一下这些特点。
+一. 函数是&amp;quot;第一等公民&amp;rdquo; 所谓&amp;quot;第一等公民&amp;rdquo;（first class），指的是函数与其他数据类型一样，处于平等地位，可以赋值给其他变量，也可以作为参数，传入另一个函数，或者作为别的函数的返回值。
+一等函数的理念可以追溯到 Church 的 lambda 演算 (Church 1941; Barendregt 1984)。此后，包括 Haskell，OCaml，Standard ML，Scala 和 F# 在内的大量 (函数式) 编程语言都不同程度地借鉴了这个概念。</description></item></channel></rss>

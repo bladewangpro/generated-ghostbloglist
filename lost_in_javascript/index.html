@@ -1,0 +1,408 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>JavaScript 新手的踩坑日记 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="JavaScript 新手的踩坑日记"><meta property="og:description" content="引语 在1995年5月，Eich 大神在10天内就写出了第一个脚本语言的版本，JavaScript 的第一个代号是 Mocha，Marc Andreesen 起的这个名字。由于商标问题以及很多产品已经使用了 Live 的前缀，网景市场部将它改名为 LiveScript。在1995年11月底，Navigator 2.0B3 发行，其中包含了该语言的原型，这个版本相比之前没有什么大的变化。在1995年12月初，Java 语言发展壮大，Sun 把 Java 的商标授权给了网景。这个语言被再次改名，变成了最终的名字——JavaScript。在之后的1997年1月，标准化以后，就成为现在的 ECMAScript。
+近一两年在客户端上用到 JS 的地方也越来越多了，笔者最近接触了一下 JS ，作为前端小白，记录一下近期自己“踩坑”的成长经历。
+一. 原始值和对象 在 JavaScript 中，对值的区分就两种：
+1.原始值：BOOL，Number，String，null，undefined。 2.对象：每个对象都有唯一的标识且只严格的等于( = = = ) 自己。
+null，undefined没有属性，连toString( )方法也没有。
+false，0，NaN，undefined，null，&rsquo; ' ，都是false。
+typeof 运算符能区分原始值和对象，并检测出原始值的类型。 instanceof 运算符可以检测出一个对象是否是特定构造函数的一个实例或者是否为它的一个子类。
+ 引用类型： 对象、数组、函数
+剩下的类型都为 值类型
+ null 返回的是一个 object，这个是一个不可修复的 bug，如果修改这个 bug，就会破坏现有代码体系。但是这不能表示 null 是一个对象。
+因为第一代 JavaScript 引擎中的 JavaScript 值表示为32位的字符。最低3位作为一种标识，表示值是对象，整数，浮点数或者布尔值。对象的标识是000，而为了表现 null ，引擎使用了机器语言 NULL 的指针，该字符的所有位都是0。而 typeof 就是检测值的标志位，这就是为什么它会认为 null 是一个对象了。
+所以判断 一个 value 是不是一个对象应该按照如下条件判断："><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/lost_in_javascript/"><meta property="article:published_time" content="2017-05-12T22:18:00+00:00"><meta property="article:modified_time" content="2017-05-12T22:18:00+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="JavaScript 新手的踩坑日记"><meta name=twitter:description content="引语 在1995年5月，Eich 大神在10天内就写出了第一个脚本语言的版本，JavaScript 的第一个代号是 Mocha，Marc Andreesen 起的这个名字。由于商标问题以及很多产品已经使用了 Live 的前缀，网景市场部将它改名为 LiveScript。在1995年11月底，Navigator 2.0B3 发行，其中包含了该语言的原型，这个版本相比之前没有什么大的变化。在1995年12月初，Java 语言发展壮大，Sun 把 Java 的商标授权给了网景。这个语言被再次改名，变成了最终的名字——JavaScript。在之后的1997年1月，标准化以后，就成为现在的 ECMAScript。
+近一两年在客户端上用到 JS 的地方也越来越多了，笔者最近接触了一下 JS ，作为前端小白，记录一下近期自己“踩坑”的成长经历。
+一. 原始值和对象 在 JavaScript 中，对值的区分就两种：
+1.原始值：BOOL，Number，String，null，undefined。 2.对象：每个对象都有唯一的标识且只严格的等于( = = = ) 自己。
+null，undefined没有属性，连toString( )方法也没有。
+false，0，NaN，undefined，null，&rsquo; ' ，都是false。
+typeof 运算符能区分原始值和对象，并检测出原始值的类型。 instanceof 运算符可以检测出一个对象是否是特定构造函数的一个实例或者是否为它的一个子类。
+ 引用类型： 对象、数组、函数
+剩下的类型都为 值类型
+ null 返回的是一个 object，这个是一个不可修复的 bug，如果修改这个 bug，就会破坏现有代码体系。但是这不能表示 null 是一个对象。
+因为第一代 JavaScript 引擎中的 JavaScript 值表示为32位的字符。最低3位作为一种标识，表示值是对象，整数，浮点数或者布尔值。对象的标识是000，而为了表现 null ，引擎使用了机器语言 NULL 的指针，该字符的所有位都是0。而 typeof 就是检测值的标志位，这就是为什么它会认为 null 是一个对象了。
+所以判断 一个 value 是不是一个对象应该按照如下条件判断："><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/weex_best_practice_guidelines/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/javascript_scope/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&text=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&is_video=false&description=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&name=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0&description=%e5%bc%95%e8%af%ad%20%e5%9c%a81995%e5%b9%b45%e6%9c%88%ef%bc%8cEich%20%e5%a4%a7%e7%a5%9e%e5%9c%a810%e5%a4%a9%e5%86%85%e5%b0%b1%e5%86%99%e5%87%ba%e4%ba%86%e7%ac%ac%e4%b8%80%e4%b8%aa%e8%84%9a%e6%9c%ac%e8%af%ad%e8%a8%80%e7%9a%84%e7%89%88%e6%9c%ac%ef%bc%8cJavaScript%20%e7%9a%84%e7%ac%ac%e4%b8%80%e4%b8%aa%e4%bb%a3%e5%8f%b7%e6%98%af%20Mocha%ef%bc%8cMarc%20Andreesen%20%e8%b5%b7%e7%9a%84%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e3%80%82%e7%94%b1%e4%ba%8e%e5%95%86%e6%a0%87%e9%97%ae%e9%a2%98%e4%bb%a5%e5%8f%8a%e5%be%88%e5%a4%9a%e4%ba%a7%e5%93%81%e5%b7%b2%e7%bb%8f%e4%bd%bf%e7%94%a8%e4%ba%86%20Live%20%e7%9a%84%e5%89%8d%e7%bc%80%ef%bc%8c%e7%bd%91%e6%99%af%e5%b8%82%e5%9c%ba%e9%83%a8%e5%b0%86%e5%ae%83%e6%94%b9%e5%90%8d%e4%b8%ba%20LiveScript%e3%80%82%e5%9c%a81995%e5%b9%b411%e6%9c%88%e5%ba%95%ef%bc%8cNavigator%202.0B3%20%e5%8f%91%e8%a1%8c%ef%bc%8c%e5%85%b6%e4%b8%ad%e5%8c%85%e5%90%ab%e4%ba%86%e8%af%a5%e8%af%ad%e8%a8%80%e7%9a%84%e5%8e%9f%e5%9e%8b%ef%bc%8c%e8%bf%99%e4%b8%aa%e7%89%88%e6%9c%ac%e7%9b%b8%e6%af%94%e4%b9%8b%e5%89%8d%e6%b2%a1%e6%9c%89%e4%bb%80%e4%b9%88%e5%a4%a7%e7%9a%84%e5%8f%98%e5%8c%96%e3%80%82%e5%9c%a81995%e5%b9%b412%e6%9c%88%e5%88%9d%ef%bc%8cJava%20%e8%af%ad%e8%a8%80%e5%8f%91%e5%b1%95%e5%a3%ae%e5%a4%a7%ef%bc%8cSun%20%e6%8a%8a%20Java%20%e7%9a%84%e5%95%86%e6%a0%87%e6%8e%88%e6%9d%83%e7%bb%99%e4%ba%86%e7%bd%91%e6%99%af%e3%80%82%e8%bf%99%e4%b8%aa%e8%af%ad%e8%a8%80%e8%a2%ab%e5%86%8d%e6%ac%a1%e6%94%b9%e5%90%8d%ef%bc%8c%e5%8f%98%e6%88%90%e4%ba%86%e6%9c%80%e7%bb%88%e7%9a%84%e5%90%8d%e5%ad%97%e2%80%94%e2%80%94JavaScript%e3%80%82%e5%9c%a8%e4%b9%8b%e5%90%8e%e7%9a%841997%e5%b9%b41%e6%9c%88%ef%bc%8c%e6%a0%87%e5%87%86%e5%8c%96%e4%bb%a5%e5%90%8e%ef%bc%8c%e5%b0%b1%e6%88%90%e4%b8%ba%e7%8e%b0%e5%9c%a8%e7%9a%84%20ECMAScript%e3%80%82%0a%e8%bf%91%e4%b8%80%e4%b8%a4%e5%b9%b4%e5%9c%a8%e5%ae%a2%e6%88%b7%e7%ab%af%e4%b8%8a%e7%94%a8%e5%88%b0%20JS%20%e7%9a%84%e5%9c%b0%e6%96%b9%e4%b9%9f%e8%b6%8a%e6%9d%a5%e8%b6%8a%e5%a4%9a%e4%ba%86%ef%bc%8c%e7%ac%94%e8%80%85%e6%9c%80%e8%bf%91%e6%8e%a5%e8%a7%a6%e4%ba%86%e4%b8%80%e4%b8%8b%20JS%20%ef%bc%8c%e4%bd%9c%e4%b8%ba%e5%89%8d%e7%ab%af%e5%b0%8f%e7%99%bd%ef%bc%8c%e8%ae%b0%e5%bd%95%e4%b8%80%e4%b8%8b%e8%bf%91%e6%9c%9f%e8%87%aa%e5%b7%b1%e2%80%9c%e8%b8%a9%e5%9d%91%e2%80%9d%e7%9a%84%e6%88%90%e9%95%bf%e7%bb%8f%e5%8e%86%e3%80%82%0a%e4%b8%80.%20%e5%8e%9f%e5%a7%8b%e5%80%bc%e5%92%8c%e5%af%b9%e8%b1%a1%20%e5%9c%a8%20JavaScript%20%e4%b8%ad%ef%bc%8c%e5%af%b9%e5%80%bc%e7%9a%84%e5%8c%ba%e5%88%86%e5%b0%b1%e4%b8%a4%e7%a7%8d%ef%bc%9a%0a1.%e5%8e%9f%e5%a7%8b%e5%80%bc%ef%bc%9aBOOL%ef%bc%8cNumber%ef%bc%8cString%ef%bc%8cnull%ef%bc%8cundefined%e3%80%82%202.%e5%af%b9%e8%b1%a1%ef%bc%9a%e6%af%8f%e4%b8%aa%e5%af%b9%e8%b1%a1%e9%83%bd%e6%9c%89%e5%94%af%e4%b8%80%e7%9a%84%e6%a0%87%e8%af%86%e4%b8%94%e5%8f%aa%e4%b8%a5%e6%a0%bc%e7%9a%84%e7%ad%89%e4%ba%8e%28%20%3d%20%3d%20%3d%20%29%20%e8%87%aa%e5%b7%b1%e3%80%82%0anull%ef%bc%8cundefined%e6%b2%a1%e6%9c%89%e5%b1%9e%e6%80%a7%ef%bc%8c%e8%bf%9etoString%28%20%29%e6%96%b9%e6%b3%95%e4%b9%9f%e6%b2%a1%e6%9c%89%e3%80%82%0afalse%ef%bc%8c0%ef%bc%8cNaN%ef%bc%8cundefined%ef%bc%8cnull%ef%bc%8c%26rsquo%3b%20%27%20%ef%bc%8c%e9%83%bd%e6%98%affalse%e3%80%82%0atypeof%20%e8%bf%90%e7%ae%97%e7%ac%a6%e8%83%bd%e5%8c%ba%e5%88%86%e5%8e%9f%e5%a7%8b%e5%80%bc%e5%92%8c%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%b9%b6%e6%a3%80%e6%b5%8b%e5%87%ba%e5%8e%9f%e5%a7%8b%e5%80%bc%e7%9a%84%e7%b1%bb%e5%9e%8b%e3%80%82%20instanceof%20%e8%bf%90%e7%ae%97%e7%ac%a6%e5%8f%af%e4%bb%a5%e6%a3%80%e6%b5%8b%e5%87%ba%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e6%98%af%e5%90%a6%e6%98%af%e7%89%b9%e5%ae%9a%e6%9e%84%e9%80%a0%e5%87%bd%e6%95%b0%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ae%9e%e4%be%8b%e6%88%96%e8%80%85%e6%98%af%e5%90%a6%e4%b8%ba%e5%ae%83%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ad%90%e7%b1%bb%e3%80%82%0a%20%e5%bc%95%e7%94%a8%e7%b1%bb%e5%9e%8b%ef%bc%9a%20%e5%af%b9%e8%b1%a1%e3%80%81%e6%95%b0%e7%bb%84%e3%80%81%e5%87%bd%e6%95%b0%0a%e5%89%a9%e4%b8%8b%e7%9a%84%e7%b1%bb%e5%9e%8b%e9%83%bd%e4%b8%ba%20%e5%80%bc%e7%b1%bb%e5%9e%8b%0a%20null%20%e8%bf%94%e5%9b%9e%e7%9a%84%e6%98%af%e4%b8%80%e4%b8%aa%20object%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%98%af%e4%b8%80%e4%b8%aa%e4%b8%8d%e5%8f%af%e4%bf%ae%e5%a4%8d%e7%9a%84%20bug%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%bf%ae%e6%94%b9%e8%bf%99%e4%b8%aa%20bug%ef%bc%8c%e5%b0%b1%e4%bc%9a%e7%a0%b4%e5%9d%8f%e7%8e%b0%e6%9c%89%e4%bb%a3%e7%a0%81%e4%bd%93%e7%b3%bb%e3%80%82%e4%bd%86%e6%98%af%e8%bf%99%e4%b8%8d%e8%83%bd%e8%a1%a8%e7%a4%ba%20null%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e3%80%82%0a%e5%9b%a0%e4%b8%ba%e7%ac%ac%e4%b8%80%e4%bb%a3%20JavaScript%20%e5%bc%95%e6%93%8e%e4%b8%ad%e7%9a%84%20JavaScript%20%e5%80%bc%e8%a1%a8%e7%a4%ba%e4%b8%ba32%e4%bd%8d%e7%9a%84%e5%ad%97%e7%ac%a6%e3%80%82%e6%9c%80%e4%bd%8e3%e4%bd%8d%e4%bd%9c%e4%b8%ba%e4%b8%80%e7%a7%8d%e6%a0%87%e8%af%86%ef%bc%8c%e8%a1%a8%e7%a4%ba%e5%80%bc%e6%98%af%e5%af%b9%e8%b1%a1%ef%bc%8c%e6%95%b4%e6%95%b0%ef%bc%8c%e6%b5%ae%e7%82%b9%e6%95%b0%e6%88%96%e8%80%85%e5%b8%83%e5%b0%94%e5%80%bc%e3%80%82%e5%af%b9%e8%b1%a1%e7%9a%84%e6%a0%87%e8%af%86%e6%98%af000%ef%bc%8c%e8%80%8c%e4%b8%ba%e4%ba%86%e8%a1%a8%e7%8e%b0%20null%20%ef%bc%8c%e5%bc%95%e6%93%8e%e4%bd%bf%e7%94%a8%e4%ba%86%e6%9c%ba%e5%99%a8%e8%af%ad%e8%a8%80%20NULL%20%e7%9a%84%e6%8c%87%e9%92%88%ef%bc%8c%e8%af%a5%e5%ad%97%e7%ac%a6%e7%9a%84%e6%89%80%e6%9c%89%e4%bd%8d%e9%83%bd%e6%98%af0%e3%80%82%e8%80%8c%20typeof%20%e5%b0%b1%e6%98%af%e6%a3%80%e6%b5%8b%e5%80%bc%e7%9a%84%e6%a0%87%e5%bf%97%e4%bd%8d%ef%bc%8c%e8%bf%99%e5%b0%b1%e6%98%af%e4%b8%ba%e4%bb%80%e4%b9%88%e5%ae%83%e4%bc%9a%e8%ae%a4%e4%b8%ba%20null%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%ba%86%e3%80%82%0a%e6%89%80%e4%bb%a5%e5%88%a4%e6%96%ad%20%e4%b8%80%e4%b8%aa%20value%20%e6%98%af%e4%b8%8d%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%ba%94%e8%af%a5%e6%8c%89%e7%85%a7%e5%a6%82%e4%b8%8b%e6%9d%a1%e4%bb%b6%e5%88%a4%e6%96%ad%ef%bc%9a"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&t=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#引语>引语</a></li><li><a href=#一-原始值和对象>一. 原始值和对象</a></li><li><a href=#二-宽松相等带来的bug>二. 宽松相等带来的bug</a></li><li><a href=#三-number>三. Number</a></li><li><a href=#四-string>四. String</a></li><li><a href=#五-array>五. Array</a></li><li><a href=#六-set-mapweaksetweakmap>六. Set 、Map、WeakSet、WeakMap</a></li><li><a href=#七-循环>七. 循环</a></li><li><a href=#八-隐式转换--强制转换-带来的bug>八. 隐式转换 / 强制转换 带来的bug</a></li><li><a href=#九-运算符重载>九. 运算符重载</a></li><li><a href=#十-函数声明和变量声明的提升>十. 函数声明和变量声明的提升</a></li><li><a href=#十一-arguments-不是数组>十一. arguments 不是数组</a></li><li><a href=#十二-iife-引入新的作用域>十二. IIFE 引入新的作用域</a></li><li><a href=#十三-函数中-this-的问题>十三. 函数中 this 的问题</a></li><li><a href=#十四-异步>十四. 异步</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">JavaScript 新手的踩坑日记</h1><div class=meta><div class=postdate><time datetime="2017-05-12 22:18:00 +0000 UTC" itemprop=datePublished>May 12</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/javascript>JavaScript</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/javascript rel=tag>JavaScript</a></div></div></header><div class=content itemprop=articleBody><h3 id=引语>引语</h3><p>在1995年5月，Eich 大神在10天内就写出了第一个脚本语言的版本，JavaScript 的第一个代号是 Mocha，Marc Andreesen 起的这个名字。由于商标问题以及很多产品已经使用了 Live 的前缀，网景市场部将它改名为 LiveScript。在1995年11月底，Navigator 2.0B3 发行，其中包含了该语言的原型，这个版本相比之前没有什么大的变化。在1995年12月初，Java 语言发展壮大，Sun 把 Java 的商标授权给了网景。这个语言被再次改名，变成了最终的名字——JavaScript。在之后的1997年1月，标准化以后，就成为现在的 ECMAScript。</p><p>近一两年在客户端上用到 JS 的地方也越来越多了，笔者最近接触了一下 JS ，作为前端小白，记录一下近期自己“踩坑”的成长经历。</p><h3 id=一-原始值和对象>一. 原始值和对象</h3><p>在 JavaScript 中，对值的区分就两种：</p><p>1.原始值：BOOL，Number，String，null，undefined。
+2.对象：每个对象都有唯一的标识且只严格的等于( = = = ) 自己。</p><p>null，undefined没有属性，连toString( )方法也没有。</p><p>false，0，NaN，undefined，null，&rsquo; ' ，都是false。</p><p>typeof 运算符能区分原始值和对象，并检测出原始值的类型。
+instanceof 运算符可以检测出一个对象是否是特定构造函数的一个实例或者是否为它的一个子类。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_1.png alt></p><blockquote><p>引用类型： 对象、数组、函数<br>剩下的类型都为 值类型</p></blockquote><p>null 返回的是一个 object，这个是一个不可修复的 bug，如果修改这个 bug，就会破坏现有代码体系。但是这不能表示 null 是一个对象。</p><p>因为第一代 JavaScript 引擎中的 JavaScript 值表示为32位的字符。最低3位作为一种标识，表示值是对象，整数，浮点数或者布尔值。对象的标识是000，而为了表现 null ，引擎使用了机器语言 NULL 的指针，该字符的所有位都是0。而 typeof 就是检测值的标志位，这就是为什么它会认为 null 是一个对象了。</p><p>所以判断 一个 value 是不是一个对象应该按照如下条件判断：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>isObject</span> (<span style=color:#a6e22e>value</span>) {
+  <span style=color:#66d9ef>return</span> ( <span style=color:#a6e22e>value</span> <span style=color:#f92672>!==</span> <span style=color:#66d9ef>null</span> 
+    <span style=color:#f92672>&amp;&amp;</span> (<span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;object&#39;</span> 
+    <span style=color:#f92672>||</span> <span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;function&#39;</span>));
+}
+
+</code></pre></div><p>null 是原型链最顶端的元素</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+Object.<span style=color:#a6e22e>getPrototypeOf</span>(Object.<span style=color:#a6e22e>prototype</span>)
+
+<span style=color:#f92672>&lt;</span> <span style=color:#66d9ef>null</span>
+
+</code></pre></div><p>判断 undefined 和 null 可以用严格相等判断：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>if</span>(<span style=color:#a6e22e>x</span> <span style=color:#f92672>===</span> <span style=color:#66d9ef>null</span>) {
+  <span style=color:#75715e>// 判断是否为 null
+</span><span style=color:#75715e></span>}
+
+<span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>x</span> <span style=color:#f92672>===</span> <span style=color:#66d9ef>undefined</span>) {
+  <span style=color:#75715e>// 判断是否为 undefined
+</span><span style=color:#75715e></span>}
+
+<span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>x</span> <span style=color:#f92672>===</span> <span style=color:#66d9ef>void</span> <span style=color:#ae81ff>0</span> ) {
+  <span style=color:#75715e>// 判断是否为 undefined，void 0 === undefined
+</span><span style=color:#75715e></span>}
+
+<span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>x</span> <span style=color:#f92672>!=</span> <span style=color:#66d9ef>null</span> ) {
+ <span style=color:#75715e>// 判断x既不是undefined，也不是null
+</span><span style=color:#75715e></span> <span style=color:#75715e>// 这种写法等价于 if (x !== undefined &amp;&amp; x !== null )
+</span><span style=color:#75715e></span>}
+
+</code></pre></div><p>在原始值里面有一个特例，NaN 虽然是原始值，但是它和它本身是不相等的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>NaN</span> <span style=color:#f92672>===</span> <span style=color:#66d9ef>NaN</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+</code></pre></div><p>原始值的构造函数 Boolean，Number，String 可以把原始值转换成对象，也可以把对象转换成原始值。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#75715e>// 原始值转换成对象
+</span><span style=color:#75715e></span><span style=color:#66d9ef>var</span> <span style=color:#a6e22e>object</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> String(<span style=color:#e6db74>&#39;abc&#39;</span>)
+
+
+<span style=color:#75715e>// 对象转换成原始值
+</span><span style=color:#75715e></span>String(<span style=color:#ae81ff>123</span>)
+<span style=color:#f92672>&lt;</span><span style=color:#e6db74>&#39;123&#39;</span>
+
+</code></pre></div><p>但是在对象转换成原始值的时候，需要注意一点：如果用 valueOf() 函数进行转换的时候，转换一切正确。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>new</span> Boolean(<span style=color:#66d9ef>true</span>).<span style=color:#a6e22e>valueOf</span>()
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+</code></pre></div><p>但是使用构造函数将包装对象转换成原始值的时候，BOOL值是不能正确被转换的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+Boolean(<span style=color:#66d9ef>new</span> Boolean(<span style=color:#66d9ef>false</span>))
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+</code></pre></div><p>构造函数只能正确的提取出包装对象中的数字和字符串。</p><h3 id=二-宽松相等带来的bug>二. 宽松相等带来的bug</h3><p>在 JavaScript 中有两种方式来判断两个值是否相等。</p><ol><li>严格相等 ( = = = ) 和严格不等 ( != = ) 要求比较的值必须是相同的类型。</li><li>宽松相等 ( = = ) 和宽松不等 ( ！ = ) 会先尝试将两个不同类型的值进行转换，然后再使用严格等进行比较。</li></ol><p>宽松相等就会遇到一些bug：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>undefined</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>null</span> <span style=color:#75715e>// undefined 和 null 是宽松相等的
+</span><span style=color:#75715e></span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+<span style=color:#ae81ff>2</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>true</span>  <span style=color:#75715e>// 不要误认为这里是true
+</span><span style=color:#75715e></span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+<span style=color:#ae81ff>1</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>true</span> 
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+<span style=color:#ae81ff>0</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>false</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span> 
+
+<span style=color:#e6db74>&#39; &#39;</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>false</span> <span style=color:#75715e>// 空字符串等于false，但是不是所有的非空字符串都等于true
+</span><span style=color:#75715e></span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+<span style=color:#e6db74>&#39;1&#39;</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>true</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+<span style=color:#e6db74>&#39;2&#39;</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>true</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+<span style=color:#e6db74>&#39;abc&#39;</span> <span style=color:#f92672>==</span> <span style=color:#66d9ef>true</span> <span style=color:#75715e>// NaN === 1
+</span><span style=color:#75715e></span><span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+</code></pre></div><p>关于严格相等( Strict equality ) 和 宽松相等( Loose equality )，GitHub上有一个人总结了一张图，挺好的，贴出来分享一下，Github地址在<a href=https://github.com/dorey/Javascript-Equality-Table/>这里</a></p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_10.png alt></p><p>这里还有一张更全的表，还是彩色的，原文地址在<a href=https://thomas-yang.me/projects/oh-my-dear-js/>这里</a></p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_11_.png alt></p><blockquote><p>面试题：何时用 = = = ，何时用 = =<br>if ( obj.a = = null ) {<br>// 上面这个判断相当于 obj.a = = = null || obj.a = = = undefined<br>// 上面这种简写方式 jQuery 中推荐的写法<br>}</p><p>除去上面这里用 = = 以外，其他地方都用 = = =</p></blockquote><p>但是如果用 Boolean( ) 进行转换的时候情况又有不同：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_2.png alt></p><p>这里为何对象总是为true ？
+在 ECMAScript 1中，曾经规定不支持通过对象配置来转换（比如 toBoolean() 方法）。原理是布尔运算符 || 和 && 会保持运算数的值。因此，如果链式使用这些运算符，会多次确认相同值的真假。这样的检查对于原始值类型成本不大，但是对于对象，如果能通过配置来转换布尔值，成本很大。所以从 ECMAScript 1 开始，对象总是为 true 来避免了这些成本转换。</p><h3 id=三-number>三. Number</h3><p>JavaScript 中所有的数字都只有一种类型，都被当做浮点数，JavaScript 内部会做优化，来区分浮点数组和整数。JavaScript 的数字是双精度的（64位），基于 IEEE 754 标准。</p><p>由于所有数字都是浮点数，所以这里就会有精度的问题。还记得前段时间网上流传的机器人的漫画么？</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_3.png alt></p><p>精度的问题就会引发一些奇妙的事情</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#ae81ff>0.1</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>0.2</span> ;  <span style=color:#75715e>// 0.300000000000004
+</span><span style=color:#75715e></span>
+( <span style=color:#ae81ff>0.1</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>0.2</span> ) <span style=color:#f92672>+</span> <span style=color:#ae81ff>0.3</span>;    <span style=color:#75715e>// 0.6000000000001
+</span><span style=color:#75715e></span><span style=color:#ae81ff>0.1</span> <span style=color:#f92672>+</span> ( <span style=color:#ae81ff>0.2</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>0.3</span> );    <span style=color:#75715e>// 0.6
+</span><span style=color:#75715e></span>
+(<span style=color:#ae81ff>0.8</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.7</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.6</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.5</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span>   <span style=color:#75715e>// 0.65
+</span><span style=color:#75715e></span>(<span style=color:#ae81ff>0.6</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.7</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.8</span><span style=color:#f92672>+</span><span style=color:#ae81ff>0.5</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span>   <span style=color:#75715e>// 0.6499999999999999
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>变换一个位置，加一个括号，都会影响精度。为了避免这个问题，建议还是转换成整数。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+( <span style=color:#ae81ff>8</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>7</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>6</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>5</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>10</span> ;  <span style=color:#75715e>// 0.65
+</span><span style=color:#75715e></span>( <span style=color:#ae81ff>6</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>8</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>5</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>7</span>) <span style=color:#f92672>/</span> <span style=color:#ae81ff>4</span> <span style=color:#f92672>/</span> <span style=color:#ae81ff>10</span> ;  <span style=color:#75715e>// 0.65
+</span><span style=color:#75715e></span>
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_4.png alt></p><p>在数字里面有4个特殊的数值：</p><ol><li>2个错误值：NaN 和 Infinity</li><li>2个0，一个+0，一个-0。0是会带正号和负号。因为正负号和数值是分开存储的。</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>typeof</span> <span style=color:#66d9ef>NaN</span>
+<span style=color:#f92672>&lt;</span><span style=color:#e6db74>&#34;number&#34;</span>
+
+</code></pre></div><p>（吐槽：NaN 是 “ not a number ”的缩写，但是它却是一个数字）</p><p>NaN 是 JS 中唯一一个不能自身严格相等的值：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>NaN</span> <span style=color:#f92672>===</span> <span style=color:#66d9ef>NaN</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+</code></pre></div><p>所以不能通过 Array.prototype.indexOf 方法去查找 NaN （因为数组的 indexOf 方法会进行严格等的判断）。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+[ <span style=color:#66d9ef>NaN</span> ].<span style=color:#a6e22e>indexOf</span>( <span style=color:#66d9ef>NaN</span> )
+<span style=color:#f92672>&lt;-</span><span style=color:#ae81ff>1</span>
+
+</code></pre></div><p>正确的姿势有两种：</p><p>第一种：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>realIsNaN</span>( <span style=color:#a6e22e>value</span> ){
+  <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>typeof</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;number&#39;</span> <span style=color:#f92672>&amp;&amp;</span> isNaN(<span style=color:#a6e22e>value</span>);
+}
+
+</code></pre></div><p>上面这种之所以需要判断类型，是因为字符串转换会先转换成数字，转换失败为 NaN。所以和 NaN 相等。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+isNaN( <span style=color:#e6db74>&#39;halfrost&#39;</span> )
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>true</span>
+
+</code></pre></div><p>第二种方法是利用 IEEE 754 标准里面的定义，NaN 和任意值比较，包括和自身进行比较，都是无序的</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>realIsNaN</span>( <span style=color:#a6e22e>value</span> ){
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>!==</span> <span style=color:#a6e22e>value</span> ;
+}
+
+</code></pre></div><p>另外一个错误值 Infinity 是由表示无穷大，或者除以0导致的。</p><p>判断它直接用 宽松相等 = = ，或者严格相等 = = = 判断即可。</p><p>但是 isFinite() 函数不是专门用来判断Infinity的，是用来判断一个值是否是错误值（这里表示既不是 NaN，又不是 Infinity，排除掉这两个错误值）。</p><p>在 ES6 中 引入了两个函数专门判断 Infinity 和 NaN的，Number.isFinite() 和 Number.isNaN() 以后都建议用这两个函数进行判断。</p><p>JS 中整型是有一个安全区间，在（ -2^53 ， 2^53）之间。所以如果数字超过了64位无符号的整型数字，就只能用字符串进行存储了。</p><p>利用 parseInt() 进行转换成数字的时候，会有出错的时候，结果不可信：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+parseInt(<span style=color:#ae81ff>1000000000000000000000000000.99999999999999999</span>,<span style=color:#ae81ff>10</span>)
+<span style=color:#f92672>&lt;</span><span style=color:#ae81ff>1</span>
+
+</code></pre></div><p>parseInt( str , redix? ) 会先把第一个参数转换成字符串:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+String(<span style=color:#ae81ff>1000000000000000000000000000.99999999999999999</span>)
+<span style=color:#f92672>&lt;</span><span style=color:#e6db74>&#34;1e+27&#34;</span>
+
+</code></pre></div><p>parseInt 不认为 e 是整数，所以在 e 之后的就停止解析了，所以最终输出1。</p><p>JS 中的 % 求余操作符并不是我们平时认为的取模。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#f92672>-</span><span style=color:#ae81ff>9</span><span style=color:#f92672>%</span><span style=color:#ae81ff>7</span>
+<span style=color:#f92672>&lt;-</span><span style=color:#ae81ff>2</span>
+
+</code></pre></div><p>求余操作符会返回一个和第一个操作数相同符号的结果。取模运算是和第二个操作数符号相同。</p><p>所以比较坑的就是我们平时判断一个数是否是奇偶数的问题就会出现错误：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>isOdd</span>( <span style=color:#a6e22e>value</span> ){
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>value</span> <span style=color:#f92672>%</span> <span style=color:#ae81ff>2</span> <span style=color:#f92672>===</span> <span style=color:#ae81ff>1</span>;
+}
+
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>);  <span style=color:#75715e>// false
+</span><span style=color:#75715e></span><span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#f92672>-</span><span style=color:#ae81ff>2</span>);  <span style=color:#75715e>// false
+</span><span style=color:#75715e></span>
+</code></pre></div><p>正确姿势是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>isOdd</span>( <span style=color:#a6e22e>value</span> ){
+  <span style=color:#66d9ef>return</span> Math.<span style=color:#a6e22e>abs</span>( <span style=color:#a6e22e>value</span> <span style=color:#f92672>%</span> <span style=color:#ae81ff>2</span> ) <span style=color:#f92672>===</span> <span style=color:#ae81ff>1</span>;
+}
+
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#f92672>-</span><span style=color:#ae81ff>3</span>);  <span style=color:#75715e>// true
+</span><span style=color:#75715e></span><span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#f92672>-</span><span style=color:#ae81ff>2</span>);  <span style=color:#75715e>// false
+</span><span style=color:#75715e></span>
+</code></pre></div><h3 id=四-string>四. String</h3><p>字符串比较符，是无法比较变音符和重音符的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#e6db74>&#39;ä&#39;</span> <span style=color:#f92672>&lt;</span> <span style=color:#e6db74>&#39;b&#39;</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+<span style=color:#e6db74>&#39;á&#39;</span> <span style=color:#f92672>&lt;</span> <span style=color:#e6db74>&#39;b&#39;</span>
+<span style=color:#f92672>&lt;</span><span style=color:#66d9ef>false</span>
+
+</code></pre></div><h3 id=五-array>五. Array</h3><p>创建数组的时候不能用单个数字创建数组。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>new</span> Array(<span style=color:#ae81ff>2</span>)  <span style=color:#75715e>// 这里的一个数字代表的是数组的长度
+</span><span style=color:#75715e></span><span style=color:#f92672>&lt;</span>[ , , ]
+
+<span style=color:#66d9ef>new</span> Array(<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>)
+<span style=color:#f92672>&lt;</span>[<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>] 
+
+</code></pre></div><p>删除元素会删出空格，但是不会改变数组的长度。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>array</span> <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>]
+<span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>length</span>
+<span style=color:#f92672>&lt;</span><span style=color:#ae81ff>4</span>
+<span style=color:#66d9ef>delete</span> <span style=color:#a6e22e>array</span>[<span style=color:#ae81ff>1</span>]
+
+<span style=color:#a6e22e>array</span>
+<span style=color:#f92672>&lt;</span>[<span style=color:#ae81ff>1</span>, ,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>]
+<span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>length</span>
+<span style=color:#f92672>&lt;</span><span style=color:#ae81ff>4</span>
+
+
+</code></pre></div><p>所以这里的删除不是很符合我们之前的删除，正确姿势是用splice</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>array</span> <span style=color:#f92672>=</span> [<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>2</span>,<span style=color:#ae81ff>3</span>,<span style=color:#ae81ff>4</span>,<span style=color:#ae81ff>56</span>,<span style=color:#ae81ff>7</span>,<span style=color:#ae81ff>8</span>,<span style=color:#ae81ff>9</span>]
+<span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>splice</span>(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>3</span>)
+<span style=color:#a6e22e>array</span>
+<span style=color:#f92672>&lt;</span>[<span style=color:#ae81ff>1</span>, <span style=color:#ae81ff>56</span>, <span style=color:#ae81ff>7</span>, <span style=color:#ae81ff>8</span>, <span style=color:#ae81ff>9</span>]
+<span style=color:#a6e22e>array</span>.<span style=color:#a6e22e>length</span>
+<span style=color:#f92672>&lt;</span><span style=color:#ae81ff>5</span>
+
+
+</code></pre></div><p>针对数组里面的空缺，不同的遍历方法行为不同</p><p>在 ES5 中：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_5.png alt></p><p>在 ES6 中：规定，遍历时不跳过空缺，空缺都转化为undefined</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_6.png alt></p><h3 id=六-set-mapweaksetweakmap>六. Set 、Map、WeakSet、WeakMap</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_7.png alt></p><h3 id=七-循环>七. 循环</h3><p>先说一个 for-in 的坑：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>scores</span> <span style=color:#f92672>=</span> [ <span style=color:#ae81ff>11</span>,<span style=color:#ae81ff>22</span>,<span style=color:#ae81ff>33</span>,<span style=color:#ae81ff>44</span>,<span style=color:#ae81ff>55</span>,<span style=color:#ae81ff>66</span>,<span style=color:#ae81ff>77</span> ];
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>total</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>;
+<span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>score</span> <span style=color:#66d9ef>in</span> <span style=color:#a6e22e>scores</span>) {
+  <span style=color:#a6e22e>total</span> <span style=color:#f92672>+=</span> <span style=color:#a6e22e>score</span>;
+}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>mean</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>total</span> <span style=color:#f92672>/</span> <span style=color:#a6e22e>scores</span>.<span style=color:#a6e22e>length</span>;
+
+<span style=color:#a6e22e>mean</span>;
+
+
+</code></pre></div><p>一般人看到这道题肯定就开始算了，累加，然后除以7 。那么这题就错了，如果把数组里面的元素变的更加复杂：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>scores</span> <span style=color:#f92672>=</span> [ <span style=color:#ae81ff>1242351</span>,<span style=color:#ae81ff>252352</span>,<span style=color:#ae81ff>32143</span>,<span style=color:#ae81ff>452354</span>,<span style=color:#ae81ff>51455</span>,<span style=color:#ae81ff>66125</span>,<span style=color:#ae81ff>74217</span> ];
+
+</code></pre></div><p>其实这里答案和数组里面元素是多少无关。只要数组元素个数是7，最终答案都是17636.571428571428。</p><p>原因是 for-in 循环的是数组下标，所以 total = ‘00123456’ ，然后这个字符串再除以7。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_8.png alt></p><p>遍历对象的属性，ES6 中有6种方法：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/47_9.png alt></p><h3 id=八-隐式转换--强制转换-带来的bug>八. 隐式转换 / 强制转换 带来的bug</h3><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>formData</span> <span style=color:#f92672>=</span> { <span style=color:#a6e22e>width</span> <span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;100&#39;</span>};
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>w</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>formData</span>.<span style=color:#a6e22e>width</span>;
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>outer</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>w</span> <span style=color:#f92672>+</span> <span style=color:#ae81ff>20</span>;
+
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>outer</span> <span style=color:#f92672>===</span> <span style=color:#ae81ff>120</span> ); <span style=color:#75715e>// false;
+</span><span style=color:#75715e></span><span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>outer</span> <span style=color:#f92672>===</span> <span style=color:#e6db74>&#39;10020&#39;</span>); <span style=color:#75715e>// true
+</span><span style=color:#75715e></span>
+</code></pre></div><h3 id=九-运算符重载>九. 运算符重载</h3><p>在 JavaScript 无法重载或者自定义运算符，包括等号。</p><h3 id=十-函数声明和变量声明的提升>十. 函数声明和变量声明的提升</h3><p>先举一个函数提升的例子。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>foo</span>() {
+  <span style=color:#a6e22e>bar</span>();
+  <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>bar</span>() {
+    <span style=color:#960050;background-color:#1e0010>……</span>
+  }
+}
+
+
+</code></pre></div><p>var 变量也具有提升的特性。但是把函数赋值给变量以后，提升的效果就会消失。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>foo</span>() {
+  <span style=color:#a6e22e>bar</span>(); <span style=color:#75715e>// error！
+</span><span style=color:#75715e></span>  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>bar</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span> () {
+    <span style=color:#960050;background-color:#1e0010>……</span>
+  }
+}
+
+</code></pre></div><p>上述函数就没有提升效果了。</p><p><strong>函数声明是做了完全提升，变量声明只是做了部分提升。变量的声明才有提升的作用，赋值的过程并不会提升。</strong></p><p>JavaScript 支持词法作用域( lexical scoping )，即除了极少的例外，对变量 foo 的引用会被绑定到声明 foo 变量最近的作用域中。ES5中 不支持块级作用域，即变量定义的作用域并不是离其最近的封闭语句或代码块，而包含它们的函数。所有的变量声明都会被提升，声明会被移动到函数的开始处，而赋值则仍然会在原来的位置进行。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>foo</span>() {
+  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>x</span> <span style=color:#f92672>=</span> <span style=color:#f92672>-</span><span style=color:#ae81ff>10</span>;
+  <span style=color:#66d9ef>if</span> ( <span style=color:#a6e22e>x</span> <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>0</span>) {
+    <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>tmp</span> <span style=color:#f92672>=</span> <span style=color:#f92672>-</span><span style=color:#a6e22e>x</span>;
+    <span style=color:#960050;background-color:#1e0010>……</span>
+ }
+ <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#a6e22e>tmp</span>);  <span style=color:#75715e>// 10
+</span><span style=color:#75715e></span>}
+
+
+</code></pre></div><p>这里 tmp 就有变量提升的效果。</p><p>再举个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>foo</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>foo</span>; 
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>foo</span> );
+
+</code></pre></div><p>上面这个例子还是输出2，不是输出undefined。</p><p>这个经过编译器编译以后，其实会变成下面这个样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>foo</span>; 
+<span style=color:#a6e22e>foo</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>foo</span> );
+
+</code></pre></div><p><strong>变量声明被提前了，赋值还在原地。</strong> 为了加深一下这句话的理解，再举一个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>a</span> ); 
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>a</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+
+</code></pre></div><p>上述代码会被编译成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>foo</span>;
+<span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#a6e22e>foo</span> ); 
+<span style=color:#a6e22e>foo</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>2</span>;
+
+</code></pre></div><p>所以输出的是undefined。</p><p>如果变量和函数都存在提升的情况，那么<strong>函数提升优先级更高</strong>。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>foo</span>(); <span style=color:#75715e>// 1
+</span><span style=color:#75715e></span><span style=color:#66d9ef>var</span> <span style=color:#a6e22e>foo</span>;
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>foo</span>() { 
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#ae81ff>1</span> );
+}
+<span style=color:#a6e22e>foo</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span>() { 
+    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#ae81ff>2</span> );
+};
+
+</code></pre></div><p>上面经过编译过会变成下面这样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>foo</span>() { 
+   <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#ae81ff>1</span> );
+}
+<span style=color:#a6e22e>foo</span>(); <span style=color:#75715e>// 1
+</span><span style=color:#75715e></span><span style=color:#a6e22e>foo</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>function</span>() { 
+   <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>( <span style=color:#ae81ff>2</span> );
+};
+
+
+</code></pre></div><p>最终结果输出是1，不是2 。这就说明了函数提升是优先于变量提升的。</p><p>为了避免变量提升，ES6中引入了 let 和 const 关键字，使用这两个关键字就不会有变量提升了。原理是，在代码块内，使用 let 命令声明变量之前，该变量都是不可用的，这块区域叫“暂时性死区”（temporal dead zone，TDZ）。TDZ 的做法是，只要一进入到这一区域，所要使用的变量就已经存在了，变量还是“提升”了，但是不能获取，只有等到声明变量的那一行出现，才可以获取和使用该变量。</p><p>ES6 的这种做法也给 JS 带来了块级作用域，（在 ES5 中只有全局作用于和函数作用域），于是立即执行匿名函数（IIFE）就不在必要了。</p><h3 id=十一-arguments-不是数组>十一. arguments 不是数组</h3><p>arguments 不是数组，它只是类似于数组。它有length属性，可以通过方括号去访问它的元素。不能移除它的元素，也不能对它调用数组的方法。</p><p>不要在函数体内使用 arguments 变量，使用 rest 运算符( &mldr; )代替。因为 rest 运算符显式表明了你想要获取的参数，而且 arguments 仅仅只是一个类似的数组，而 rest 运算符提供的是一个真正的数组。</p><p>下面有一个把 arguments 当数组用的例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>callMethod</span>(<span style=color:#a6e22e>obj</span>,<span style=color:#a6e22e>method</span>) {
+  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>shift</span> <span style=color:#f92672>=</span> [].<span style=color:#a6e22e>shift</span>;
+  <span style=color:#a6e22e>shift</span>.<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>arguments</span>);
+  <span style=color:#a6e22e>shift</span>.<span style=color:#a6e22e>call</span>(<span style=color:#a6e22e>arguments</span>);
+  <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>obj</span>[<span style=color:#a6e22e>method</span>].<span style=color:#a6e22e>apply</span>(<span style=color:#a6e22e>obj</span>,<span style=color:#a6e22e>arguments</span>);
+}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>obj</span> <span style=color:#f92672>=</span> {
+  <span style=color:#a6e22e>add</span><span style=color:#f92672>:</span><span style=color:#66d9ef>function</span>(<span style=color:#a6e22e>x</span>,<span style=color:#a6e22e>y</span>) { <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>x</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>y</span> ;}
+};
+
+<span style=color:#a6e22e>callMethod</span>(<span style=color:#a6e22e>obj</span>,<span style=color:#e6db74>&#34;add&#34;</span>,<span style=color:#ae81ff>18</span>,<span style=color:#ae81ff>38</span>);
+
+
+</code></pre></div><p>上述代码直接报错：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+
+<span style=color:#a6e22e>Uncaught</span> <span style=color:#a6e22e>TypeError</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>Cannot</span> <span style=color:#a6e22e>read</span> <span style=color:#a6e22e>property</span> <span style=color:#e6db74>&#39;apply&#39;</span> <span style=color:#66d9ef>of</span> <span style=color:#66d9ef>undefined</span>
+    <span style=color:#a6e22e>at</span> <span style=color:#a6e22e>callMethod</span> (<span style=color:#f92672>&lt;</span><span style=color:#a6e22e>anonymous</span><span style=color:#f92672>&gt;:</span><span style=color:#ae81ff>5</span><span style=color:#f92672>:</span><span style=color:#ae81ff>21</span>)
+    <span style=color:#a6e22e>at</span> <span style=color:#f92672>&lt;</span><span style=color:#a6e22e>anonymous</span><span style=color:#f92672>&gt;:</span><span style=color:#ae81ff>12</span><span style=color:#f92672>:</span><span style=color:#ae81ff>1</span>
+
+</code></pre></div><p>出错的原因就在于 arguments 并不是函数参数的副本，所有命名参数都是 arguments 对象中对应索引的别名。因此通过 shift 方法移除 arguments 对象中的元素之后，obj 仍然是 arguments[0] 的别名，method 仍然是 arguments[1] 的别名。看上去是在调用 obj[add]，实际上是在调用17[25]。</p><p>还有一个问题，使用 arguments 引用的时候。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>values</span>() {
+  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span> , <span style=color:#a6e22e>n</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>arguments</span>.<span style=color:#a6e22e>length</span>;
+  <span style=color:#66d9ef>return</span> {
+      <span style=color:#a6e22e>hasNext</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+        <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>&lt;</span> <span style=color:#a6e22e>n</span>;
+      },
+      <span style=color:#a6e22e>next</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>i</span> <span style=color:#f92672>&gt;=</span> <span style=color:#a6e22e>n</span>) {
+            <span style=color:#66d9ef>throw</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>&#34;end of iteration&#34;</span>);
+        }
+        <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>arguments</span>[<span style=color:#a6e22e>i</span><span style=color:#f92672>++</span>];
+      }
+  }
+}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>it</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>values</span>(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>24</span>,<span style=color:#ae81ff>53</span>,<span style=color:#ae81ff>253</span>,<span style=color:#ae81ff>26</span>,<span style=color:#ae81ff>326</span>,);
+<span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span><span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span><span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// undefined
+</span><span style=color:#75715e></span>
+</code></pre></div><p>上述代码是想构造一个迭代器来遍历 arguments 对象的元素。这里之所以会输出 undefined，是因为有一个新的 arguments 变量被隐式的绑定到了每个函数体内，每个迭代器 next 方法含有自己的 arguments 变量，所以执行 it.next 的参数时，已经不是 values 函数中的参数了。</p><p>更改方式也简单，只要声明一个局部变量，next 的时候能引用到这个变量即可。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>function</span> <span style=color:#a6e22e>values</span>() {
+  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span> , <span style=color:#a6e22e>n</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>arguments</span>.<span style=color:#a6e22e>length</span>,<span style=color:#a6e22e>a</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>arguments</span>;
+  <span style=color:#66d9ef>return</span> {
+      <span style=color:#a6e22e>hasNext</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+        <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>i</span> <span style=color:#f92672>&lt;</span> <span style=color:#a6e22e>n</span>;
+      },
+      <span style=color:#a6e22e>next</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>i</span> <span style=color:#f92672>&gt;=</span> <span style=color:#a6e22e>n</span>) {
+            <span style=color:#66d9ef>throw</span> <span style=color:#66d9ef>new</span> Error(<span style=color:#e6db74>&#34;end of iteration&#34;</span>);
+        }
+        <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>a</span>[<span style=color:#a6e22e>i</span><span style=color:#f92672>++</span>];
+      }
+  }
+}
+
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>it</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>values</span>(<span style=color:#ae81ff>1</span>,<span style=color:#ae81ff>24</span>,<span style=color:#ae81ff>53</span>,<span style=color:#ae81ff>253</span>,<span style=color:#ae81ff>26</span>,<span style=color:#ae81ff>326</span>,);
+<span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// 1
+</span><span style=color:#75715e></span><span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// 24
+</span><span style=color:#75715e></span><span style=color:#a6e22e>it</span>.<span style=color:#a6e22e>next</span>();   <span style=color:#75715e>// 53
+</span><span style=color:#75715e></span>
+
+</code></pre></div><h3 id=十二-iife-引入新的作用域>十二. IIFE 引入新的作用域</h3><p>在 ES5 中 IIFE 是为了解决 JS 缺少块级作用域，但是到了 ES6 中，这个就可以不需要了。</p><h3 id=十三-函数中-this-的问题>十三. 函数中 this 的问题</h3><p>在嵌套函数中不能访问方法中的 this 变量。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#66d9ef>var</span> <span style=color:#a6e22e>halfrost</span> <span style=color:#f92672>=</span> {
+    <span style=color:#a6e22e>name</span><span style=color:#f92672>:</span><span style=color:#e6db74>&#39;halfrost&#39;</span>,
+    <span style=color:#a6e22e>friends</span><span style=color:#f92672>:</span> [ <span style=color:#e6db74>&#39;haha&#39;</span> , <span style=color:#e6db74>&#39;hehe&#39;</span> ],
+    <span style=color:#a6e22e>sayHiToFriends</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+      <span style=color:#e6db74>&#39;use strict&#39;</span>;
+      <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>friend</span>) {
+          <span style=color:#75715e>// &#39;this&#39; is undefined here
+</span><span style=color:#75715e></span>          <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39;say hi to&#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);
+      });
+    }
+}
+
+<span style=color:#a6e22e>halfrost</span>.<span style=color:#a6e22e>sayHiToFriends</span>()
+
+</code></pre></div><p>这时就会出现一个TypeError: Cannot read property &lsquo;name&rsquo; of undefined。</p><p>解决这个问题有两种方法：</p><p>第一种：将 this 保存在变量中。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>sayHiToFriends</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+  <span style=color:#e6db74>&#39;use strict&#39;</span>;
+  <span style=color:#66d9ef>var</span> <span style=color:#a6e22e>that</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>this</span>;
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>friend</span>) {
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#a6e22e>that</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39;say hi to&#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);
+  });
+}
+
+</code></pre></div><p>第二种：利用bind()函数</p><p>使用bind()给回调函数的this绑定固定值，即函数的this。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>sayHiToFriends</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+  <span style=color:#e6db74>&#39;use strict&#39;</span>;
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>friend</span>) {
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39;say hi to&#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);
+  }.<span style=color:#a6e22e>bind</span>(<span style=color:#66d9ef>this</span>));
+}
+
+</code></pre></div><p>第三种：利用 forEach 的第二个参数，把 this 指定一个值。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript>
+<span style=color:#a6e22e>sayHiToFriends</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>function</span>() {
+  <span style=color:#e6db74>&#39;use strict&#39;</span>;
+  <span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>friends</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#66d9ef>function</span> (<span style=color:#a6e22e>friend</span>) {
+      <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#66d9ef>this</span>.<span style=color:#a6e22e>name</span> <span style=color:#f92672>+</span> <span style=color:#e6db74>&#39;say hi to&#39;</span> <span style=color:#f92672>+</span> <span style=color:#a6e22e>friend</span>);
+  }, <span style=color:#66d9ef>this</span>);
+}
+
+</code></pre></div><p>到了 ES6 里面，建议能用箭头函数的地方用箭头函数。</p><p>简单的，单行的，不会复用的函数，都建议用箭头函数，如果函数体很复杂，行数很多，还应该用传统写法。</p><p>箭头函数里面的 this 对象就是定义时候的对象，而不是使用时候的对象，这里存在“绑定关系”。</p><p>这里的“绑定”机制并不是箭头函数带来的，而是因为箭头函数根本就没有自己的 this，导致内部的 this 就是外层代码块的 this，正因为这个特性，也导致了以下的情况都不能使用箭头函数：</p><ol><li>不能当做构造函数，不能使用 new 命令，因为没有 this，否则会抛出一个错误。</li><li>不可以使用 argument 对象，该对象在函数体内不存在，非要使用就只能用 rest 参数代替。也不能使用 super，new.target 。</li><li>不可以使用 yield 命令，不能作为 Generator 函数。</li><li>不可以使用call()，apply()，bind()这些方法改变 this 的指向。</li></ol><h3 id=十四-异步>十四. 异步</h3><p>异步编程有以下几种：</p><ol><li>回调函数callback</li><li>事件监听</li><li>发布 / 订阅</li><li>Promise对象</li><li>Async / Await</li></ol><p>(这个日记可能一直未完待续&mldr;&mldr;)</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#引语>引语</a></li><li><a href=#一-原始值和对象>一. 原始值和对象</a></li><li><a href=#二-宽松相等带来的bug>二. 宽松相等带来的bug</a></li><li><a href=#三-number>三. Number</a></li><li><a href=#四-string>四. String</a></li><li><a href=#五-array>五. Array</a></li><li><a href=#六-set-mapweaksetweakmap>六. Set 、Map、WeakSet、WeakMap</a></li><li><a href=#七-循环>七. 循环</a></li><li><a href=#八-隐式转换--强制转换-带来的bug>八. 隐式转换 / 强制转换 带来的bug</a></li><li><a href=#九-运算符重载>九. 运算符重载</a></li><li><a href=#十-函数声明和变量声明的提升>十. 函数声明和变量声明的提升</a></li><li><a href=#十一-arguments-不是数组>十一. arguments 不是数组</a></li><li><a href=#十二-iife-引入新的作用域>十二. IIFE 引入新的作用域</a></li><li><a href=#十三-函数中-this-的问题>十三. 函数中 this 的问题</a></li><li><a href=#十四-异步>十四. 异步</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&text=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&is_video=false&description=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&title=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&name=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0&description=%e5%bc%95%e8%af%ad%20%e5%9c%a81995%e5%b9%b45%e6%9c%88%ef%bc%8cEich%20%e5%a4%a7%e7%a5%9e%e5%9c%a810%e5%a4%a9%e5%86%85%e5%b0%b1%e5%86%99%e5%87%ba%e4%ba%86%e7%ac%ac%e4%b8%80%e4%b8%aa%e8%84%9a%e6%9c%ac%e8%af%ad%e8%a8%80%e7%9a%84%e7%89%88%e6%9c%ac%ef%bc%8cJavaScript%20%e7%9a%84%e7%ac%ac%e4%b8%80%e4%b8%aa%e4%bb%a3%e5%8f%b7%e6%98%af%20Mocha%ef%bc%8cMarc%20Andreesen%20%e8%b5%b7%e7%9a%84%e8%bf%99%e4%b8%aa%e5%90%8d%e5%ad%97%e3%80%82%e7%94%b1%e4%ba%8e%e5%95%86%e6%a0%87%e9%97%ae%e9%a2%98%e4%bb%a5%e5%8f%8a%e5%be%88%e5%a4%9a%e4%ba%a7%e5%93%81%e5%b7%b2%e7%bb%8f%e4%bd%bf%e7%94%a8%e4%ba%86%20Live%20%e7%9a%84%e5%89%8d%e7%bc%80%ef%bc%8c%e7%bd%91%e6%99%af%e5%b8%82%e5%9c%ba%e9%83%a8%e5%b0%86%e5%ae%83%e6%94%b9%e5%90%8d%e4%b8%ba%20LiveScript%e3%80%82%e5%9c%a81995%e5%b9%b411%e6%9c%88%e5%ba%95%ef%bc%8cNavigator%202.0B3%20%e5%8f%91%e8%a1%8c%ef%bc%8c%e5%85%b6%e4%b8%ad%e5%8c%85%e5%90%ab%e4%ba%86%e8%af%a5%e8%af%ad%e8%a8%80%e7%9a%84%e5%8e%9f%e5%9e%8b%ef%bc%8c%e8%bf%99%e4%b8%aa%e7%89%88%e6%9c%ac%e7%9b%b8%e6%af%94%e4%b9%8b%e5%89%8d%e6%b2%a1%e6%9c%89%e4%bb%80%e4%b9%88%e5%a4%a7%e7%9a%84%e5%8f%98%e5%8c%96%e3%80%82%e5%9c%a81995%e5%b9%b412%e6%9c%88%e5%88%9d%ef%bc%8cJava%20%e8%af%ad%e8%a8%80%e5%8f%91%e5%b1%95%e5%a3%ae%e5%a4%a7%ef%bc%8cSun%20%e6%8a%8a%20Java%20%e7%9a%84%e5%95%86%e6%a0%87%e6%8e%88%e6%9d%83%e7%bb%99%e4%ba%86%e7%bd%91%e6%99%af%e3%80%82%e8%bf%99%e4%b8%aa%e8%af%ad%e8%a8%80%e8%a2%ab%e5%86%8d%e6%ac%a1%e6%94%b9%e5%90%8d%ef%bc%8c%e5%8f%98%e6%88%90%e4%ba%86%e6%9c%80%e7%bb%88%e7%9a%84%e5%90%8d%e5%ad%97%e2%80%94%e2%80%94JavaScript%e3%80%82%e5%9c%a8%e4%b9%8b%e5%90%8e%e7%9a%841997%e5%b9%b41%e6%9c%88%ef%bc%8c%e6%a0%87%e5%87%86%e5%8c%96%e4%bb%a5%e5%90%8e%ef%bc%8c%e5%b0%b1%e6%88%90%e4%b8%ba%e7%8e%b0%e5%9c%a8%e7%9a%84%20ECMAScript%e3%80%82%0a%e8%bf%91%e4%b8%80%e4%b8%a4%e5%b9%b4%e5%9c%a8%e5%ae%a2%e6%88%b7%e7%ab%af%e4%b8%8a%e7%94%a8%e5%88%b0%20JS%20%e7%9a%84%e5%9c%b0%e6%96%b9%e4%b9%9f%e8%b6%8a%e6%9d%a5%e8%b6%8a%e5%a4%9a%e4%ba%86%ef%bc%8c%e7%ac%94%e8%80%85%e6%9c%80%e8%bf%91%e6%8e%a5%e8%a7%a6%e4%ba%86%e4%b8%80%e4%b8%8b%20JS%20%ef%bc%8c%e4%bd%9c%e4%b8%ba%e5%89%8d%e7%ab%af%e5%b0%8f%e7%99%bd%ef%bc%8c%e8%ae%b0%e5%bd%95%e4%b8%80%e4%b8%8b%e8%bf%91%e6%9c%9f%e8%87%aa%e5%b7%b1%e2%80%9c%e8%b8%a9%e5%9d%91%e2%80%9d%e7%9a%84%e6%88%90%e9%95%bf%e7%bb%8f%e5%8e%86%e3%80%82%0a%e4%b8%80.%20%e5%8e%9f%e5%a7%8b%e5%80%bc%e5%92%8c%e5%af%b9%e8%b1%a1%20%e5%9c%a8%20JavaScript%20%e4%b8%ad%ef%bc%8c%e5%af%b9%e5%80%bc%e7%9a%84%e5%8c%ba%e5%88%86%e5%b0%b1%e4%b8%a4%e7%a7%8d%ef%bc%9a%0a1.%e5%8e%9f%e5%a7%8b%e5%80%bc%ef%bc%9aBOOL%ef%bc%8cNumber%ef%bc%8cString%ef%bc%8cnull%ef%bc%8cundefined%e3%80%82%202.%e5%af%b9%e8%b1%a1%ef%bc%9a%e6%af%8f%e4%b8%aa%e5%af%b9%e8%b1%a1%e9%83%bd%e6%9c%89%e5%94%af%e4%b8%80%e7%9a%84%e6%a0%87%e8%af%86%e4%b8%94%e5%8f%aa%e4%b8%a5%e6%a0%bc%e7%9a%84%e7%ad%89%e4%ba%8e%28%20%3d%20%3d%20%3d%20%29%20%e8%87%aa%e5%b7%b1%e3%80%82%0anull%ef%bc%8cundefined%e6%b2%a1%e6%9c%89%e5%b1%9e%e6%80%a7%ef%bc%8c%e8%bf%9etoString%28%20%29%e6%96%b9%e6%b3%95%e4%b9%9f%e6%b2%a1%e6%9c%89%e3%80%82%0afalse%ef%bc%8c0%ef%bc%8cNaN%ef%bc%8cundefined%ef%bc%8cnull%ef%bc%8c%26rsquo%3b%20%27%20%ef%bc%8c%e9%83%bd%e6%98%affalse%e3%80%82%0atypeof%20%e8%bf%90%e7%ae%97%e7%ac%a6%e8%83%bd%e5%8c%ba%e5%88%86%e5%8e%9f%e5%a7%8b%e5%80%bc%e5%92%8c%e5%af%b9%e8%b1%a1%ef%bc%8c%e5%b9%b6%e6%a3%80%e6%b5%8b%e5%87%ba%e5%8e%9f%e5%a7%8b%e5%80%bc%e7%9a%84%e7%b1%bb%e5%9e%8b%e3%80%82%20instanceof%20%e8%bf%90%e7%ae%97%e7%ac%a6%e5%8f%af%e4%bb%a5%e6%a3%80%e6%b5%8b%e5%87%ba%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e6%98%af%e5%90%a6%e6%98%af%e7%89%b9%e5%ae%9a%e6%9e%84%e9%80%a0%e5%87%bd%e6%95%b0%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ae%9e%e4%be%8b%e6%88%96%e8%80%85%e6%98%af%e5%90%a6%e4%b8%ba%e5%ae%83%e7%9a%84%e4%b8%80%e4%b8%aa%e5%ad%90%e7%b1%bb%e3%80%82%0a%20%e5%bc%95%e7%94%a8%e7%b1%bb%e5%9e%8b%ef%bc%9a%20%e5%af%b9%e8%b1%a1%e3%80%81%e6%95%b0%e7%bb%84%e3%80%81%e5%87%bd%e6%95%b0%0a%e5%89%a9%e4%b8%8b%e7%9a%84%e7%b1%bb%e5%9e%8b%e9%83%bd%e4%b8%ba%20%e5%80%bc%e7%b1%bb%e5%9e%8b%0a%20null%20%e8%bf%94%e5%9b%9e%e7%9a%84%e6%98%af%e4%b8%80%e4%b8%aa%20object%ef%bc%8c%e8%bf%99%e4%b8%aa%e6%98%af%e4%b8%80%e4%b8%aa%e4%b8%8d%e5%8f%af%e4%bf%ae%e5%a4%8d%e7%9a%84%20bug%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%bf%ae%e6%94%b9%e8%bf%99%e4%b8%aa%20bug%ef%bc%8c%e5%b0%b1%e4%bc%9a%e7%a0%b4%e5%9d%8f%e7%8e%b0%e6%9c%89%e4%bb%a3%e7%a0%81%e4%bd%93%e7%b3%bb%e3%80%82%e4%bd%86%e6%98%af%e8%bf%99%e4%b8%8d%e8%83%bd%e8%a1%a8%e7%a4%ba%20null%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e3%80%82%0a%e5%9b%a0%e4%b8%ba%e7%ac%ac%e4%b8%80%e4%bb%a3%20JavaScript%20%e5%bc%95%e6%93%8e%e4%b8%ad%e7%9a%84%20JavaScript%20%e5%80%bc%e8%a1%a8%e7%a4%ba%e4%b8%ba32%e4%bd%8d%e7%9a%84%e5%ad%97%e7%ac%a6%e3%80%82%e6%9c%80%e4%bd%8e3%e4%bd%8d%e4%bd%9c%e4%b8%ba%e4%b8%80%e7%a7%8d%e6%a0%87%e8%af%86%ef%bc%8c%e8%a1%a8%e7%a4%ba%e5%80%bc%e6%98%af%e5%af%b9%e8%b1%a1%ef%bc%8c%e6%95%b4%e6%95%b0%ef%bc%8c%e6%b5%ae%e7%82%b9%e6%95%b0%e6%88%96%e8%80%85%e5%b8%83%e5%b0%94%e5%80%bc%e3%80%82%e5%af%b9%e8%b1%a1%e7%9a%84%e6%a0%87%e8%af%86%e6%98%af000%ef%bc%8c%e8%80%8c%e4%b8%ba%e4%ba%86%e8%a1%a8%e7%8e%b0%20null%20%ef%bc%8c%e5%bc%95%e6%93%8e%e4%bd%bf%e7%94%a8%e4%ba%86%e6%9c%ba%e5%99%a8%e8%af%ad%e8%a8%80%20NULL%20%e7%9a%84%e6%8c%87%e9%92%88%ef%bc%8c%e8%af%a5%e5%ad%97%e7%ac%a6%e7%9a%84%e6%89%80%e6%9c%89%e4%bd%8d%e9%83%bd%e6%98%af0%e3%80%82%e8%80%8c%20typeof%20%e5%b0%b1%e6%98%af%e6%a3%80%e6%b5%8b%e5%80%bc%e7%9a%84%e6%a0%87%e5%bf%97%e4%bd%8d%ef%bc%8c%e8%bf%99%e5%b0%b1%e6%98%af%e4%b8%ba%e4%bb%80%e4%b9%88%e5%ae%83%e4%bc%9a%e8%ae%a4%e4%b8%ba%20null%20%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e4%ba%86%e3%80%82%0a%e6%89%80%e4%bb%a5%e5%88%a4%e6%96%ad%20%e4%b8%80%e4%b8%aa%20value%20%e6%98%af%e4%b8%8d%e6%98%af%e4%b8%80%e4%b8%aa%e5%af%b9%e8%b1%a1%e5%ba%94%e8%af%a5%e6%8c%89%e7%85%a7%e5%a6%82%e4%b8%8b%e6%9d%a1%e4%bb%b6%e5%88%a4%e6%96%ad%ef%bc%9a"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2flost_in_javascript%2f&t=JavaScript%20%e6%96%b0%e6%89%8b%e7%9a%84%e8%b8%a9%e5%9d%91%e6%97%a5%e8%ae%b0"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>

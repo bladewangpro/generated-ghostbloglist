@@ -1,0 +1,1416 @@
+<!doctype html><html lang=en-us><head><meta charset=utf-8><meta name=theme-color content="#FFFFFF"><meta http-equiv=x-ua-compatible content="IE=edge"><title>ReactiveCocoa 中 奇妙无比的“宏”魔法 | prometheus</title><meta name=description content="Explore in every moment of the hard thinking"><meta name=viewport content="width=device-width,initial-scale=1"><meta name=robots content="all,follow"><meta name=googlebot content="index,follow,snippet,archive"><meta property="og:title" content="ReactiveCocoa 中 奇妙无比的“宏”魔法"><meta property="og:description" content="前言 在ReactiveCocoa 中，开源库作者为我们提供了很多种魔法，“黑”魔法，“红”魔法……今天就让先来看看“红”魔法。
+在ReactiveCocoa 中，封装了很多非常实用的“宏”，使用这些“宏”为我们开发带来了很多的便利。
+今天就来盘点一下RAC中的宏是如何实现的。
+目录  1.关于宏 2.ReactiveCocoa 中的元宏 3.ReactiveCocoa 中常用的宏  一. 关于宏  宏（Macro），是一种批量处理的称谓。
+ 在编程领域里的宏是一种抽象（Abstraction），它根据一系列预定义的规则替换一定的文本模式。解释器或编译器在遇到宏时会自动进行这一模式替换。绝大多数情况下，“宏”这个词的使用暗示着将小命令或动作转化为一系列指令。
+宏的用途在于自动化频繁使用的序列或者是获得一种更强大的抽象能力。 计算机语言如C语言或汇编语言有简单的宏系统，由编译器或汇编器的预处理器实现。C语言的宏预处理器的工作只是简单的文本搜索和替换，使用附加的文本处理语言如M4，C程序员可以获得更精巧的宏。
+Lisp类语言如Common Lisp和Scheme有更精巧的宏系统：宏的行为如同是函数对自身程序文本的变形，并且可以应用全部语言来表达这种变形。一个C宏可以定义一段语法的替换，然而一个Lisp的宏却可以控制一节代码的计算。
+对于编译语言来说，所有的宏都是在预编译的时候被展开的，所以在lex进行词法扫描生成Token，词法分析过程之前，所有的宏都已经被展开完成了。
+对于Xcode，预处理或者预编译阶段是可以直接查看的。
+随便写一个宏，然后打开Xcode右上方的Assistant，选择“Preprocess”就可以看到该文件预处理之后的样子了。可以看到左边的@weakify(self) 被转换成了右边的两行代码了。
+关于这个Xcode的这个功能还有2点补充说明：
+1.不同阶段的Preprocessed可能不同，要根据你的目标去选择预处理的条件。
+比如这里就有5种预编译的种类可以选择。
+2.宏经过预编译之后出来的代码，是可以用来检测宏写的是否正确的，但是无法看到宏被展开的具体过程。这意味着我们可以通过Xcode这个功能来查看宏的作用，但是无法知道宏的具体实现。具体实现还是需要通过查看源码来分析。
+ReactiveCocoa中的宏，如果不查看源码分析，会觉得那些宏都像魔法一样奇妙无比，接下来就来解开“宏”魔法的神秘面纱。
+二. ReactiveCocoa 中的元宏 在ReactiveCocoa的宏中，作者定义了这么一些基础的宏，作为“元宏”，它们是构成之后复杂宏的基础。在分析常用宏之前，必须要先分析清楚这些元宏的具体实现。
+1. metamacro_stringify(VALUE) #define metamacro_stringify(VALUE) \ metamacro_stringify_(VALUE)  #define metamacro_stringify_(VALUE) # VALUE  metamacro_stringify( )这个宏用到了#的用法。#在宏中代表把宏的参数变为一个字符串。这个宏的目的和它的名字一样明显，把入参VALUE转换成一个字符串返回。
+这里可能就有人有疑问，为啥要包装一层，不能直接写成下面这样：
+#define metamacro_stringify(VALUE) # VALUE  语意确实也没有变，但是有种特殊情况下就会出现问题。
+举个例子：
+#define NUMBER 10 #define ADD(a,b) (a+b) NSLog(@&#34;%d+%d=%d&#34;,NUMBER, NUMBER, ADD(NUMBER,NUMBER)); 输出如下：
+10+10=20这样子确实是没有问题，但是稍作修改就会有问题。"><meta property="og:type" content="article"><meta property="og:url" content="https://new.halfrost.com/reactivecocoa_macro/"><meta property="article:published_time" content="2017-02-12T05:46:54+00:00"><meta property="article:modified_time" content="2017-02-12T05:46:54+00:00"><meta name=twitter:card content="summary"><meta name=twitter:title content="ReactiveCocoa 中 奇妙无比的“宏”魔法"><meta name=twitter:description content="前言 在ReactiveCocoa 中，开源库作者为我们提供了很多种魔法，“黑”魔法，“红”魔法……今天就让先来看看“红”魔法。
+在ReactiveCocoa 中，封装了很多非常实用的“宏”，使用这些“宏”为我们开发带来了很多的便利。
+今天就来盘点一下RAC中的宏是如何实现的。
+目录  1.关于宏 2.ReactiveCocoa 中的元宏 3.ReactiveCocoa 中常用的宏  一. 关于宏  宏（Macro），是一种批量处理的称谓。
+ 在编程领域里的宏是一种抽象（Abstraction），它根据一系列预定义的规则替换一定的文本模式。解释器或编译器在遇到宏时会自动进行这一模式替换。绝大多数情况下，“宏”这个词的使用暗示着将小命令或动作转化为一系列指令。
+宏的用途在于自动化频繁使用的序列或者是获得一种更强大的抽象能力。 计算机语言如C语言或汇编语言有简单的宏系统，由编译器或汇编器的预处理器实现。C语言的宏预处理器的工作只是简单的文本搜索和替换，使用附加的文本处理语言如M4，C程序员可以获得更精巧的宏。
+Lisp类语言如Common Lisp和Scheme有更精巧的宏系统：宏的行为如同是函数对自身程序文本的变形，并且可以应用全部语言来表达这种变形。一个C宏可以定义一段语法的替换，然而一个Lisp的宏却可以控制一节代码的计算。
+对于编译语言来说，所有的宏都是在预编译的时候被展开的，所以在lex进行词法扫描生成Token，词法分析过程之前，所有的宏都已经被展开完成了。
+对于Xcode，预处理或者预编译阶段是可以直接查看的。
+随便写一个宏，然后打开Xcode右上方的Assistant，选择“Preprocess”就可以看到该文件预处理之后的样子了。可以看到左边的@weakify(self) 被转换成了右边的两行代码了。
+关于这个Xcode的这个功能还有2点补充说明：
+1.不同阶段的Preprocessed可能不同，要根据你的目标去选择预处理的条件。
+比如这里就有5种预编译的种类可以选择。
+2.宏经过预编译之后出来的代码，是可以用来检测宏写的是否正确的，但是无法看到宏被展开的具体过程。这意味着我们可以通过Xcode这个功能来查看宏的作用，但是无法知道宏的具体实现。具体实现还是需要通过查看源码来分析。
+ReactiveCocoa中的宏，如果不查看源码分析，会觉得那些宏都像魔法一样奇妙无比，接下来就来解开“宏”魔法的神秘面纱。
+二. ReactiveCocoa 中的元宏 在ReactiveCocoa的宏中，作者定义了这么一些基础的宏，作为“元宏”，它们是构成之后复杂宏的基础。在分析常用宏之前，必须要先分析清楚这些元宏的具体实现。
+1. metamacro_stringify(VALUE) #define metamacro_stringify(VALUE) \ metamacro_stringify_(VALUE)  #define metamacro_stringify_(VALUE) # VALUE  metamacro_stringify( )这个宏用到了#的用法。#在宏中代表把宏的参数变为一个字符串。这个宏的目的和它的名字一样明显，把入参VALUE转换成一个字符串返回。
+这里可能就有人有疑问，为啥要包装一层，不能直接写成下面这样：
+#define metamacro_stringify(VALUE) # VALUE  语意确实也没有变，但是有种特殊情况下就会出现问题。
+举个例子：
+#define NUMBER 10 #define ADD(a,b) (a+b) NSLog(@&#34;%d+%d=%d&#34;,NUMBER, NUMBER, ADD(NUMBER,NUMBER)); 输出如下：
+10+10=20这样子确实是没有问题，但是稍作修改就会有问题。"><link rel=stylesheet href=/css/style-white.min.css><link rel=manifest href=/manifest.json><link rel=stylesheet href=/prism.css><link href=/images/apple-touch-icon-60x60.png rel=apple-touch-icon sizes=60x60><link href=/images/apple-touch-icon-76x76.png rel=apple-touch-icon sizes=76x76><link href=/images/apple-touch-icon-120x120.png rel=apple-touch-icon sizes=120x120><link href=/images/apple-touch-icon-152x152.png rel=apple-touch-icon sizes=152x152><link href=/images/apple-touch-icon-180x180.png rel=apple-touch-icon sizes=180x180><link href=/images/apple-touch-icon-512x512.png rel=apple-touch-icon sizes=512x512><link href=/images/apple-touch-icon-1024x1024.png rel=apple-touch-icon sizes=1024x1024><script async>if('serviceWorker'in navigator){navigator.serviceWorker.register("\/serviceworker-v1.min.a64912b78d282eab1ad3715a0943da21616e5f326f8afea27034784ad445043b.js").then(function(){if(navigator.serviceWorker.controller){console.log('Assets cached by the controlling service worker.');}else{console.log('Please reload this page to allow the service worker to handle network operations.');}}).catch(function(error){console.log('ERROR: '+error);});}else{console.log('Service workers are not supported in the current browser.');}</script><!--[if lt IE 9]><script src=https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js></script><script src=https://oss.maxcdn.com/respond/1.4.2/respond.min.js></script><![endif]--><link rel=icon type=image/png href=https://new.halfrost.com/images/favicon.ico><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-82753806-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></head><body class="single-max-width mx-auto px3 ltr"><div class="content index py4"><div id=header-post><a id=menu-icon href=#><i class="fas fa-bars fa-lg"></i></a><a id=menu-icon-tablet href=#><i class="fas fa-bars fa-lg"></i></a><a id=top-icon-tablet href=# onclick="$('html, body').animate({scrollTop:0},'fast');" style=display:none><i class="fas fa-chevron-up fa-lg"></i></a><span id=menu><span id=nav><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></span><br><span id=actions><ul><li><a class=icon href=https://new.halfrost.com/reactivecocoa_raccommand/><i class="fas fa-chevron-left" aria-hidden=true onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li><li><a class=icon href=https://new.halfrost.com/http/><i class="fas fa-chevron-right" aria-hidden=true onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li><li><a class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up" aria-hidden=true onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li><li><a class=icon href=#><i class="fas fa-share-alt" aria-hidden=true onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li></ul><span id=i-prev class=info style=display:none>Previous post</span>
+<span id=i-next class=info style=display:none>Next post</span>
+<span id=i-top class=info style=display:none>Back to top</span>
+<span id=i-share class=info style=display:none>Share post</span></span><br><div id=share style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f"><i class="fab fa-facebook" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&text=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-twitter" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-linkedin" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-pinterest" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f"><i class="fas fa-envelope" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-get-pocket" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-reddit" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-stumbleupon" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-digg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&name=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%ef%bc%8c%e5%bc%80%e6%ba%90%e5%ba%93%e4%bd%9c%e8%80%85%e4%b8%ba%e6%88%91%e4%bb%ac%e6%8f%90%e4%be%9b%e4%ba%86%e5%be%88%e5%a4%9a%e7%a7%8d%e9%ad%94%e6%b3%95%ef%bc%8c%e2%80%9c%e9%bb%91%e2%80%9d%e9%ad%94%e6%b3%95%ef%bc%8c%e2%80%9c%e7%ba%a2%e2%80%9d%e9%ad%94%e6%b3%95%e2%80%a6%e2%80%a6%e4%bb%8a%e5%a4%a9%e5%b0%b1%e8%ae%a9%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8b%e2%80%9c%e7%ba%a2%e2%80%9d%e9%ad%94%e6%b3%95%e3%80%82%0a%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%ef%bc%8c%e5%b0%81%e8%a3%85%e4%ba%86%e5%be%88%e5%a4%9a%e9%9d%9e%e5%b8%b8%e5%ae%9e%e7%94%a8%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%ef%bc%8c%e4%bd%bf%e7%94%a8%e8%bf%99%e4%ba%9b%e2%80%9c%e5%ae%8f%e2%80%9d%e4%b8%ba%e6%88%91%e4%bb%ac%e5%bc%80%e5%8f%91%e5%b8%a6%e6%9d%a5%e4%ba%86%e5%be%88%e5%a4%9a%e7%9a%84%e4%be%bf%e5%88%a9%e3%80%82%0a%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e7%9b%98%e7%82%b9%e4%b8%80%e4%b8%8bRAC%e4%b8%ad%e7%9a%84%e5%ae%8f%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.%e5%85%b3%e4%ba%8e%e5%ae%8f%202.ReactiveCocoa%20%e4%b8%ad%e7%9a%84%e5%85%83%e5%ae%8f%203.ReactiveCocoa%20%e4%b8%ad%e5%b8%b8%e7%94%a8%e7%9a%84%e5%ae%8f%20%20%e4%b8%80.%20%e5%85%b3%e4%ba%8e%e5%ae%8f%20%20%e5%ae%8f%ef%bc%88Macro%ef%bc%89%ef%bc%8c%e6%98%af%e4%b8%80%e7%a7%8d%e6%89%b9%e9%87%8f%e5%a4%84%e7%90%86%e7%9a%84%e7%a7%b0%e8%b0%93%e3%80%82%0a%20%e5%9c%a8%e7%bc%96%e7%a8%8b%e9%a2%86%e5%9f%9f%e9%87%8c%e7%9a%84%e5%ae%8f%e6%98%af%e4%b8%80%e7%a7%8d%e6%8a%bd%e8%b1%a1%ef%bc%88Abstraction%ef%bc%89%ef%bc%8c%e5%ae%83%e6%a0%b9%e6%8d%ae%e4%b8%80%e7%b3%bb%e5%88%97%e9%a2%84%e5%ae%9a%e4%b9%89%e7%9a%84%e8%a7%84%e5%88%99%e6%9b%bf%e6%8d%a2%e4%b8%80%e5%ae%9a%e7%9a%84%e6%96%87%e6%9c%ac%e6%a8%a1%e5%bc%8f%e3%80%82%e8%a7%a3%e9%87%8a%e5%99%a8%e6%88%96%e7%bc%96%e8%af%91%e5%99%a8%e5%9c%a8%e9%81%87%e5%88%b0%e5%ae%8f%e6%97%b6%e4%bc%9a%e8%87%aa%e5%8a%a8%e8%bf%9b%e8%a1%8c%e8%bf%99%e4%b8%80%e6%a8%a1%e5%bc%8f%e6%9b%bf%e6%8d%a2%e3%80%82%e7%bb%9d%e5%a4%a7%e5%a4%9a%e6%95%b0%e6%83%85%e5%86%b5%e4%b8%8b%ef%bc%8c%e2%80%9c%e5%ae%8f%e2%80%9d%e8%bf%99%e4%b8%aa%e8%af%8d%e7%9a%84%e4%bd%bf%e7%94%a8%e6%9a%97%e7%a4%ba%e7%9d%80%e5%b0%86%e5%b0%8f%e5%91%bd%e4%bb%a4%e6%88%96%e5%8a%a8%e4%bd%9c%e8%bd%ac%e5%8c%96%e4%b8%ba%e4%b8%80%e7%b3%bb%e5%88%97%e6%8c%87%e4%bb%a4%e3%80%82%0a%e5%ae%8f%e7%9a%84%e7%94%a8%e9%80%94%e5%9c%a8%e4%ba%8e%e8%87%aa%e5%8a%a8%e5%8c%96%e9%a2%91%e7%b9%81%e4%bd%bf%e7%94%a8%e7%9a%84%e5%ba%8f%e5%88%97%e6%88%96%e8%80%85%e6%98%af%e8%8e%b7%e5%be%97%e4%b8%80%e7%a7%8d%e6%9b%b4%e5%bc%ba%e5%a4%a7%e7%9a%84%e6%8a%bd%e8%b1%a1%e8%83%bd%e5%8a%9b%e3%80%82%20%e8%ae%a1%e7%ae%97%e6%9c%ba%e8%af%ad%e8%a8%80%e5%a6%82C%e8%af%ad%e8%a8%80%e6%88%96%e6%b1%87%e7%bc%96%e8%af%ad%e8%a8%80%e6%9c%89%e7%ae%80%e5%8d%95%e7%9a%84%e5%ae%8f%e7%b3%bb%e7%bb%9f%ef%bc%8c%e7%94%b1%e7%bc%96%e8%af%91%e5%99%a8%e6%88%96%e6%b1%87%e7%bc%96%e5%99%a8%e7%9a%84%e9%a2%84%e5%a4%84%e7%90%86%e5%99%a8%e5%ae%9e%e7%8e%b0%e3%80%82C%e8%af%ad%e8%a8%80%e7%9a%84%e5%ae%8f%e9%a2%84%e5%a4%84%e7%90%86%e5%99%a8%e7%9a%84%e5%b7%a5%e4%bd%9c%e5%8f%aa%e6%98%af%e7%ae%80%e5%8d%95%e7%9a%84%e6%96%87%e6%9c%ac%e6%90%9c%e7%b4%a2%e5%92%8c%e6%9b%bf%e6%8d%a2%ef%bc%8c%e4%bd%bf%e7%94%a8%e9%99%84%e5%8a%a0%e7%9a%84%e6%96%87%e6%9c%ac%e5%a4%84%e7%90%86%e8%af%ad%e8%a8%80%e5%a6%82M4%ef%bc%8cC%e7%a8%8b%e5%ba%8f%e5%91%98%e5%8f%af%e4%bb%a5%e8%8e%b7%e5%be%97%e6%9b%b4%e7%b2%be%e5%b7%a7%e7%9a%84%e5%ae%8f%e3%80%82%0aLisp%e7%b1%bb%e8%af%ad%e8%a8%80%e5%a6%82Common%20Lisp%e5%92%8cScheme%e6%9c%89%e6%9b%b4%e7%b2%be%e5%b7%a7%e7%9a%84%e5%ae%8f%e7%b3%bb%e7%bb%9f%ef%bc%9a%e5%ae%8f%e7%9a%84%e8%a1%8c%e4%b8%ba%e5%a6%82%e5%90%8c%e6%98%af%e5%87%bd%e6%95%b0%e5%af%b9%e8%87%aa%e8%ba%ab%e7%a8%8b%e5%ba%8f%e6%96%87%e6%9c%ac%e7%9a%84%e5%8f%98%e5%bd%a2%ef%bc%8c%e5%b9%b6%e4%b8%94%e5%8f%af%e4%bb%a5%e5%ba%94%e7%94%a8%e5%85%a8%e9%83%a8%e8%af%ad%e8%a8%80%e6%9d%a5%e8%a1%a8%e8%be%be%e8%bf%99%e7%a7%8d%e5%8f%98%e5%bd%a2%e3%80%82%e4%b8%80%e4%b8%aaC%e5%ae%8f%e5%8f%af%e4%bb%a5%e5%ae%9a%e4%b9%89%e4%b8%80%e6%ae%b5%e8%af%ad%e6%b3%95%e7%9a%84%e6%9b%bf%e6%8d%a2%ef%bc%8c%e7%84%b6%e8%80%8c%e4%b8%80%e4%b8%aaLisp%e7%9a%84%e5%ae%8f%e5%8d%b4%e5%8f%af%e4%bb%a5%e6%8e%a7%e5%88%b6%e4%b8%80%e8%8a%82%e4%bb%a3%e7%a0%81%e7%9a%84%e8%ae%a1%e7%ae%97%e3%80%82%0a%e5%af%b9%e4%ba%8e%e7%bc%96%e8%af%91%e8%af%ad%e8%a8%80%e6%9d%a5%e8%af%b4%ef%bc%8c%e6%89%80%e6%9c%89%e7%9a%84%e5%ae%8f%e9%83%bd%e6%98%af%e5%9c%a8%e9%a2%84%e7%bc%96%e8%af%91%e7%9a%84%e6%97%b6%e5%80%99%e8%a2%ab%e5%b1%95%e5%bc%80%e7%9a%84%ef%bc%8c%e6%89%80%e4%bb%a5%e5%9c%a8lex%e8%bf%9b%e8%a1%8c%e8%af%8d%e6%b3%95%e6%89%ab%e6%8f%8f%e7%94%9f%e6%88%90Token%ef%bc%8c%e8%af%8d%e6%b3%95%e5%88%86%e6%9e%90%e8%bf%87%e7%a8%8b%e4%b9%8b%e5%89%8d%ef%bc%8c%e6%89%80%e6%9c%89%e7%9a%84%e5%ae%8f%e9%83%bd%e5%b7%b2%e7%bb%8f%e8%a2%ab%e5%b1%95%e5%bc%80%e5%ae%8c%e6%88%90%e4%ba%86%e3%80%82%0a%e5%af%b9%e4%ba%8eXcode%ef%bc%8c%e9%a2%84%e5%a4%84%e7%90%86%e6%88%96%e8%80%85%e9%a2%84%e7%bc%96%e8%af%91%e9%98%b6%e6%ae%b5%e6%98%af%e5%8f%af%e4%bb%a5%e7%9b%b4%e6%8e%a5%e6%9f%a5%e7%9c%8b%e7%9a%84%e3%80%82%0a%e9%9a%8f%e4%be%bf%e5%86%99%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%8c%e7%84%b6%e5%90%8e%e6%89%93%e5%bc%80Xcode%e5%8f%b3%e4%b8%8a%e6%96%b9%e7%9a%84Assistant%ef%bc%8c%e9%80%89%e6%8b%a9%e2%80%9cPreprocess%e2%80%9d%e5%b0%b1%e5%8f%af%e4%bb%a5%e7%9c%8b%e5%88%b0%e8%af%a5%e6%96%87%e4%bb%b6%e9%a2%84%e5%a4%84%e7%90%86%e4%b9%8b%e5%90%8e%e7%9a%84%e6%a0%b7%e5%ad%90%e4%ba%86%e3%80%82%e5%8f%af%e4%bb%a5%e7%9c%8b%e5%88%b0%e5%b7%a6%e8%be%b9%e7%9a%84%40weakify%28self%29%20%e8%a2%ab%e8%bd%ac%e6%8d%a2%e6%88%90%e4%ba%86%e5%8f%b3%e8%be%b9%e7%9a%84%e4%b8%a4%e8%a1%8c%e4%bb%a3%e7%a0%81%e4%ba%86%e3%80%82%0a%e5%85%b3%e4%ba%8e%e8%bf%99%e4%b8%aaXcode%e7%9a%84%e8%bf%99%e4%b8%aa%e5%8a%9f%e8%83%bd%e8%bf%98%e6%9c%892%e7%82%b9%e8%a1%a5%e5%85%85%e8%af%b4%e6%98%8e%ef%bc%9a%0a1.%e4%b8%8d%e5%90%8c%e9%98%b6%e6%ae%b5%e7%9a%84Preprocessed%e5%8f%af%e8%83%bd%e4%b8%8d%e5%90%8c%ef%bc%8c%e8%a6%81%e6%a0%b9%e6%8d%ae%e4%bd%a0%e7%9a%84%e7%9b%ae%e6%a0%87%e5%8e%bb%e9%80%89%e6%8b%a9%e9%a2%84%e5%a4%84%e7%90%86%e7%9a%84%e6%9d%a1%e4%bb%b6%e3%80%82%0a%e6%af%94%e5%a6%82%e8%bf%99%e9%87%8c%e5%b0%b1%e6%9c%895%e7%a7%8d%e9%a2%84%e7%bc%96%e8%af%91%e7%9a%84%e7%a7%8d%e7%b1%bb%e5%8f%af%e4%bb%a5%e9%80%89%e6%8b%a9%e3%80%82%0a2.%e5%ae%8f%e7%bb%8f%e8%bf%87%e9%a2%84%e7%bc%96%e8%af%91%e4%b9%8b%e5%90%8e%e5%87%ba%e6%9d%a5%e7%9a%84%e4%bb%a3%e7%a0%81%ef%bc%8c%e6%98%af%e5%8f%af%e4%bb%a5%e7%94%a8%e6%9d%a5%e6%a3%80%e6%b5%8b%e5%ae%8f%e5%86%99%e7%9a%84%e6%98%af%e5%90%a6%e6%ad%a3%e7%a1%ae%e7%9a%84%ef%bc%8c%e4%bd%86%e6%98%af%e6%97%a0%e6%b3%95%e7%9c%8b%e5%88%b0%e5%ae%8f%e8%a2%ab%e5%b1%95%e5%bc%80%e7%9a%84%e5%85%b7%e4%bd%93%e8%bf%87%e7%a8%8b%e3%80%82%e8%bf%99%e6%84%8f%e5%91%b3%e7%9d%80%e6%88%91%e4%bb%ac%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87Xcode%e8%bf%99%e4%b8%aa%e5%8a%9f%e8%83%bd%e6%9d%a5%e6%9f%a5%e7%9c%8b%e5%ae%8f%e7%9a%84%e4%bd%9c%e7%94%a8%ef%bc%8c%e4%bd%86%e6%98%af%e6%97%a0%e6%b3%95%e7%9f%a5%e9%81%93%e5%ae%8f%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e3%80%82%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e8%bf%98%e6%98%af%e9%9c%80%e8%a6%81%e9%80%9a%e8%bf%87%e6%9f%a5%e7%9c%8b%e6%ba%90%e7%a0%81%e6%9d%a5%e5%88%86%e6%9e%90%e3%80%82%0aReactiveCocoa%e4%b8%ad%e7%9a%84%e5%ae%8f%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%b8%8d%e6%9f%a5%e7%9c%8b%e6%ba%90%e7%a0%81%e5%88%86%e6%9e%90%ef%bc%8c%e4%bc%9a%e8%a7%89%e5%be%97%e9%82%a3%e4%ba%9b%e5%ae%8f%e9%83%bd%e5%83%8f%e9%ad%94%e6%b3%95%e4%b8%80%e6%a0%b7%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%ef%bc%8c%e6%8e%a5%e4%b8%8b%e6%9d%a5%e5%b0%b1%e6%9d%a5%e8%a7%a3%e5%bc%80%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95%e7%9a%84%e7%a5%9e%e7%a7%98%e9%9d%a2%e7%ba%b1%e3%80%82%0a%e4%ba%8c.%20ReactiveCocoa%20%e4%b8%ad%e7%9a%84%e5%85%83%e5%ae%8f%20%e5%9c%a8ReactiveCocoa%e7%9a%84%e5%ae%8f%e4%b8%ad%ef%bc%8c%e4%bd%9c%e8%80%85%e5%ae%9a%e4%b9%89%e4%ba%86%e8%bf%99%e4%b9%88%e4%b8%80%e4%ba%9b%e5%9f%ba%e7%a1%80%e7%9a%84%e5%ae%8f%ef%bc%8c%e4%bd%9c%e4%b8%ba%e2%80%9c%e5%85%83%e5%ae%8f%e2%80%9d%ef%bc%8c%e5%ae%83%e4%bb%ac%e6%98%af%e6%9e%84%e6%88%90%e4%b9%8b%e5%90%8e%e5%a4%8d%e6%9d%82%e5%ae%8f%e7%9a%84%e5%9f%ba%e7%a1%80%e3%80%82%e5%9c%a8%e5%88%86%e6%9e%90%e5%b8%b8%e7%94%a8%e5%ae%8f%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%bf%85%e9%a1%bb%e8%a6%81%e5%85%88%e5%88%86%e6%9e%90%e6%b8%85%e6%a5%9a%e8%bf%99%e4%ba%9b%e5%85%83%e5%ae%8f%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e3%80%82%0a1.%20metamacro_stringify%28VALUE%29%20%23define%20metamacro_stringify%28VALUE%29%20%5c%20metamacro_stringify_%28VALUE%29%20%20%23define%20metamacro_stringify_%28VALUE%29%20%23%20VALUE%20%20metamacro_stringify%28%20%29%e8%bf%99%e4%b8%aa%e5%ae%8f%e7%94%a8%e5%88%b0%e4%ba%86%23%e7%9a%84%e7%94%a8%e6%b3%95%e3%80%82%23%e5%9c%a8%e5%ae%8f%e4%b8%ad%e4%bb%a3%e8%a1%a8%e6%8a%8a%e5%ae%8f%e7%9a%84%e5%8f%82%e6%95%b0%e5%8f%98%e4%b8%ba%e4%b8%80%e4%b8%aa%e5%ad%97%e7%ac%a6%e4%b8%b2%e3%80%82%e8%bf%99%e4%b8%aa%e5%ae%8f%e7%9a%84%e7%9b%ae%e7%9a%84%e5%92%8c%e5%ae%83%e7%9a%84%e5%90%8d%e5%ad%97%e4%b8%80%e6%a0%b7%e6%98%8e%e6%98%be%ef%bc%8c%e6%8a%8a%e5%85%a5%e5%8f%82VALUE%e8%bd%ac%e6%8d%a2%e6%88%90%e4%b8%80%e4%b8%aa%e5%ad%97%e7%ac%a6%e4%b8%b2%e8%bf%94%e5%9b%9e%e3%80%82%0a%e8%bf%99%e9%87%8c%e5%8f%af%e8%83%bd%e5%b0%b1%e6%9c%89%e4%ba%ba%e6%9c%89%e7%96%91%e9%97%ae%ef%bc%8c%e4%b8%ba%e5%95%a5%e8%a6%81%e5%8c%85%e8%a3%85%e4%b8%80%e5%b1%82%ef%bc%8c%e4%b8%8d%e8%83%bd%e7%9b%b4%e6%8e%a5%e5%86%99%e6%88%90%e4%b8%8b%e9%9d%a2%e8%bf%99%e6%a0%b7%ef%bc%9a%0a%23define%20metamacro_stringify%28VALUE%29%20%23%20VALUE%20%20%e8%af%ad%e6%84%8f%e7%a1%ae%e5%ae%9e%e4%b9%9f%e6%b2%a1%e6%9c%89%e5%8f%98%ef%bc%8c%e4%bd%86%e6%98%af%e6%9c%89%e7%a7%8d%e7%89%b9%e6%ae%8a%e6%83%85%e5%86%b5%e4%b8%8b%e5%b0%b1%e4%bc%9a%e5%87%ba%e7%8e%b0%e9%97%ae%e9%a2%98%e3%80%82%0a%e4%b8%be%e4%b8%aa%e4%be%8b%e5%ad%90%ef%bc%9a%0a%23define%20NUMBER%2010%20%23define%20ADD%28a%2cb%29%20%28a%2bb%29%20NSLog%28%40%26%2334%3b%25d%2b%25d%3d%25d%26%2334%3b%2cNUMBER%2c%20NUMBER%2c%20ADD%28NUMBER%2cNUMBER%29%29%3b%20%e8%be%93%e5%87%ba%e5%a6%82%e4%b8%8b%ef%bc%9a%0a10%2b10%3d20%e8%bf%99%e6%a0%b7%e5%ad%90%e7%a1%ae%e5%ae%9e%e6%98%af%e6%b2%a1%e6%9c%89%e9%97%ae%e9%a2%98%ef%bc%8c%e4%bd%86%e6%98%af%e7%a8%8d%e4%bd%9c%e4%bf%ae%e6%94%b9%e5%b0%b1%e4%bc%9a%e6%9c%89%e9%97%ae%e9%a2%98%e3%80%82"><i class="fab fa-tumblr" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&t=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-hacker-news" aria-hidden=true></i></a></li></ul></div><div id=toc><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-关于宏>一. 关于宏</a></li><li><a href=#二-reactivecocoa-中的元宏>二. ReactiveCocoa 中的元宏</a><ul><li><a href=#1-metamacro_stringifyvalue>1. metamacro_stringify(VALUE)</a></li><li><a href=#2-metamacro_concata-b>2. metamacro_concat(A, B)</a></li><li><a href=#3-metamacro_argcount-和-metamacro_atn->3. metamacro_argcount(&mldr;) 和 metamacro_at(N, &mldr;)</a></li><li><a href=#4-metamacro_foreachmacro-sep--和-metamacro_foreach_cxtmacro-sep-context->4. metamacro_foreach(MACRO, SEP, &mldr;) 和 metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)</a></li><li><a href=#5-metamacro_foreach_cxt_recursivemacro-sep-context->5. metamacro_foreach_cxt_recursive(MACRO, SEP, CONTEXT, &mldr;)</a></li><li><a href=#6-metamacro_foreach_concatbase-sep->6. metamacro_foreach_concat(BASE, SEP, &mldr;)</a></li><li><a href=#7-metamacro_for_cxtcount-macro-sep-context>7. metamacro_for_cxt(COUNT, MACRO, SEP, CONTEXT)</a></li><li><a href=#8-metamacro_head>8. metamacro_head(&mldr;)</a></li><li><a href=#9-metamacro_tail>9. metamacro_tail(&mldr;)</a></li><li><a href=#10-metamacro_taken->10. metamacro_take(N, &mldr;)</a></li><li><a href=#11-metamacro_dropn->11. metamacro_drop(N, &mldr;)</a></li><li><a href=#12-metamacro_decval-和-metamacro_incval>12. metamacro_dec(VAL) 和 metamacro_inc(VAL)</a></li><li><a href=#13-metamacro_if_eqa-b>13. metamacro_if_eq(A, B)</a></li><li><a href=#14-metamacro_if_eq_recursivea-b>14. metamacro_if_eq_recursive(A, B)</a></li><li><a href=#15-metamacro_is_evenn>15. metamacro_is_even(N)</a></li><li><a href=#16-metamacro_notb>16. metamacro_not(B)</a></li></ul></li><li><a href=#三-reactivecocoa-中常用的宏>三. ReactiveCocoa 中常用的宏</a><ul><li><a href=#1-weakifyunsafeifystrongify>1. weakify(&mldr;)、unsafeify(&mldr;)、strongify(&mldr;)</a></li><li><a href=#2-ractuplepack-和-ractupleunpack>2. RACTuplePack(&mldr;) 和 RACTupleUnpack(&mldr;)</a></li><li><a href=#3-racobservetarget-keypath>3. RACObserve(TARGET, KEYPATH)</a></li><li><a href=#4-ractarget->4. RAC(TARGET, &mldr;)</a></li><li><a href=#5-racchanneltotarget->5. RACChannelTo(TARGET, &mldr;)</a></li><li><a href=#6-onexit>6. onExit</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div></span></div><article class=post itemscope itemtype=http://schema.org/BlogPosting><header><h1 class=posttitle itemprop="name headline">ReactiveCocoa 中 奇妙无比的“宏”魔法</h1><div class=meta><div class=postdate><time datetime="2017-02-12 05:46:54 +0000 UTC" itemprop=datePublished>Feb 12</time></div><div class=article-category><i class="fas fa-archive"></i><a class=category-link href=/categories/ios>iOS</a>
+,
+<a class=category-link href=/categories/reactivecocoa>ReactiveCocoa</a>
+,
+<a class=category-link href=/categories/rac>RAC</a>
+,
+<a class=category-link href=/categories/macro>Macro</a></div><div class=article-tag><i class="fas fa-tag"></i><a class=tag-link href=/tags/ios rel=tag>iOS</a>
+,
+<a class=tag-link href=/tags/reactivecocoa rel=tag>ReactiveCocoa</a>
+,
+<a class=tag-link href=/tags/rac rel=tag>RAC</a>
+,
+<a class=tag-link href=/tags/macro rel=tag>Macro</a></div></div></header><div class=content itemprop=articleBody><h3 id=前言>前言</h3><p>在ReactiveCocoa 中，开源库作者为我们提供了很多种魔法，“黑”魔法，“红”魔法……今天就让先来看看“红”魔法。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_1.png alt></p><p>在ReactiveCocoa 中，封装了很多非常实用的“宏”，使用这些“宏”为我们开发带来了很多的便利。</p><p>今天就来盘点一下RAC中的宏是如何实现的。</p><h3 id=目录>目录</h3><ul><li>1.关于宏</li><li>2.ReactiveCocoa 中的元宏</li><li>3.ReactiveCocoa 中常用的宏</li></ul><h3 id=一-关于宏>一. 关于宏</h3><blockquote><p><strong>宏</strong>（Macro），是一种<a href=https://zh.wikipedia.org/wiki/%E6%89%B9%E5%A4%84%E7%90%86>批量处理</a>的称谓。</p></blockquote><p>在编程领域里的宏是一种<a href=https://zh.wikipedia.org/wiki/%E6%8A%BD%E8%B1%A1>抽象</a>（Abstraction），它根据一系列预定义的规则替换一定的文本模式。<a href=https://zh.wikipedia.org/wiki/%E8%A7%A3%E9%87%8A%E5%99%A8>解释器</a>或<a href=https://zh.wikipedia.org/wiki/%E7%BC%96%E8%AF%91%E5%99%A8>编译器</a>在遇到宏时会自动进行这一模式替换。绝大多数情况下，“宏”这个词的使用暗示着将小命令或动作转化为一系列指令。</p><p>宏的用途在于自动化频繁使用的序列或者是获得一种更强大的抽象能力。
+计算机语言如<a href=https://zh.wikipedia.org/wiki/C%E8%AF%AD%E8%A8%80>C语言</a>或<a href=https://zh.wikipedia.org/wiki/%E6%B1%87%E7%BC%96%E8%AF%AD%E8%A8%80>汇编语言</a>有简单的宏系统，由<a href=https://zh.wikipedia.org/wiki/%E7%BC%96%E8%AF%91%E5%99%A8>编译器</a>或<a href=https://zh.wikipedia.org/wiki/%E6%B1%87%E7%BC%96%E5%99%A8>汇编器</a>的预处理器实现。<a href=https://zh.wikipedia.org/wiki/C%E8%AF%AD%E8%A8%80>C语言</a>的宏预处理器的工作只是简单的文本搜索和替换，使用附加的文本处理语言如<a href=https://zh.wikipedia.org/wiki/M4>M4</a>，C程序员可以获得更精巧的宏。</p><p><a href=https://zh.wikipedia.org/wiki/Lisp>Lisp</a>类语言如<a href=https://zh.wikipedia.org/wiki/Common_Lisp>Common Lisp</a>和<a href=https://zh.wikipedia.org/wiki/Scheme>Scheme</a>有更精巧的宏系统：宏的行为如同是函数对自身程序文本的变形，并且可以应用全部语言来表达这种变形。一个C宏可以定义一段语法的替换，然而一个Lisp的宏却可以控制一节代码的计算。</p><p>对于编译语言来说，所有的宏都是在预编译的时候被展开的，所以在lex进行词法扫描生成Token，词法分析过程之前，所有的宏都已经被展开完成了。</p><p>对于Xcode，预处理或者预编译阶段是可以直接查看的。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_2.png alt></p><p>随便写一个宏，然后打开Xcode右上方的Assistant，选择“Preprocess”就可以看到该文件预处理之后的样子了。可以看到左边的@weakify(self) 被转换成了右边的两行代码了。</p><p>关于这个Xcode的这个功能还有2点补充说明：</p><p>1.不同阶段的Preprocessed可能不同，要根据你的目标去选择预处理的条件。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_3.png alt></p><p>比如这里就有5种预编译的种类可以选择。</p><p>2.宏经过预编译之后出来的代码，是可以用来检测宏写的是否正确的，但是无法看到宏被展开的具体过程。这意味着我们可以通过Xcode这个功能来查看宏的作用，但是无法知道宏的具体实现。具体实现还是需要通过查看源码来分析。</p><p>ReactiveCocoa中的宏，如果不查看源码分析，会觉得那些宏都像魔法一样奇妙无比，接下来就来解开“宏”魔法的神秘面纱。</p><h3 id=二-reactivecocoa-中的元宏>二. ReactiveCocoa 中的元宏</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_4.jpg alt></p><p>在ReactiveCocoa的宏中，作者定义了这么一些基础的宏，作为“元宏”，它们是构成之后复杂宏的基础。在分析常用宏之前，必须要先分析清楚这些元宏的具体实现。</p><h4 id=1-metamacro_stringifyvalue>1. metamacro_stringify(VALUE)</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_stringify(VALUE) \
+</span><span style=color:#75715e>        metamacro_stringify_(VALUE)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_stringify_(VALUE) # VALUE
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_stringify( )这个宏用到了#的用法。#在宏中代表把宏的参数变为一个字符串。这个宏的目的和它的名字一样明显，把入参VALUE转换成一个字符串返回。</p><p>这里可能就有人有疑问，为啥要包装一层，不能直接写成下面这样：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_stringify(VALUE)  # VALUE
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>语意确实也没有变，但是有种特殊情况下就会出现问题。</p><p>举个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define NUMBER   10
+</span><span style=color:#75715e>#define ADD(a,b) (a+b)
+</span><span style=color:#75715e></span>NSLog(<span style=color:#e6db74>@&#34;%d+%d=%d&#34;</span>,NUMBER, NUMBER, ADD(NUMBER,NUMBER));
+
+</code></pre></div><p>输出如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>10</span>+<span style=color:#ae81ff>10</span>=<span style=color:#ae81ff>20</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>这样子确实是没有问题，但是稍作修改就会有问题。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define STRINGIFY(S) #S
+</span><span style=color:#75715e>#define CALCULATE(A,B)  (A##10##B)
+</span><span style=color:#75715e></span>
+NSLog(<span style=color:#e6db74>@&#34;int max: %s&#34;</span>,STRINGIFY(INT_MAX));
+NSLog(<span style=color:#e6db74>@&#34;%d&#34;</span>, CALCULATE(NUMBER,NUMBER));
+
+</code></pre></div><p>如果是这种情况下，第二个NSLog打印是会编译错误的。上面两句经过预编译之后，宏会被展开成下面这个样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>NSLog</span>(@<span style=color:#e6db74>&#34;int max: %s&#34;</span>,<span style=color:#e6db74>&#34;INT_MAX&#34;</span>);<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#a6e22e>NSLog</span>(@<span style=color:#e6db74>&#34;%d&#34;</span>, (<span style=color:#a6e22e>NUMBER10NUMBER</span>));<span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>可以发现，宏并没有再次被展开。解决办法也很简单，就是把宏包装一层，写一个转接宏出来。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define CALCULATE(A,B)   _CALCULATE(A,B)   </span><span style=color:#75715e>// 转换宏
+</span><span style=color:#75715e></span><span style=color:#75715e>#define _CALCULATE(A,B)  A##10##B
+</span><span style=color:#75715e></span>
+</code></pre></div><p>再次测试一下，这里我们使用官方的metamacro_stringify</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+NSLog(<span style=color:#e6db74>@&#34;int max: %s&#34;</span>,metamacro_stringify(INT_MAX));
+NSLog(<span style=color:#e6db74>@&#34;%d&#34;</span>, CALCULATE(NUMBER,NUMBER));
+
+</code></pre></div><p>这样最终打印出来的结果和我们想要的一致，没有问题。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-vim data-lang=vim><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>2147483647</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010></span><span style=color:#ae81ff>101010</span><span style=color:#960050;background-color:#1e0010>
+</span><span style=color:#960050;background-color:#1e0010>
+</span></code></pre></div><p>CALCULATE(NUMBER,NUMBER) 第一层转换成 _CALCULATE(10,10)，接着第二次转换成10##10##10，也就是101010。</p><p>当然这里是2层转换，如果有多层转换就需要更多个转换宏了。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+NSLog(<span style=color:#e6db74>@&#34;%d&#34;</span>, CALCULATE(STRINGIFY(NUMBER),STRINGIFY(NUMBER)));
+
+
+</code></pre></div><p>上面这个例子就是3层了，按照之前我们的写法还是编译报错。如果是超过2，3层的多层的情况，就该考虑考虑宏设计的语意的问题，尽量不让使用者产生错误的用法。</p><h4 id=2-metamacro_concata-b>2. metamacro_concat(A, B)</h4><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_concat(A, B) \
+</span><span style=color:#75715e>        metamacro_concat_(A, B)
+</span><span style=color:#75715e>#define metamacro_concat_(A, B) A ## B
+</span><span style=color:#75715e></span>
+</code></pre></div><p>这个宏就是用来合并入参A，B到一起。在RAC里面主要用这个方法来合成另外一个宏的名字。</p><h4 id=3-metamacro_argcount-和-metamacro_atn->3. metamacro_argcount(&mldr;) 和 metamacro_at(N, &mldr;)</h4><p>metamacro_argcount(&mldr;)这个宏设计的也非常巧妙，它是用来获取参数个数的。由于宏展开是在预编译时期的，所以它在预编译时期获取参数个数的，其他非宏的方法都是在运行时获取参数个数的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_argcount(...) \
+</span><span style=color:#75715e>        metamacro_at(20, __VA_ARGS__, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这里会调用metamacro_at(N, &mldr;)宏。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_at(N, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_at, N)(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>把这个宏展开，于是得到：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_at(N, ...) \
+</span><span style=color:#75715e>        metamacro_atN(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>于是通过metamacro_concat合成命令，就得到了一连串的metamacro_atN宏命令：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_at0(...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at1(_0, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at2(_0, _1, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at3(_0, _1, _2, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at4(_0, _1, _2, _3, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at5(_0, _1, _2, _3, _4, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at6(_0, _1, _2, _3, _4, _5, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at7(_0, _1, _2, _3, _4, _5, _6, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at8(_0, _1, _2, _3, _4, _5, _6, _7, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at9(_0, _1, _2, _3, _4, _5, _6, _7, _8, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at10(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at11(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at12(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at13(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at14(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at15(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at16(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at17(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at18(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at19(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_at20(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>可见N的取值只能从0到20。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_head(...) \
+</span><span style=color:#75715e>        metamacro_head_(__VA_ARGS__, 0)
+</span><span style=color:#75715e>#define metamacro_head_(FIRST, ...) FIRST
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_head展开之后变成：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_head(FIRST,..., 0)  FIRST
+</span><span style=color:#75715e></span>
+</code></pre></div><p>metamacro_head的意图就很明显，是用来获取后面可变入参的第一个参数。</p><p>回到metamacro_atN宏上面来，那么把它展开就是下面这样：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_atN(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, ... , _N, ...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>当然，N的取值还是从0到20，那么metamacro_atN宏获取到的值就是可变参数列表里面的第N个参数值。参数从0开始。</p><p>再回到最初的metamacro_argcount(&mldr;)宏，目前展开到这一步：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_argcount(...) \
+</span><span style=color:#75715e>        metamacro_at20(__VA_ARGS__, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>由于__VA_ARGS__个数不能超过20个，所以必定是在0-19之间。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_at20(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19, ..., <span style=color:#ae81ff>20</span>, <span style=color:#ae81ff>19</span>, <span style=color:#ae81ff>18</span>, <span style=color:#ae81ff>17</span>, <span style=color:#ae81ff>16</span>, <span style=color:#ae81ff>15</span>, <span style=color:#ae81ff>14</span>, <span style=color:#ae81ff>13</span>, <span style=color:#ae81ff>12</span>, <span style=color:#ae81ff>11</span>, <span style=color:#ae81ff>10</span>, <span style=color:#ae81ff>9</span>, <span style=color:#ae81ff>8</span>, <span style=color:#ae81ff>7</span>, <span style=color:#ae81ff>6</span>, <span style=color:#ae81ff>5</span>, <span style=color:#ae81ff>4</span>, <span style=color:#ae81ff>3</span>, <span style=color:#ae81ff>2</span>, <span style=color:#ae81ff>1</span>) metamacro_head(__VA_ARGS__)
+
+
+</code></pre></div><p>假设入参是有5个：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_argcount(<span style=color:#e6db74>@&#34;1&#34;</span>,<span style=color:#e6db74>@&#34;2&#34;</span>,<span style=color:#e6db74>@&#34;3&#34;</span>,<span style=color:#e6db74>@&#34;4&#34;</span>,<span style=color:#e6db74>@&#34;5&#34;</span>);
+
+</code></pre></div><p>先把5个参数放入metamacro_at20的前五个位置。然后从第6个位置开始倒序插入20-1的数字。如下图：</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_5.png alt></p><p>我们可以把倒序的数字想象成一把尺子，是用来衡量或者指示当前有多少个参数的。尺子的最左边对齐上面20个空位的第一位，尺子后面多出来的部分，取出来，然后进行metamacro_head操作，取出第一位参数，这个数字就是整个参数的个数了。这把虚拟的“尺子”是会左右对齐的，具体的位置就要根据填入参数的个数来决定的。</p><p>这个宏的原理也很简单，20 - （ 20 - n ）= n。metamacro_argcount(&mldr;) 宏就是这样在预编译时期获取到参数个数的。</p><p>作者也标明了，这个宏的设计灵感来自于<a href=http://p99.gforge.inria.fr>P99</a>神库，有兴趣的同学可以去看看这个库。</p><h4 id=4-metamacro_foreachmacro-sep--和-metamacro_foreach_cxtmacro-sep-context->4. metamacro_foreach(MACRO, SEP, &mldr;) 和 metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)</h4><p>先来分析分析metamacro_foreach(MACRO, SEP, &mldr;) 宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach(MACRO, SEP, ...) \
+</span><span style=color:#75715e>        metamacro_foreach_cxt(metamacro_foreach_iter, SEP, MACRO, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>看到定义就知道metamacro_foreach(MACRO, SEP, &mldr;) 和 metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;) 是一样的作用。前者只不过比后者少了一个foreach的迭代子。</p><h5 id=1-metamacro_foreach_cxtmacro-sep-context-宏>1. metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏</h5><p>再来看看metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏的定义。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_foreach_cxt(MACRO, SEP, CONTEXT, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(__VA_ARGS__))(MACRO, SEP, CONTEXT, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>那么之前的metamacro_foreach(MACRO, SEP, &mldr;)宏就可以等价于</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(__VA_ARGS__))(metamacro_foreach_iter, SEP, MACRO, __VA_ARGS__)
+
+</code></pre></div><p>回到metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏的展开表达式上面来，假设__VA_ARGS__的参数个数为N。</p><p>metamacro_concat 宏 和 metamacro_argcount 宏上面介绍过了，那么可以继续把宏展开成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_foreach_cxtN(MACRO, SEP, CONTEXT, __VA_ARGS__)
+
+</code></pre></div><p>这里又是利用metamacro_concat 宏动态的合并成了另一个宏的例子。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt0(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e>#define metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) MACRO(0, CONTEXT, _0)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt1(MACRO, SEP, CONTEXT, _0) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(1, CONTEXT, _1)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(2, CONTEXT, _2)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(3, CONTEXT, _3)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(4, CONTEXT, _4)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(5, CONTEXT, _5)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(6, CONTEXT, _6)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(7, CONTEXT, _7)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(8, CONTEXT, _8)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(9, CONTEXT, _9)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(10, CONTEXT, _10)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(11, CONTEXT, _11)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(12, CONTEXT, _12)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(13, CONTEXT, _13)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(14, CONTEXT, _14)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(15, CONTEXT, _15)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(16, CONTEXT, _16)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(17, CONTEXT, _17)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(18, CONTEXT, _18)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt20(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(19, CONTEXT, _19)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>把上述的metamacro_foreach_cxtN的定义抽象一下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxtN(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, … ,_N - 1) \
+</span><span style=color:#75715e>    metamacro_foreach_cxtN - 1(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, … ,_N - 2) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(N - 1, CONTEXT, _N - 1)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>当然，在RAC中N的取值范围是[0,20]。我们还是假设N的定义域是全体非负整数组成的集合N(数学中的非负整数集合的标志) 。那么我们把metamacro_foreach_cxtN完全展开到不能展开为止：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    MACRO(<span style=color:#ae81ff>0</span>, CONTEXT, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, CONTEXT, _1) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, CONTEXT, _2) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, CONTEXT, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+</code></pre></div><p>metamacro_foreach_cxtN(MACRO, SEP, CONTEXT, &mldr;)，这个宏的意图也就很明显了，从可变参数列表里面读取出个数，然后把每个参数都进行一次MACRO(N - 1, CONTEXT, _N - 1)操作，每个操作直接用SEP作为分隔符进行分隔。</p><p>metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)这个宏的设计灵感也来自于P99库。</p><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_6.png alt></p><p>用到这个宏最著名的的宏就是weakify(&mldr;)了，下面来简要的看看是如何利用metamacro_foreach_cxtN(MACRO, SEP, CONTEXT, &mldr;)巧妙的实现weakify(&mldr;)的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define weakify(...) \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    metamacro_foreach_cxt(rac_weakify_,, __weak, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>使用weakify和平时我们自己写的weakSelf最大的区别就是，weakify后面是可以跟多个参数的，最多多达20个。weakify可以一口气把参数列表里面所有的参数都进行weak操作。</p><p>weakify(&mldr;)的重点之一就在metamacro_foreach_cxt操作上。假设传入2个参数，self和str，进行展开之后得到：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    MACRO(<span style=color:#ae81ff>0</span>, CONTEXT, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, CONTEXT, _1)
+
+</code></pre></div><p>MACRO = rac_weakify_，CONTEXT = __weak，SEP 为 空格 ，代入参数：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+ rac_weakify_(<span style=color:#ae81ff>0</span>,<span style=color:#66d9ef>__weak</span>,self) \
+ rac_weakify_(<span style=color:#ae81ff>1</span>,<span style=color:#66d9ef>__weak</span>,str) 
+
+</code></pre></div><p>注意，替换完成之后，两个宏是连在一起的，中间没有分号！分隔符SEP目前是空格。最后一步就是替换掉rac_weakify_：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define rac_weakify_(INDEX, CONTEXT, VAR) \
+</span><span style=color:#75715e>    CONTEXT __typeof__(VAR) metamacro_concat(VAR, _weak_) = (VAR);
+</span><span style=color:#75715e></span>
+</code></pre></div><p>注意这里的INDEX是废参数，并没有被用到。</p><p>展开上面的宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>__weak</span> __typeof__(self) self_weak_ <span style=color:#f92672>=</span> (self)<span style=color:#960050;background-color:#1e0010>；</span><span style=color:#66d9ef>__weak</span> __typeof__(str) str_weak_ <span style=color:#f92672>=</span> (str)<span style=color:#960050;background-color:#1e0010>；</span>
+
+
+</code></pre></div><p>注意，rac_weakify_是自带分号的，如果此处没有分号，这里会出现编译错误。</p><p>最终@weakify(self，str) 就会在预编译期间被替换成</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#66d9ef>@autoreleasepool</span> {} <span style=color:#66d9ef>__weak</span> __typeof__(self) self_weak_ <span style=color:#f92672>=</span> (self)<span style=color:#960050;background-color:#1e0010>；</span><span style=color:#66d9ef>__weak</span> __typeof__(str) str_weak_ <span style=color:#f92672>=</span> (str)<span style=color:#960050;background-color:#1e0010>；</span>
+
+</code></pre></div><p>注意中间是没有换行的，此处宏展开之后就是一行。</p><p>metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)分析完毕之后再回过来看看metamacro_foreach(MACRO, SEP, &mldr;)</p><h5 id=2-metamacro_foreachmacro-sep->2. metamacro_foreach(MACRO, SEP, &mldr;)</h5><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_concat(metamacro_foreach_cxt, metamacro_argcount(__VA_ARGS__))(metamacro_foreach_iter, SEP, MACRO, __VA_ARGS__)
+
+
+</code></pre></div><p>此时同样可以假设参数个数为N，那么上述宏展开可以变成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_foreach_cxtN(metamacro_foreach_iter, SEP, MACRO, __VA_ARGS__)
+
+
+</code></pre></div><p>这里的MACRO = metamacro_foreach_iter，SEP = SEP ， CONTEXT = MACRO。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    metamacro_foreach_iter(<span style=color:#ae81ff>0</span>, MACRO, _0) \
+    SEP \
+    metamacro_foreach_iter(<span style=color:#ae81ff>1</span>, MACRO, _1) \
+    SEP \
+    metamacro_foreach_iter(<span style=color:#ae81ff>2</span>, MACRO, _2) \
+    SEP \
+    metamacro_foreach_iter(<span style=color:#ae81ff>3</span>, MACRO, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    metamacro_foreach_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, MACRO, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    metamacro_foreach_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, MACRO, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    metamacro_foreach_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, MACRO, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    metamacro_foreach_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, MACRO, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+</code></pre></div><p>metamacro_foreach_iter 定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_foreach_iter(INDEX, MACRO, ARG) MACRO(INDEX, ARG)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>继续展开得到下面的式子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    MACRO(<span style=color:#ae81ff>0</span>, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, _1) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, _2) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_7.png alt></p><p>从最终的展开式子上来看，metamacro_foreach(MACRO, SEP, &mldr;) 就比 metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;) 少了一个CONTEXT。</p><p>metamacro_foreach(MACRO, SEP, &mldr;)这个宏的典型例子就是熟知的strongify(&mldr;)的实现。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define strongify(...) \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic push&#34;) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic ignored \&#34;-Wshadow\&#34;&#34;) \
+</span><span style=color:#75715e>    metamacro_foreach(rac_strongify_,, __VA_ARGS__) \
+</span><span style=color:#75715e>    _Pragma(&#34;clang diagnostic pop&#34;)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>通过上面的分析，我们直接替换结果，MACRO = rac_strongify_ ，SEP = 空格。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    rac_strongify_(<span style=color:#ae81ff>0</span>, _0) \
+    rac_strongify_(<span style=color:#ae81ff>1</span>, _1) \
+    rac_strongify_(<span style=color:#ae81ff>2</span>, _2) \
+    rac_strongify_(<span style=color:#ae81ff>3</span>, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+    rac_strongify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+    rac_strongify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+    rac_strongify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+    rac_strongify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+</code></pre></div><p>接下来替换掉rac_strongify_</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define rac_strongify_(INDEX, VAR) \
+</span><span style=color:#75715e>    __strong __typeof__(VAR) VAR = metamacro_concat(VAR, _weak_);
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>同样的，这里的INDEX也是一个废参数，也没有用到。rac_strongify_同样的自带分号，如果此处没有分号，SEP此时也是空格，编译就直接报错。</p><p>最终就转换成如下的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#66d9ef>__strong</span> <span style=color:#a6e22e>__typeof__</span>(self) self <span style=color:#f92672>=</span> self_weak_;
+
+
+</code></pre></div><h4 id=5-metamacro_foreach_cxt_recursivemacro-sep-context->5. metamacro_foreach_cxt_recursive(MACRO, SEP, CONTEXT, &mldr;)</h4><p>先来看看定义：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive(MACRO, SEP, CONTEXT, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_foreach_cxt_recursive, metamacro_argcount(__VA_ARGS__))(MACRO, SEP, CONTEXT, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>假设可变参数个数为N，将上面式子展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive(MACRO, SEP, CONTEXT, ...) \
+</span><span style=color:#75715e>        metamacro_foreach_cxt_recursiveN(MACRO, SEP, CONTEXT, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>于是就转换成了metamacro_foreach_cxt_recursiveN 宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive0(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e>#define metamacro_foreach_cxt_recursive1(MACRO, SEP, CONTEXT, _0) MACRO(0, CONTEXT, _0)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive1(MACRO, SEP, CONTEXT, _0) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(1, CONTEXT, _1)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive2(MACRO, SEP, CONTEXT, _0, _1) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(2, CONTEXT, _2)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive3(MACRO, SEP, CONTEXT, _0, _1, _2) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(3, CONTEXT, _3)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive4(MACRO, SEP, CONTEXT, _0, _1, _2, _3) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(4, CONTEXT, _4)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive5(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(5, CONTEXT, _5)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive6(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(6, CONTEXT, _6)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive7(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(7, CONTEXT, _7)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive8(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(8, CONTEXT, _8)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive9(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(9, CONTEXT, _9)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive10(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(10, CONTEXT, _10)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive11(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(11, CONTEXT, _11)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive12(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(12, CONTEXT, _12)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive13(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(13, CONTEXT, _13)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive14(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(14, CONTEXT, _14)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive15(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(15, CONTEXT, _15)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive16(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(16, CONTEXT, _16)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive17(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(17, CONTEXT, _17)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive18(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(18, CONTEXT, _18)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursive20(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, _19) \
+</span><span style=color:#75715e>    metamacro_foreach_cxt_recursive19(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(19, CONTEXT, _19)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>提取一下metamacro_foreach_cxt_recursiveN的定义：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_cxt_recursiveN(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _18, … ，_( N - 1)) \
+</span><span style=color:#75715e>        metamacro_foreach_cxt_recursive(N - 1)(MACRO, SEP, CONTEXT, _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, _17, _( N - 2)) \
+</span><span style=color:#75715e>        SEP \
+</span><span style=color:#75715e>        MACRO(N -1, CONTEXT, _N -1)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>还是按照之前分析的，同理完全展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    MACRO(<span style=color:#ae81ff>0</span>, CONTEXT, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, CONTEXT, _1) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, CONTEXT, _2) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, CONTEXT, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+
+</code></pre></div><p>至此，展开式与metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏完全相同。</p><p>这个递归的宏从来没有在RAC的其他宏中使用，作者在这里标注说明了这个宏的用处。</p><blockquote><p>This can be used when the former would fail due to recursive macro expansion</p></blockquote><p>由于宏在递归展开中可能会导致递归前置条件失败，在这种情况下，应该使用这个递归宏。当然，它的效果和metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏是完全一样的。</p><h4 id=6-metamacro_foreach_concatbase-sep->6. metamacro_foreach_concat(BASE, SEP, &mldr;)</h4><p>这个宏定义是套用了metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏的实现，只是多传入了一些参数。由此可见，metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏在RAC中的重要性。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_concat(BASE, SEP, ...) \
+</span><span style=color:#75715e>        metamacro_foreach_cxt(metamacro_foreach_concat_iter, SEP, BASE, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>由于在上面详细分析过了metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)宏的实现，那么这里就直接完全展开到最后一步。MACRO = metamacro_foreach_concat_iter，SEP = SEP，CONTEXT = BASE。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    metamacro_foreach_concat_iter(<span style=color:#ae81ff>0</span>, BASE, _0) \
+    SEP \
+    metamacro_foreach_concat_iter(<span style=color:#ae81ff>1</span>, BASE, _1) \
+    SEP \
+    metamacro_foreach_concat_iter(<span style=color:#ae81ff>2</span>, BASE, _2) \
+    SEP \
+    metamacro_foreach_concat_iter(<span style=color:#ae81ff>3</span>, BASE, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    metamacro_foreach_concat_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, BASE, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    metamacro_foreach_concat_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, BASE, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    metamacro_foreach_concat_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, BASE, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    metamacro_foreach_concat_iter(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, BASE, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+
+</code></pre></div><p>到了这一步，就需要继续展开metamacro_foreach_concat_iter</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_foreach_concat_iter(INDEX, BASE, ARG) metamacro_foreach_concat_iter_(BASE, ARG)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_foreach_concat_iter_(BASE, ARG) BASE ## ARG
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这里的2个宏，就用到了之前说道的转接宏的概念，因为需要把第一个参数剔除，所以需要写一个转接宏，转换一次踢掉第一个参数。</p><p>最终完全展开就是下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    BASE_0 \
+    SEP \
+    BASE_1 \
+    SEP \
+    BASE_2 \
+    SEP \
+    BASE_3 \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+    SEP \
+    BASE_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span> \
+    SEP \
+    BASE_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span> \
+    SEP \
+    BASE_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span> \
+    SEP \
+    BASE_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>
+
+
+
+</code></pre></div><p>metamacro_foreach_concat(BASE, SEP, &mldr;)宏如同它的名字一样，把可变参数里面每个参数都拼接到BASE后面，每个参数拼接完成之间都用SEP分隔。</p><p>试想一种场景：</p><p>如果有一连串的方法，方法名都有一个相同的前缀，后面是不同的。这种场景下，利用metamacro_foreach_concat(BASE, SEP, &mldr;)宏是非常爽的，它会一口气组合出相关的一列表的不同的宏。</p><h4 id=7-metamacro_for_cxtcount-macro-sep-context>7. metamacro_for_cxt(COUNT, MACRO, SEP, CONTEXT)</h4><p>定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_for_cxt(COUNT, MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_for_cxt, COUNT)(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>metamacro_concat 之前分析过，展开这一层：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_for_cxtN(MACRO, SEP, CONTEXT)
+
+
+</code></pre></div><p>metamacro_for_cxtN的定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_for_cxt0(MACRO, SEP, CONTEXT)
+</span><span style=color:#75715e>#define metamacro_for_cxt1(MACRO, SEP, CONTEXT) MACRO(0, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt2(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt1(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(1, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt3(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt2(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(2, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt4(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt3(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(3, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt5(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt4(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(4, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt6(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt5(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(5, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt7(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt6(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(6, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt8(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt7(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(7, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt9(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt8(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(8, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt10(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt9(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(9, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt11(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt10(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(10, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt12(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt11(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(11, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt13(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt12(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(12, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt14(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt13(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(13, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt15(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt14(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(14, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt16(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt15(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(15, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt17(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt16(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(16, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt18(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt17(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(17, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt19(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt18(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(18, CONTEXT)
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define metamacro_for_cxt20(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    metamacro_for_cxt19(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>    SEP \
+</span><span style=color:#75715e>    MACRO(19, CONTEXT)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>提取一下metamacro_for_cxtN的定义：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_for_cxtN(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>        metamacro_for_cxtN - 1(MACRO, SEP, CONTEXT) \
+</span><span style=color:#75715e>        SEP \
+</span><span style=color:#75715e>        MACRO(N - 1, CONTEXT)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>把metamacro_for_cxtN完全展开如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    MACRO(<span style=color:#ae81ff>0</span>, CONTEXT) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, CONTEXT) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, CONTEXT) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, CONTEXT) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, CONTEXT) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, CONTEXT) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, CONTEXT) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, CONTEXT)
+
+
+</code></pre></div><p>这个宏的用途是执行COUNT次MACRO宏命令，每次MACRO宏命令的第一个参数都会从COUNT开始递减到0。</p><h4 id=8-metamacro_head>8. metamacro_head(&mldr;)</h4><p>这个宏要求它的可变参数至少为1个。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_head(...) \
+</span><span style=color:#75715e>        metamacro_head_(__VA_ARGS__, 0)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>把宏展开，如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_head_(FIRST, ...) FIRST
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>metamacro_head(&mldr;) 的作用就是取出可变参数列表的第一个参数。</p><h4 id=9-metamacro_tail>9. metamacro_tail(&mldr;)</h4><p>这个宏要求它的可变参数至少为2个。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_tail(...) \
+</span><span style=color:#75715e>        metamacro_tail_(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>把宏展开，如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_tail_(FIRST, ...) __VA_ARGS__
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>metamacro_tail(&mldr;) 的作用就是取出可变参数列表除去第一个参数以外的所有参数。</p><h4 id=10-metamacro_taken->10. metamacro_take(N, &mldr;)</h4><p>这个宏要求它的可变参数至少有N个。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_take(N, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_take, N)(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>展开成如下的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_takeN(__VA_ARGS__)
+
+</code></pre></div><p>继续展开metamacro_takeN：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_take0(...)
+</span><span style=color:#75715e>#define metamacro_take1(...) metamacro_head(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_take2(...) metamacro_head(__VA_ARGS__), metamacro_take1(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take3(...) metamacro_head(__VA_ARGS__), metamacro_take2(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take4(...) metamacro_head(__VA_ARGS__), metamacro_take3(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take5(...) metamacro_head(__VA_ARGS__), metamacro_take4(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take6(...) metamacro_head(__VA_ARGS__), metamacro_take5(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take7(...) metamacro_head(__VA_ARGS__), metamacro_take6(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take8(...) metamacro_head(__VA_ARGS__), metamacro_take7(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take9(...) metamacro_head(__VA_ARGS__), metamacro_take8(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take10(...) metamacro_head(__VA_ARGS__), metamacro_take9(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take11(...) metamacro_head(__VA_ARGS__), metamacro_take10(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take12(...) metamacro_head(__VA_ARGS__), metamacro_take11(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take13(...) metamacro_head(__VA_ARGS__), metamacro_take12(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take14(...) metamacro_head(__VA_ARGS__), metamacro_take13(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take15(...) metamacro_head(__VA_ARGS__), metamacro_take14(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take16(...) metamacro_head(__VA_ARGS__), metamacro_take15(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take17(...) metamacro_head(__VA_ARGS__), metamacro_take16(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take18(...) metamacro_head(__VA_ARGS__), metamacro_take17(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take19(...) metamacro_head(__VA_ARGS__), metamacro_take18(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_take20(...) metamacro_head(__VA_ARGS__), metamacro_take19(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_8.png alt></p><p>这里也用到了递归的思想，每次取完头以后，剩下的队列针对于此次是tail，对于下次是head。所以每次都取head，之后再递归的取剩下部分的head，直到取出前N个数为止。</p><p>metamacro_take(N, &mldr;)的作用就是取出可变参数的前N个数，并把它们组合成新的参数列表。</p><h4 id=11-metamacro_dropn->11. metamacro_drop(N, &mldr;)</h4><p>这个宏要求它的可变参数至少为N个。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_drop(N, ...) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_drop, N)(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>展开成如下的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_dropN(__VA_ARGS__)
+
+</code></pre></div><p>继续展开metamacro_dropN：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_drop0(...) __VA_ARGS__
+</span><span style=color:#75715e>#define metamacro_drop1(...) metamacro_tail(__VA_ARGS__)
+</span><span style=color:#75715e>#define metamacro_drop2(...) metamacro_drop1(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop3(...) metamacro_drop2(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop4(...) metamacro_drop3(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop5(...) metamacro_drop4(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop6(...) metamacro_drop5(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop7(...) metamacro_drop6(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop8(...) metamacro_drop7(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop9(...) metamacro_drop8(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop10(...) metamacro_drop9(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop11(...) metamacro_drop10(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop12(...) metamacro_drop11(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop13(...) metamacro_drop12(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop14(...) metamacro_drop13(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop15(...) metamacro_drop14(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop16(...) metamacro_drop15(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop17(...) metamacro_drop16(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop18(...) metamacro_drop17(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop19(...) metamacro_drop18(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e>#define metamacro_drop20(...) metamacro_drop19(metamacro_tail(__VA_ARGS__))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_9.png alt></p><p>这里也用到了递归的思想，每次都取当前队列的tail，每次都丢掉当前队列的head。这样递归N次就丢掉了前N位参数。</p><p>metamacro_drop(N, &mldr;)的作用是丢掉当前参数列表里面的前N位参数。</p><h4 id=12-metamacro_decval-和-metamacro_incval>12. metamacro_dec(VAL) 和 metamacro_inc(VAL)</h4><p>这两个宏是一对。它们在元编程中，处理计数和index方面及其有用。VAL的值域都是[0,20]。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_dec(VAL) \
+</span><span style=color:#75715e>        metamacro_at(VAL, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>metamacro_dec(VAL) 提供了一个被左移一位的[0,20]的序列。那么通过metamacro_at计算出来的结果就比原来的结果小1。从而达到了减一的目的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_inc(VAL) \
+</span><span style=color:#75715e>        metamacro_at(VAL, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>metamacro_inc(VAL) 提供了一个被右移一位的[0,20]的序列。那么通过metamacro_at计算出来的结果就比原来的结果大1。从而达到了加一的目的。</p><h4 id=13-metamacro_if_eqa-b>13. metamacro_if_eq(A, B)</h4><p>首先A 和 B的值域都为[0,20]，并且B要大于等于A，即0&lt;=A&lt;=B&lt;=20。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_if_eq(A, B) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_if_eq, A)(B)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>如果当A不等于0的时候，将上面的式子展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq(A, B) \
+</span><span style=color:#75715e>        metamacro_if_eqA(B)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>再继续把metamacro_if_eqA展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq1(VALUE) metamacro_if_eq0(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq2(VALUE) metamacro_if_eq1(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq3(VALUE) metamacro_if_eq2(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq4(VALUE) metamacro_if_eq3(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq5(VALUE) metamacro_if_eq4(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq6(VALUE) metamacro_if_eq5(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq7(VALUE) metamacro_if_eq6(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq8(VALUE) metamacro_if_eq7(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq9(VALUE) metamacro_if_eq8(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq10(VALUE) metamacro_if_eq9(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq11(VALUE) metamacro_if_eq10(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq12(VALUE) metamacro_if_eq11(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq13(VALUE) metamacro_if_eq12(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq14(VALUE) metamacro_if_eq13(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq15(VALUE) metamacro_if_eq14(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq16(VALUE) metamacro_if_eq15(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq17(VALUE) metamacro_if_eq16(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq18(VALUE) metamacro_if_eq17(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq19(VALUE) metamacro_if_eq18(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq20(VALUE) metamacro_if_eq19(metamacro_dec(VALUE))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>上面是一个递推的式子，最终肯定会得到metamacro_if_eq0，最终的结果就是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_if_eq0(B <span style=color:#f92672>-</span> A)
+
+
+</code></pre></div><p>再把metamacro_if_eq0展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_if_eq0(VALUE) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_if_eq0_, VALUE)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>得到最终的展开式子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_if_eq0_(B <span style=color:#f92672>-</span> A)
+
+</code></pre></div><p>再查表得到最终结果：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq0_0(...) __VA_ARGS__ metamacro_consume_
+</span><span style=color:#75715e>#define metamacro_if_eq0_1(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_2(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_3(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_4(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_5(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_6(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_7(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_8(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_9(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_10(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_11(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_12(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_13(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_14(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_15(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_16(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_17(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_18(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_19(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq0_20(...) metamacro_expand_
+</span><span style=color:#75715e></span>
+</code></pre></div><p>上面这张表有两点注意点：</p><ol><li>除了0_0，其他的都是metamacro_expand_。</li></ol><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_consume_(...)
+</span><span style=color:#75715e>#define metamacro_expand_(...) __VA_ARGS__
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>除了0_0以外，其他所有操作都是直接透传参数，什么也不处理。metamacro_consume_(&mldr;)就是直接吞掉后续的参数。expand就是指的是可以继续展开宏，consume就是指的是终止展开宏，并吃掉后面的参数。</p><p>举2个例子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 第一个例子
+</span><span style=color:#75715e></span>metamacro_if_eq(<span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>0</span>)(true)(false)
+
+<span style=color:#75715e>// 第二个例子
+</span><span style=color:#75715e></span>metamacro_if_eq(<span style=color:#ae81ff>0</span>, <span style=color:#ae81ff>1</span>)(true)(false)
+
+
+
+</code></pre></div><p>直接套用最终展开式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 第一个例子
+</span><span style=color:#75715e></span>metamacro_if_eq0_0(true)(false)
+
+<span style=color:#75715e>// 第二个例子
+</span><span style=color:#75715e></span>metamacro_if_eq0_1(true)(false)
+
+
+</code></pre></div><p>继续展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 第一个例子
+</span><span style=color:#75715e></span>true metamacro_consume_(false) <span style=color:#f92672>=&gt;</span> true
+
+<span style=color:#75715e>// 第二个例子
+</span><span style=color:#75715e></span>metamacro_expand_(false) <span style=color:#f92672>=&gt;</span> false
+
+
+</code></pre></div><p>这个如果 B &lt; A，那么(B - A) &lt; 0，那么最终展开的式子就变成下面的样子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_if_eq0_(<span style=color:#960050;background-color:#1e0010>负数</span>)
+
+
+</code></pre></div><p>这个宏展开到这个程度就没法继续下去了，就会出现编译错误。</p><h4 id=14-metamacro_if_eq_recursivea-b>14. metamacro_if_eq_recursive(A, B)</h4><p>A 和 B的值域都为[0,20]，并且B要大于等于A，即0&lt;=A&lt;=B&lt;=20。</p><p>定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq_recursive(A, B) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_if_eq_recursive, A)(B)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>展开之后：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_if_eq_recursiveA(B)
+
+</code></pre></div><p>继续展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_if_eq_recursive1(VALUE) metamacro_if_eq_recursive0(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive2(VALUE) metamacro_if_eq_recursive1(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive3(VALUE) metamacro_if_eq_recursive2(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive4(VALUE) metamacro_if_eq_recursive3(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive5(VALUE) metamacro_if_eq_recursive4(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive6(VALUE) metamacro_if_eq_recursive5(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive7(VALUE) metamacro_if_eq_recursive6(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive8(VALUE) metamacro_if_eq_recursive7(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive9(VALUE) metamacro_if_eq_recursive8(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive10(VALUE) metamacro_if_eq_recursive9(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive11(VALUE) metamacro_if_eq_recursive10(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive12(VALUE) metamacro_if_eq_recursive11(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive13(VALUE) metamacro_if_eq_recursive12(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive14(VALUE) metamacro_if_eq_recursive13(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive15(VALUE) metamacro_if_eq_recursive14(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive16(VALUE) metamacro_if_eq_recursive15(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive17(VALUE) metamacro_if_eq_recursive16(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive18(VALUE) metamacro_if_eq_recursive17(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive19(VALUE) metamacro_if_eq_recursive18(metamacro_dec(VALUE))
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive20(VALUE) metamacro_if_eq_recursive19(metamacro_dec(VALUE))
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>最终肯定会得到metamacro_if_eq_recursive0_，最终的结果就是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_if_eq_recursive0_(B <span style=color:#f92672>-</span> A)
+
+
+</code></pre></div><p>再把metamacro_if_eq_recursive0_展开：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq_recursive0(VALUE) \
+</span><span style=color:#75715e>    metamacro_concat(metamacro_if_eq_recursive0_, VALUE)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>得到最终的式子：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+metamacro_if_eq_recursive0_(B <span style=color:#f92672>-</span> A)
+
+
+</code></pre></div><p>最终再比对下表：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_if_eq_recursive0_0(...) __VA_ARGS__ metamacro_consume_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_1(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_2(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_3(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_4(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_5(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_6(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_7(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_8(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_9(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_10(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_11(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_12(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_13(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_14(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_15(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_16(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_17(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_18(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_19(...) metamacro_expand_
+</span><span style=color:#75715e>#define metamacro_if_eq_recursive0_20(...) metamacro_expand_
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>接下来就和metamacro_if_eq(A, B)宏完全一样了。</p><p>这个递归的宏也从来没有在RAC的其他宏中使用，作者在这里标注说明了这个宏的用处。</p><blockquote><p>This can be used when the former would fail due to recursive macro expansion</p></blockquote><p>由于宏在递归展开中可能会导致递归前置条件失败，在这种情况下，应该使用这个递归宏。当然，它的效果和metamacro_if_eq(A, B)宏是完全一样的。</p><h4 id=15-metamacro_is_evenn>15. metamacro_is_even(N)</h4><p>定义如下：</p><p>N的值域在[0,20]之间。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define metamacro_is_even(N) \
+</span><span style=color:#75715e>        metamacro_at(N, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>这个宏比较简单，就是判断N是不是偶数，下面metamacro_at把所有从0-20的自然数是偶数的都标志成了1，是奇数的都标志成了0。0在这里默认是偶数。</p><h4 id=16-metamacro_notb>16. metamacro_not(B)</h4><p>这里B的取值只能是0或者1。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define metamacro_not(B) \
+</span><span style=color:#75715e>        metamacro_at(B, 1, 0)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这个宏很简单，就是对参数逻辑取非运算。</p><h3 id=三-reactivecocoa-中常用的宏>三. ReactiveCocoa 中常用的宏</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_10.png alt></p><p>上一章节我们分析完了ReactiveCocoa中所有的元宏，这一章节将会把元宏以外的宏的实现都分析一遍。包括我们日常使用的常见的所有宏，它们看似神秘，但是他们都是由这些元宏来组成的。</p><h4 id=1-weakifyunsafeifystrongify>1. weakify(&mldr;)、unsafeify(&mldr;)、strongify(&mldr;)</h4><p>这三个在ReactiveCocoa一定是使用最多的，那么就先来分析这三个。这三个宏的定义在RACEXTScope.h中。</p><p>关于weakify(&mldr;)和strongify(&mldr;)，这两个宏的实现分析在之前的文章里面详细分析过了，详情可以看这篇文章<a href=http://www.jianshu.com/p/701da54bd78c>《深入研究Block用weakSelf、strongSelf、@weakify、@strongify解决循环引用》</a>。</p><p>这里需要再次强调的一点是，在使用weakify(&mldr;)、unsafeify(&mldr;)、strongify(&mldr;)这三个宏的前面需要额外添加@符号。原因是在这三个宏的实现里面都有rac_keywordify，它的实现如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#if DEBUG
+</span><span style=color:#75715e>#define rac_keywordify autoreleasepool {}
+</span><span style=color:#75715e>#else
+</span><span style=color:#75715e>#define rac_keywordify try {} @catch (...) {}
+</span><span style=color:#75715e>#endif
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>不管是在什么环境下，autoreleasepool {} 和 try {} @catch (&mldr;) {} 前面都要添加@符号，变成@autoreleasepool {} 和 @try {} @catch (&mldr;) {} 才可以继续使用。</p><p>既然@weakify(&mldr;)，@strongify(&mldr;)都分析过了，那么这里就分析一下@unsafeify(&mldr;)的实现。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define unsafeify(...) \
+</span><span style=color:#75715e>        rac_keywordify \
+</span><span style=color:#75715e>        metamacro_foreach_cxt(rac_weakify_,, __unsafe_unretained, __VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>rac_keywordify上面说过了，这里就直接展开metamacro_foreach_cxt宏。这里就套用之前元宏的分析，直接拿到最终展开表达式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+    MACRO(<span style=color:#ae81ff>0</span>, CONTEXT, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, CONTEXT, _1) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, CONTEXT, _2) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, CONTEXT, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, CONTEXT, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+</code></pre></div><p>MACRO = rac_weakify_，SEP = 空格，CONTEXT = __unsafe_unretained。代入得到最终的展开式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    rac_weakify_(<span style=color:#ae81ff>0</span>,  __unsafe_unretained, _0) \
+    rac_weakify_(<span style=color:#ae81ff>1</span>,  __unsafe_unretained, _1) \
+    rac_weakify_(<span style=color:#ae81ff>2</span>,  __unsafe_unretained, _2) \
+    rac_weakify_(<span style=color:#ae81ff>3</span>,  __unsafe_unretained, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+    rac_weakify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>,  __unsafe_unretained, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+    rac_weakify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>,  __unsafe_unretained, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+    rac_weakify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>,  __unsafe_unretained, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+    rac_weakify_(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>,  __unsafe_unretained, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+</code></pre></div><p>把rac_weakify_再替换掉：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define rac_weakify_(INDEX, CONTEXT, VAR) \
+</span><span style=color:#75715e>    CONTEXT __typeof__(VAR) metamacro_concat(VAR, _weak_) = (VAR);
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>得到最终的展开表达式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+__unsafe_unretained  __typeof__(_0) _0_weak_ <span style=color:#f92672>=</span> _0<span style=color:#960050;background-color:#1e0010>；</span>
+__unsafe_unretained  __typeof__(_1) _1_weak_ <span style=color:#f92672>=</span> _1<span style=color:#960050;background-color:#1e0010>；</span>
+__unsafe_unretained  __typeof__(_2) _2_weak_ <span style=color:#f92672>=</span> _2<span style=color:#960050;background-color:#1e0010>；</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+__unsafe_unretained  __typeof__(_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>_weak_ <span style=color:#f92672>=</span> _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span><span style=color:#960050;background-color:#1e0010>；</span>
+__unsafe_unretained  __typeof__(_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>_weak_ <span style=color:#f92672>=</span> _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span><span style=color:#960050;background-color:#1e0010>；</span>
+__unsafe_unretained  __typeof__(_N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>) _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>_weak_ <span style=color:#f92672>=</span> _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span><span style=color:#960050;background-color:#1e0010>；</span>
+
+
+
+</code></pre></div><p>其中 _0， _1， _2 …… _N - 3， _N - 2， _N - 1是 __VA_ARGS__里面对应的是0 - N的参数值。</p><h4 id=2-ractuplepack-和-ractupleunpack>2. RACTuplePack(&mldr;) 和 RACTupleUnpack(&mldr;)</h4><p>这两个在ReactiveCocoa中也是非常常见的宏，专门用在RACTuple中。</p><p>先看RACTuplePack(&mldr;)</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTuplePack(...) \
+</span><span style=color:#75715e>        RACTuplePack_(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+</code></pre></div><p>再展开一步：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTuplePack_(...) \
+</span><span style=color:#75715e>        ([RACTuple tupleWithObjectsFromArray:@[ metamacro_foreach(RACTuplePack_object_or_ractuplenil,, __VA_ARGS__) ]])
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>这里调用了RACTuple的tupleWithObjectsFromArray:方法。主要需要展开的是：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+metamacro_foreach(RACTuplePack_object_or_ractuplenil,, __VA_ARGS__) 
+
+
+</code></pre></div><p>直接调用上一章节中metamacro_foreach的最终表达式：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+    MACRO(<span style=color:#ae81ff>0</span>, _0) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>1</span>, _1) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>2</span>, _2) \
+    SEP \
+    MACRO(<span style=color:#ae81ff>3</span>, _3) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>4</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+     SEP \
+    MACRO(N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+
+</code></pre></div><p>MACRO = RACTuplePack_object_or_ractuplenil ， SEP = 空格，替换之后如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACTuplePack_object_or_ractuplenil(<span style=color:#ae81ff>0</span>, _0) \
+RACTuplePack_object_or_ractuplenil(<span style=color:#ae81ff>1</span>, _1) \
+RACTuplePack_object_or_ractuplenil(<span style=color:#ae81ff>2</span>, _2) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+RACTuplePack_object_or_ractuplenil( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>3</span>) \
+RACTuplePack_object_or_ractuplenil( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>2</span>) \
+RACTuplePack_object_or_ractuplenil( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>) 
+
+</code></pre></div><p>最后一步就是替换掉RACTuplePack_object_or_ractuplenil：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTuplePack_object_or_ractuplenil(INDEX, ARG) \
+</span><span style=color:#75715e>    (ARG) ?: RACTupleNil.tupleNil,
+</span><span style=color:#75715e></span>
+</code></pre></div><p>注意这里宏结尾是“，”逗号，而不是“；”分号，原因是因为tupleWithObjectsFromArray:方法里面是各个元素，所以这里用“；”分号就会出错，反而应该用“，”逗号，可见设计宏的时候需要考虑清楚使用场景，不能乱写。</p><p>展开上面最后一层宏之后，原可变参数列表里面的所有非nil的值就都排列到了tupleWithObjectsFromArray:方法里面了，如果是nil的，就会变成RACTupleNil.tupleNil放进Array里面。</p><p>再来看看RACTupleUnpack(&mldr;)</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTupleUnpack(...) \
+</span><span style=color:#75715e>        RACTupleUnpack_(__VA_ARGS__)
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>再展开一步：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTupleUnpack_(...) \
+</span><span style=color:#75715e>    metamacro_foreach(RACTupleUnpack_decl,, __VA_ARGS__) \
+</span><span style=color:#75715e>    \
+</span><span style=color:#75715e>    int RACTupleUnpack_state = 0; \
+</span><span style=color:#75715e>    \
+</span><span style=color:#75715e>    RACTupleUnpack_after: \
+</span><span style=color:#75715e>        ; \
+</span><span style=color:#75715e>        metamacro_foreach(RACTupleUnpack_assign,, __VA_ARGS__) \
+</span><span style=color:#75715e>        if (RACTupleUnpack_state != 0) RACTupleUnpack_state = 2; \
+</span><span style=color:#75715e>        \
+</span><span style=color:#75715e>        while (RACTupleUnpack_state != 2) \
+</span><span style=color:#75715e>            if (RACTupleUnpack_state == 1) { \
+</span><span style=color:#75715e>                goto RACTupleUnpack_after; \
+</span><span style=color:#75715e>            } else \
+</span><span style=color:#75715e>                for (; RACTupleUnpack_state != 1; RACTupleUnpack_state = 1) \
+</span><span style=color:#75715e>                    [RACTupleUnpackingTrampoline trampoline][ @[ metamacro_foreach(RACTupleUnpack_value,, __VA_ARGS__) ] ]
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>乍一看这个宏像一段程序，仔细分析一下也不难。RACTupleUnpack_state 就是一个局部变量，代表状态的。RACTupleUnpack_after: 这是一个标号，用来给goto跳转使用的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 1
+</span><span style=color:#75715e></span>metamacro_foreach(RACTupleUnpack_decl,, __VA_ARGS__) 
+<span style=color:#75715e>// 2
+</span><span style=color:#75715e></span>metamacro_foreach(RACTupleUnpack_assign,, __VA_ARGS__)
+<span style=color:#75715e>// 3
+</span><span style=color:#75715e></span>metamacro_foreach(RACTupleUnpack_value,, __VA_ARGS__)
+
+</code></pre></div><p>这里面需要展开的就是这3个宏了。</p><p>套用上一章节中metamacro_foreach的最终表达式，直接把MACRO分别为 RACTupleUnpack_decl，RACTupleUnpack_assign，RACTupleUnpack_value 代入表达式。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>// 1
+</span><span style=color:#75715e></span>RACTupleUnpack_decl(<span style=color:#ae81ff>0</span>, _0) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+RACTupleUnpack_decl( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+<span style=color:#75715e>// 2
+</span><span style=color:#75715e></span>RACTupleUnpack_assign(<span style=color:#ae81ff>0</span>, _0) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+RACTupleUnpack_assign( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+<span style=color:#75715e>// 3
+</span><span style=color:#75715e></span>RACTupleUnpack_value(<span style=color:#ae81ff>0</span>, _0) \
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+     <span style=color:#960050;background-color:#1e0010>……</span>
+RACTupleUnpack_value( N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>, _N <span style=color:#f92672>-</span> <span style=color:#ae81ff>1</span>)
+
+
+</code></pre></div><p>分别替换掉这3个宏：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTupleUnpack_decl(INDEX, ARG) \
+</span><span style=color:#75715e>    __strong id RACTupleUnpack_decl_name(INDEX);
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define RACTupleUnpack_assign(INDEX, ARG) \
+</span><span style=color:#75715e>    __strong ARG = RACTupleUnpack_decl_name(INDEX);
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define RACTupleUnpack_value(INDEX, ARG) \
+</span><span style=color:#75715e>    [NSValue valueWithPointer:&amp;RACTupleUnpack_decl_name(INDEX)],
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>发现这3个宏都是用RACTupleUnpack_decl_name实现的。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACTupleUnpack_decl_name(INDEX) \
+</span><span style=color:#75715e>        metamacro_concat(metamacro_concat(RACTupleUnpack, __LINE__), metamacro_concat(_var, INDEX))
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>这个展开就是一个名字：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+RACTupleUnpack __LINE__ _varINDEX
+
+</code></pre></div><p>之后的实现，请看<a href=http://www.jianshu.com/p/5c2119b3f2eb>《ReactiveCocoa 中 集合类RACSequence 和 RACTuple底层实现分析》</a>这篇文章的详细分析。</p><h4 id=3-racobservetarget-keypath>3. RACObserve(TARGET, KEYPATH)</h4><p>定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RACObserve(TARGET, KEYPATH) \
+</span><span style=color:#75715e>	({ \
+</span><span style=color:#75715e>		_Pragma(&#34;clang diagnostic push&#34;) \
+</span><span style=color:#75715e>		_Pragma(&#34;clang diagnostic ignored \&#34;-Wreceiver-is-weak\&#34;&#34;) \
+</span><span style=color:#75715e>		__weak id target_ = (TARGET); \
+</span><span style=color:#75715e>		[target_ rac_valuesForKeyPath:@keypath(TARGET, KEYPATH) observer:self]; \
+</span><span style=color:#75715e>		_Pragma(&#34;clang diagnostic pop&#34;) \
+</span><span style=color:#75715e>	})
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>看完定义，RACObserve(TARGET, KEYPATH) 实质其实就是调用了rac_valuesForKeyPath:方法。这个方法是NSObject的一个category，所以只要是NSObject就可以调用这个方法。所以这里的关键就是要分析清楚@keypath(TARGET, KEYPATH) 这个宏的实现。</p><p>以下重点分析一下keypath(&mldr;)的实现</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define keypath(...) \
+</span><span style=color:#75715e>    metamacro_if_eq(1, metamacro_argcount(__VA_ARGS__))(keypath1(__VA_ARGS__))(keypath2(__VA_ARGS__))
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define keypath1(PATH) \
+</span><span style=color:#75715e>    (((void)(NO &amp;&amp; ((void)PATH, NO)), strchr(# PATH, &#39;.&#39;) + 1))
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define keypath2(OBJ, PATH) \
+</span><span style=color:#75715e>    (((void)(NO &amp;&amp; ((void)OBJ.PATH, NO)), # PATH))
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>metamacro_argcount这个宏在元宏里面分析过，是取出可变参数个数的。metamacro_if_eq也详细分析过，是判断里面2个参数是否相当的。所以keypath(&mldr;)总体展开的意思是说，可变参数的个数是否等于1，如果等于1，就执行(keypath1(__VA_ARGS__))，如果不等于1，就执行(keypath2(__VA_ARGS__))。</p><p>这里有几点需要说明的：</p><p>1.加void是为了防止逗号表达式的warning。例如：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#66d9ef>int</span> a<span style=color:#f92672>=</span><span style=color:#ae81ff>0</span>; <span style=color:#66d9ef>int</span> b <span style=color:#f92672>=</span> <span style=color:#ae81ff>1</span>;
+<span style=color:#66d9ef>int</span> c <span style=color:#f92672>=</span> (a,b);
+
+
+</code></pre></div><p>由于a没有被用到，所以会有警告。但是写成如下的样子就不会出现警告了：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#66d9ef>int</span> c <span style=color:#f92672>=</span> ((<span style=color:#66d9ef>void</span>)a,b);
+
+
+</code></pre></div><p>所以上面keypath1和keypath2加了几个void就是为了防止出现warning。</p><p>2.加NO是C语言判断条件短路表达式。增加NO && 以后，预编译的时候看见了NO，就会很快的跳过判断条件。</p><p>3.strchr函数原型如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-c data-lang=c>
+<span style=color:#66d9ef>extern</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span><span style=color:#a6e22e>strchr</span>(<span style=color:#66d9ef>const</span> <span style=color:#66d9ef>char</span> <span style=color:#f92672>*</span>s,<span style=color:#66d9ef>char</span> c);
+
+</code></pre></div><p>查找字符串s中首次出现字符c的位置。返回首次出现字符c的位置的指针，返回的地址是被查找字符串指针开始的第一个与字符c相同字符的指针，如果字符串中不存在字符c则返回NULL。</p><p>4.当输入self.的时候，会出现编译器的语法提示，原因是OBJ.PATH，因为这里的点，所以输入第二个参数时编辑器会给出正确的代码提示。</p><p>5.使用keypath(&mldr;)的时候前面会加上@符号，原因是经过keypath1(PATH)和keypath2(OBJ, PATH)之后出现的结果是一个C的字符串，前面加上@以后，就变成了OC的字符串了。</p><p>举3个例子</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+
+<span style=color:#75715e>// 例子1，一个参数的情况，会调用keypath1(PATH)
+</span><span style=color:#75715e></span>NSString <span style=color:#f92672>*</span>UTF8StringPath <span style=color:#f92672>=</span> @keypath(str.lowercaseString.UTF8String);
+<span style=color:#75715e>// 输出=&gt; @&#34;lowercaseString.UTF8String&#34;
+</span><span style=color:#75715e></span>
+
+<span style=color:#75715e>// 例子2，2个参数的情况，支持自省
+</span><span style=color:#75715e></span>NSString <span style=color:#f92672>*</span>versionPath <span style=color:#f92672>=</span> @keypath(NSObject, version);
+<span style=color:#75715e>//  输出=&gt; @&#34;version&#34;
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>// 例子3，2个参数的情况
+</span><span style=color:#75715e></span>NSString <span style=color:#f92672>*</span>lowercaseStringPath <span style=color:#f92672>=</span> @keypath(NSString.new, lowercaseString);
+<span style=color:#75715e>// 输出=&gt; @&#34;lowercaseString&#34;
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>相应的也有集合类的keypath</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define collectionKeypath(...) \
+</span><span style=color:#75715e>    metamacro_if_eq(3, metamacro_argcount(__VA_ARGS__))(collectionKeypath3(__VA_ARGS__))(collectionKeypath4(__VA_ARGS__))
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define collectionKeypath3(PATH, COLLECTION_OBJECT, COLLECTION_PATH) ([[NSString stringWithFormat:@&#34;%s.%s&#34;,keypath(PATH), keypath(COLLECTION_OBJECT, COLLECTION_PATH)] UTF8String])
+</span><span style=color:#75715e></span>
+<span style=color:#75715e>#define collectionKeypath4(OBJ, PATH, COLLECTION_OBJECT, COLLECTION_PATH) ([[NSString stringWithFormat:@&#34;%s.%s&#34;,keypath(OBJ, PATH), keypath(COLLECTION_OBJECT, COLLECTION_PATH)] UTF8String])
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>原理也是调用了keypath(PATH)，原理这里就不再赘述了。</p><h4 id=4-ractarget->4. RAC(TARGET, &mldr;)</h4><p>宏定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define RAC(TARGET, ...) \
+</span><span style=color:#75715e>        metamacro_if_eq(1, metamacro_argcount(__VA_ARGS__)) \
+</span><span style=color:#75715e>        (RAC_(TARGET, __VA_ARGS__, nil)) \
+</span><span style=color:#75715e>        (RAC_(TARGET, __VA_ARGS__))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>RAC(TARGET, &mldr;) 和上一个RACObserve(TARGET, KEYPATH)原理类似。如果只有一个参数就调用(RAC_(TARGET, __VA_ARGS__, nil))，如果是多个参数就调用(RAC_(TARGET, __VA_ARGS__))。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define RAC_(TARGET, KEYPATH, NILVALUE) \
+</span><span style=color:#75715e>        [[RACSubscriptingAssignmentTrampoline alloc] initWithTarget:(TARGET) nilValue:(NILVALUE)][@keypath(TARGET, KEYPATH)]
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>到这里就很明了了，其实内部就是调用RACSubscriptingAssignmentTrampoline类的initWithTarget: nilValue:方法。</p><p>我们都知道RAC(TARGET, &mldr;)宏是用来把一个信号绑定给一个对象的属性，绑定之后，每次信号发送出一个新的值，就会自动设定到执行的keypath中。当信号完成之后，这次绑定也会自动的解除。</p><p>RAC_(TARGET, KEYPATH, NILVALUE) 会把信号绑定到TARGET指定的KEYPATH上。如果信号发送了nil的值，那么会替换成NILVALUE赋值给对应的属性值上。</p><p>RAC_(TARGET, __VA_ARGS__)只不过是RAC_(TARGET, KEYPATH, NILVALUE)第三个参数为nil。</p><h4 id=5-racchanneltotarget->5. RACChannelTo(TARGET, &mldr;)</h4><p>RACChannelTo(TARGET, &mldr;)这个宏完全可以类比RAC(TARGET, &mldr;)，两个几乎完全一样。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define RACChannelTo(TARGET, ...) \
+</span><span style=color:#75715e>    metamacro_if_eq(1, metamacro_argcount(__VA_ARGS__)) \
+</span><span style=color:#75715e>        (RACChannelTo_(TARGET, __VA_ARGS__, nil)) \
+</span><span style=color:#75715e>        (RACChannelTo_(TARGET, __VA_ARGS__))
+</span><span style=color:#75715e></span>
+
+</code></pre></div><p>如果只有一个参数就调用(RACChannelTo_(TARGET, __VA_ARGS__, nil)) ，如果是多个参数就调用(RACChannelTo_(TARGET, __VA_ARGS__))。(RACChannelTo_(TARGET, __VA_ARGS__))相当于是(RACChannelTo_(TARGET, __VA_ARGS__, nil)) 第三个参数传了nil。</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+
+<span style=color:#75715e>#define RACChannelTo_(TARGET, KEYPATH, NILVALUE) \
+</span><span style=color:#75715e>    [[RACKVOChannel alloc] initWithTarget:(TARGET) keyPath:@keypath(TARGET, KEYPATH) nilValue:(NILVALUE)][@keypath(RACKVOChannel.new, followingTerminal)]
+</span><span style=color:#75715e></span>
+</code></pre></div><p>最终内部是调用了RACKVOChannel的initWithTarget: keyPath: nilValue:方法。具体原理可以完全类比RAC(TARGET, &mldr;)宏展开，这里不再赘述。</p><p>平时我们都是这样用：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+   RACChannelTo(view, objectProperty) <span style=color:#f92672>=</span> RACChannelTo(model, objectProperty);
+   RACChannelTo(view, integerProperty, <span style=color:#ae81ff>@2</span>) <span style=color:#f92672>=</span> RACChannelTo(model, integerProperty, <span style=color:#ae81ff>@10</span>);
+
+
+</code></pre></div><h4 id=6-onexit>6. onExit</h4><p>宏定义如下：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+<span style=color:#75715e>#define onExit \
+</span><span style=color:#75715e>    rac_keywordify \
+</span><span style=color:#75715e>    __strong rac_cleanupBlock_t metamacro_concat(rac_exitBlock_, __LINE__) __attribute__((cleanup(rac_executeCleanupBlock), unused)) = ^
+</span><span style=color:#75715e></span>
+
+
+</code></pre></div><p>由于rac_keywordify的存在，所以在使用onExit的时候，前面也要加上@符号。</p><p>这个宏比较特殊，最后是跟着一个闭包，比如这样：</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-objectivec data-lang=objectivec>
+        @onExit {
+		      free(attributes);
+	    };
+
+        @onExit {
+				[objectLock unlock];
+			};
+
+
+</code></pre></div><p>@onExit定义当前代码段退出时要执行的一些代码。代码必须用大括号括起来并以分号结尾，无论是何种情况（包括出现异常，goto语句，return语句，break语句，continue语句）下跳出代码段，都会执行onExit后面的代码。</p><p>@onExit提供的代码被放进一个block块中，之后才会执行。因为在闭包中，所以它也必须遵循内存管理方面的规则。@onExit是以一种合理的方式提前退出清理块。</p><p>在相同代码段中如果有多个@onExit语句，那么他们是按照反字典序的顺序执行的。</p><p>@onExit语句不能在没有大括号的范围内使用。在实际使用过程中，这不是一个问题，因为@onExit后面如果没有大括号，那么它是一个无用的结构，不会有任何事情发生。</p><h3 id=最后>最后</h3><p><img src=https://img.halfrost.com/Blog/ArticleImage/39_11.jpg alt></p><p>关于ReactiveCocoa里面所有宏的实现分析都已经分析完成。我觉得宏是对一段逻辑的高度抽象，当一个宏被思维完备的开发人员设计出来以后，就是一个充满神奇色彩的魔法！如果能把一些简单实用的功能或者逻辑抽象成宏，把这些时间都节约到预编译中，节约运行时的时间，单从编码的程度来说，都是极有乐趣的一件事情！如果以后有机会，希望还能和大家交流交流Lisp里面的相关宏魔法的知识。</p><img src=https://img.halfrost.com/wechat-qr-code.png></div></article><div id=footer-post-container><div id=footer-post><div id=nav-footer style=display:none><ul><li><a href=/>Home</a></li><li><a href=https://books.halfrost.com/>Books</a></li><li><a href=https://github.com/halfrost/Halfrost-Field>Github</a></li><li><a href=https://halfrost.me/>About</a></li><li><a href=/index.xml>RSS</a></li></ul></div><div id=toc-footer style=display:none><nav id=TableOfContents><ul><li><ul><li><a href=#前言>前言</a></li><li><a href=#目录>目录</a></li><li><a href=#一-关于宏>一. 关于宏</a></li><li><a href=#二-reactivecocoa-中的元宏>二. ReactiveCocoa 中的元宏</a><ul><li><a href=#1-metamacro_stringifyvalue>1. metamacro_stringify(VALUE)</a></li><li><a href=#2-metamacro_concata-b>2. metamacro_concat(A, B)</a></li><li><a href=#3-metamacro_argcount-和-metamacro_atn->3. metamacro_argcount(&mldr;) 和 metamacro_at(N, &mldr;)</a></li><li><a href=#4-metamacro_foreachmacro-sep--和-metamacro_foreach_cxtmacro-sep-context->4. metamacro_foreach(MACRO, SEP, &mldr;) 和 metamacro_foreach_cxt(MACRO, SEP, CONTEXT, &mldr;)</a></li><li><a href=#5-metamacro_foreach_cxt_recursivemacro-sep-context->5. metamacro_foreach_cxt_recursive(MACRO, SEP, CONTEXT, &mldr;)</a></li><li><a href=#6-metamacro_foreach_concatbase-sep->6. metamacro_foreach_concat(BASE, SEP, &mldr;)</a></li><li><a href=#7-metamacro_for_cxtcount-macro-sep-context>7. metamacro_for_cxt(COUNT, MACRO, SEP, CONTEXT)</a></li><li><a href=#8-metamacro_head>8. metamacro_head(&mldr;)</a></li><li><a href=#9-metamacro_tail>9. metamacro_tail(&mldr;)</a></li><li><a href=#10-metamacro_taken->10. metamacro_take(N, &mldr;)</a></li><li><a href=#11-metamacro_dropn->11. metamacro_drop(N, &mldr;)</a></li><li><a href=#12-metamacro_decval-和-metamacro_incval>12. metamacro_dec(VAL) 和 metamacro_inc(VAL)</a></li><li><a href=#13-metamacro_if_eqa-b>13. metamacro_if_eq(A, B)</a></li><li><a href=#14-metamacro_if_eq_recursivea-b>14. metamacro_if_eq_recursive(A, B)</a></li><li><a href=#15-metamacro_is_evenn>15. metamacro_is_even(N)</a></li><li><a href=#16-metamacro_notb>16. metamacro_not(B)</a></li></ul></li><li><a href=#三-reactivecocoa-中常用的宏>三. ReactiveCocoa 中常用的宏</a><ul><li><a href=#1-weakifyunsafeifystrongify>1. weakify(&mldr;)、unsafeify(&mldr;)、strongify(&mldr;)</a></li><li><a href=#2-ractuplepack-和-ractupleunpack>2. RACTuplePack(&mldr;) 和 RACTupleUnpack(&mldr;)</a></li><li><a href=#3-racobservetarget-keypath>3. RACObserve(TARGET, KEYPATH)</a></li><li><a href=#4-ractarget->4. RAC(TARGET, &mldr;)</a></li><li><a href=#5-racchanneltotarget->5. RACChannelTo(TARGET, &mldr;)</a></li><li><a href=#6-onexit>6. onExit</a></li></ul></li><li><a href=#最后>最后</a></li></ul></li></ul></nav></div><div id=share-footer style=display:none><ul><li><a class=icon href="http://www.facebook.com/sharer.php?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f"><i class="fab fa-facebook fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://twitter.com/share?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&text=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-twitter fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.linkedin.com/shareArticle?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-linkedin fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://pinterest.com/pin/create/bookmarklet/?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&is_video=false&description=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-pinterest fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="mailto:?subject=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95&body=Check out this article: https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f"><i class="fas fa-envelope fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://getpocket.com/save?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-get-pocket fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://reddit.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-reddit fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.stumbleupon.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-stumbleupon fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://digg.com/submit?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&title=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-digg fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="http://www.tumblr.com/share/link?url=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&name=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95&description=%e5%89%8d%e8%a8%80%20%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%ef%bc%8c%e5%bc%80%e6%ba%90%e5%ba%93%e4%bd%9c%e8%80%85%e4%b8%ba%e6%88%91%e4%bb%ac%e6%8f%90%e4%be%9b%e4%ba%86%e5%be%88%e5%a4%9a%e7%a7%8d%e9%ad%94%e6%b3%95%ef%bc%8c%e2%80%9c%e9%bb%91%e2%80%9d%e9%ad%94%e6%b3%95%ef%bc%8c%e2%80%9c%e7%ba%a2%e2%80%9d%e9%ad%94%e6%b3%95%e2%80%a6%e2%80%a6%e4%bb%8a%e5%a4%a9%e5%b0%b1%e8%ae%a9%e5%85%88%e6%9d%a5%e7%9c%8b%e7%9c%8b%e2%80%9c%e7%ba%a2%e2%80%9d%e9%ad%94%e6%b3%95%e3%80%82%0a%e5%9c%a8ReactiveCocoa%20%e4%b8%ad%ef%bc%8c%e5%b0%81%e8%a3%85%e4%ba%86%e5%be%88%e5%a4%9a%e9%9d%9e%e5%b8%b8%e5%ae%9e%e7%94%a8%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%ef%bc%8c%e4%bd%bf%e7%94%a8%e8%bf%99%e4%ba%9b%e2%80%9c%e5%ae%8f%e2%80%9d%e4%b8%ba%e6%88%91%e4%bb%ac%e5%bc%80%e5%8f%91%e5%b8%a6%e6%9d%a5%e4%ba%86%e5%be%88%e5%a4%9a%e7%9a%84%e4%be%bf%e5%88%a9%e3%80%82%0a%e4%bb%8a%e5%a4%a9%e5%b0%b1%e6%9d%a5%e7%9b%98%e7%82%b9%e4%b8%80%e4%b8%8bRAC%e4%b8%ad%e7%9a%84%e5%ae%8f%e6%98%af%e5%a6%82%e4%bd%95%e5%ae%9e%e7%8e%b0%e7%9a%84%e3%80%82%0a%e7%9b%ae%e5%bd%95%20%201.%e5%85%b3%e4%ba%8e%e5%ae%8f%202.ReactiveCocoa%20%e4%b8%ad%e7%9a%84%e5%85%83%e5%ae%8f%203.ReactiveCocoa%20%e4%b8%ad%e5%b8%b8%e7%94%a8%e7%9a%84%e5%ae%8f%20%20%e4%b8%80.%20%e5%85%b3%e4%ba%8e%e5%ae%8f%20%20%e5%ae%8f%ef%bc%88Macro%ef%bc%89%ef%bc%8c%e6%98%af%e4%b8%80%e7%a7%8d%e6%89%b9%e9%87%8f%e5%a4%84%e7%90%86%e7%9a%84%e7%a7%b0%e8%b0%93%e3%80%82%0a%20%e5%9c%a8%e7%bc%96%e7%a8%8b%e9%a2%86%e5%9f%9f%e9%87%8c%e7%9a%84%e5%ae%8f%e6%98%af%e4%b8%80%e7%a7%8d%e6%8a%bd%e8%b1%a1%ef%bc%88Abstraction%ef%bc%89%ef%bc%8c%e5%ae%83%e6%a0%b9%e6%8d%ae%e4%b8%80%e7%b3%bb%e5%88%97%e9%a2%84%e5%ae%9a%e4%b9%89%e7%9a%84%e8%a7%84%e5%88%99%e6%9b%bf%e6%8d%a2%e4%b8%80%e5%ae%9a%e7%9a%84%e6%96%87%e6%9c%ac%e6%a8%a1%e5%bc%8f%e3%80%82%e8%a7%a3%e9%87%8a%e5%99%a8%e6%88%96%e7%bc%96%e8%af%91%e5%99%a8%e5%9c%a8%e9%81%87%e5%88%b0%e5%ae%8f%e6%97%b6%e4%bc%9a%e8%87%aa%e5%8a%a8%e8%bf%9b%e8%a1%8c%e8%bf%99%e4%b8%80%e6%a8%a1%e5%bc%8f%e6%9b%bf%e6%8d%a2%e3%80%82%e7%bb%9d%e5%a4%a7%e5%a4%9a%e6%95%b0%e6%83%85%e5%86%b5%e4%b8%8b%ef%bc%8c%e2%80%9c%e5%ae%8f%e2%80%9d%e8%bf%99%e4%b8%aa%e8%af%8d%e7%9a%84%e4%bd%bf%e7%94%a8%e6%9a%97%e7%a4%ba%e7%9d%80%e5%b0%86%e5%b0%8f%e5%91%bd%e4%bb%a4%e6%88%96%e5%8a%a8%e4%bd%9c%e8%bd%ac%e5%8c%96%e4%b8%ba%e4%b8%80%e7%b3%bb%e5%88%97%e6%8c%87%e4%bb%a4%e3%80%82%0a%e5%ae%8f%e7%9a%84%e7%94%a8%e9%80%94%e5%9c%a8%e4%ba%8e%e8%87%aa%e5%8a%a8%e5%8c%96%e9%a2%91%e7%b9%81%e4%bd%bf%e7%94%a8%e7%9a%84%e5%ba%8f%e5%88%97%e6%88%96%e8%80%85%e6%98%af%e8%8e%b7%e5%be%97%e4%b8%80%e7%a7%8d%e6%9b%b4%e5%bc%ba%e5%a4%a7%e7%9a%84%e6%8a%bd%e8%b1%a1%e8%83%bd%e5%8a%9b%e3%80%82%20%e8%ae%a1%e7%ae%97%e6%9c%ba%e8%af%ad%e8%a8%80%e5%a6%82C%e8%af%ad%e8%a8%80%e6%88%96%e6%b1%87%e7%bc%96%e8%af%ad%e8%a8%80%e6%9c%89%e7%ae%80%e5%8d%95%e7%9a%84%e5%ae%8f%e7%b3%bb%e7%bb%9f%ef%bc%8c%e7%94%b1%e7%bc%96%e8%af%91%e5%99%a8%e6%88%96%e6%b1%87%e7%bc%96%e5%99%a8%e7%9a%84%e9%a2%84%e5%a4%84%e7%90%86%e5%99%a8%e5%ae%9e%e7%8e%b0%e3%80%82C%e8%af%ad%e8%a8%80%e7%9a%84%e5%ae%8f%e9%a2%84%e5%a4%84%e7%90%86%e5%99%a8%e7%9a%84%e5%b7%a5%e4%bd%9c%e5%8f%aa%e6%98%af%e7%ae%80%e5%8d%95%e7%9a%84%e6%96%87%e6%9c%ac%e6%90%9c%e7%b4%a2%e5%92%8c%e6%9b%bf%e6%8d%a2%ef%bc%8c%e4%bd%bf%e7%94%a8%e9%99%84%e5%8a%a0%e7%9a%84%e6%96%87%e6%9c%ac%e5%a4%84%e7%90%86%e8%af%ad%e8%a8%80%e5%a6%82M4%ef%bc%8cC%e7%a8%8b%e5%ba%8f%e5%91%98%e5%8f%af%e4%bb%a5%e8%8e%b7%e5%be%97%e6%9b%b4%e7%b2%be%e5%b7%a7%e7%9a%84%e5%ae%8f%e3%80%82%0aLisp%e7%b1%bb%e8%af%ad%e8%a8%80%e5%a6%82Common%20Lisp%e5%92%8cScheme%e6%9c%89%e6%9b%b4%e7%b2%be%e5%b7%a7%e7%9a%84%e5%ae%8f%e7%b3%bb%e7%bb%9f%ef%bc%9a%e5%ae%8f%e7%9a%84%e8%a1%8c%e4%b8%ba%e5%a6%82%e5%90%8c%e6%98%af%e5%87%bd%e6%95%b0%e5%af%b9%e8%87%aa%e8%ba%ab%e7%a8%8b%e5%ba%8f%e6%96%87%e6%9c%ac%e7%9a%84%e5%8f%98%e5%bd%a2%ef%bc%8c%e5%b9%b6%e4%b8%94%e5%8f%af%e4%bb%a5%e5%ba%94%e7%94%a8%e5%85%a8%e9%83%a8%e8%af%ad%e8%a8%80%e6%9d%a5%e8%a1%a8%e8%be%be%e8%bf%99%e7%a7%8d%e5%8f%98%e5%bd%a2%e3%80%82%e4%b8%80%e4%b8%aaC%e5%ae%8f%e5%8f%af%e4%bb%a5%e5%ae%9a%e4%b9%89%e4%b8%80%e6%ae%b5%e8%af%ad%e6%b3%95%e7%9a%84%e6%9b%bf%e6%8d%a2%ef%bc%8c%e7%84%b6%e8%80%8c%e4%b8%80%e4%b8%aaLisp%e7%9a%84%e5%ae%8f%e5%8d%b4%e5%8f%af%e4%bb%a5%e6%8e%a7%e5%88%b6%e4%b8%80%e8%8a%82%e4%bb%a3%e7%a0%81%e7%9a%84%e8%ae%a1%e7%ae%97%e3%80%82%0a%e5%af%b9%e4%ba%8e%e7%bc%96%e8%af%91%e8%af%ad%e8%a8%80%e6%9d%a5%e8%af%b4%ef%bc%8c%e6%89%80%e6%9c%89%e7%9a%84%e5%ae%8f%e9%83%bd%e6%98%af%e5%9c%a8%e9%a2%84%e7%bc%96%e8%af%91%e7%9a%84%e6%97%b6%e5%80%99%e8%a2%ab%e5%b1%95%e5%bc%80%e7%9a%84%ef%bc%8c%e6%89%80%e4%bb%a5%e5%9c%a8lex%e8%bf%9b%e8%a1%8c%e8%af%8d%e6%b3%95%e6%89%ab%e6%8f%8f%e7%94%9f%e6%88%90Token%ef%bc%8c%e8%af%8d%e6%b3%95%e5%88%86%e6%9e%90%e8%bf%87%e7%a8%8b%e4%b9%8b%e5%89%8d%ef%bc%8c%e6%89%80%e6%9c%89%e7%9a%84%e5%ae%8f%e9%83%bd%e5%b7%b2%e7%bb%8f%e8%a2%ab%e5%b1%95%e5%bc%80%e5%ae%8c%e6%88%90%e4%ba%86%e3%80%82%0a%e5%af%b9%e4%ba%8eXcode%ef%bc%8c%e9%a2%84%e5%a4%84%e7%90%86%e6%88%96%e8%80%85%e9%a2%84%e7%bc%96%e8%af%91%e9%98%b6%e6%ae%b5%e6%98%af%e5%8f%af%e4%bb%a5%e7%9b%b4%e6%8e%a5%e6%9f%a5%e7%9c%8b%e7%9a%84%e3%80%82%0a%e9%9a%8f%e4%be%bf%e5%86%99%e4%b8%80%e4%b8%aa%e5%ae%8f%ef%bc%8c%e7%84%b6%e5%90%8e%e6%89%93%e5%bc%80Xcode%e5%8f%b3%e4%b8%8a%e6%96%b9%e7%9a%84Assistant%ef%bc%8c%e9%80%89%e6%8b%a9%e2%80%9cPreprocess%e2%80%9d%e5%b0%b1%e5%8f%af%e4%bb%a5%e7%9c%8b%e5%88%b0%e8%af%a5%e6%96%87%e4%bb%b6%e9%a2%84%e5%a4%84%e7%90%86%e4%b9%8b%e5%90%8e%e7%9a%84%e6%a0%b7%e5%ad%90%e4%ba%86%e3%80%82%e5%8f%af%e4%bb%a5%e7%9c%8b%e5%88%b0%e5%b7%a6%e8%be%b9%e7%9a%84%40weakify%28self%29%20%e8%a2%ab%e8%bd%ac%e6%8d%a2%e6%88%90%e4%ba%86%e5%8f%b3%e8%be%b9%e7%9a%84%e4%b8%a4%e8%a1%8c%e4%bb%a3%e7%a0%81%e4%ba%86%e3%80%82%0a%e5%85%b3%e4%ba%8e%e8%bf%99%e4%b8%aaXcode%e7%9a%84%e8%bf%99%e4%b8%aa%e5%8a%9f%e8%83%bd%e8%bf%98%e6%9c%892%e7%82%b9%e8%a1%a5%e5%85%85%e8%af%b4%e6%98%8e%ef%bc%9a%0a1.%e4%b8%8d%e5%90%8c%e9%98%b6%e6%ae%b5%e7%9a%84Preprocessed%e5%8f%af%e8%83%bd%e4%b8%8d%e5%90%8c%ef%bc%8c%e8%a6%81%e6%a0%b9%e6%8d%ae%e4%bd%a0%e7%9a%84%e7%9b%ae%e6%a0%87%e5%8e%bb%e9%80%89%e6%8b%a9%e9%a2%84%e5%a4%84%e7%90%86%e7%9a%84%e6%9d%a1%e4%bb%b6%e3%80%82%0a%e6%af%94%e5%a6%82%e8%bf%99%e9%87%8c%e5%b0%b1%e6%9c%895%e7%a7%8d%e9%a2%84%e7%bc%96%e8%af%91%e7%9a%84%e7%a7%8d%e7%b1%bb%e5%8f%af%e4%bb%a5%e9%80%89%e6%8b%a9%e3%80%82%0a2.%e5%ae%8f%e7%bb%8f%e8%bf%87%e9%a2%84%e7%bc%96%e8%af%91%e4%b9%8b%e5%90%8e%e5%87%ba%e6%9d%a5%e7%9a%84%e4%bb%a3%e7%a0%81%ef%bc%8c%e6%98%af%e5%8f%af%e4%bb%a5%e7%94%a8%e6%9d%a5%e6%a3%80%e6%b5%8b%e5%ae%8f%e5%86%99%e7%9a%84%e6%98%af%e5%90%a6%e6%ad%a3%e7%a1%ae%e7%9a%84%ef%bc%8c%e4%bd%86%e6%98%af%e6%97%a0%e6%b3%95%e7%9c%8b%e5%88%b0%e5%ae%8f%e8%a2%ab%e5%b1%95%e5%bc%80%e7%9a%84%e5%85%b7%e4%bd%93%e8%bf%87%e7%a8%8b%e3%80%82%e8%bf%99%e6%84%8f%e5%91%b3%e7%9d%80%e6%88%91%e4%bb%ac%e5%8f%af%e4%bb%a5%e9%80%9a%e8%bf%87Xcode%e8%bf%99%e4%b8%aa%e5%8a%9f%e8%83%bd%e6%9d%a5%e6%9f%a5%e7%9c%8b%e5%ae%8f%e7%9a%84%e4%bd%9c%e7%94%a8%ef%bc%8c%e4%bd%86%e6%98%af%e6%97%a0%e6%b3%95%e7%9f%a5%e9%81%93%e5%ae%8f%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e3%80%82%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e8%bf%98%e6%98%af%e9%9c%80%e8%a6%81%e9%80%9a%e8%bf%87%e6%9f%a5%e7%9c%8b%e6%ba%90%e7%a0%81%e6%9d%a5%e5%88%86%e6%9e%90%e3%80%82%0aReactiveCocoa%e4%b8%ad%e7%9a%84%e5%ae%8f%ef%bc%8c%e5%a6%82%e6%9e%9c%e4%b8%8d%e6%9f%a5%e7%9c%8b%e6%ba%90%e7%a0%81%e5%88%86%e6%9e%90%ef%bc%8c%e4%bc%9a%e8%a7%89%e5%be%97%e9%82%a3%e4%ba%9b%e5%ae%8f%e9%83%bd%e5%83%8f%e9%ad%94%e6%b3%95%e4%b8%80%e6%a0%b7%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%ef%bc%8c%e6%8e%a5%e4%b8%8b%e6%9d%a5%e5%b0%b1%e6%9d%a5%e8%a7%a3%e5%bc%80%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95%e7%9a%84%e7%a5%9e%e7%a7%98%e9%9d%a2%e7%ba%b1%e3%80%82%0a%e4%ba%8c.%20ReactiveCocoa%20%e4%b8%ad%e7%9a%84%e5%85%83%e5%ae%8f%20%e5%9c%a8ReactiveCocoa%e7%9a%84%e5%ae%8f%e4%b8%ad%ef%bc%8c%e4%bd%9c%e8%80%85%e5%ae%9a%e4%b9%89%e4%ba%86%e8%bf%99%e4%b9%88%e4%b8%80%e4%ba%9b%e5%9f%ba%e7%a1%80%e7%9a%84%e5%ae%8f%ef%bc%8c%e4%bd%9c%e4%b8%ba%e2%80%9c%e5%85%83%e5%ae%8f%e2%80%9d%ef%bc%8c%e5%ae%83%e4%bb%ac%e6%98%af%e6%9e%84%e6%88%90%e4%b9%8b%e5%90%8e%e5%a4%8d%e6%9d%82%e5%ae%8f%e7%9a%84%e5%9f%ba%e7%a1%80%e3%80%82%e5%9c%a8%e5%88%86%e6%9e%90%e5%b8%b8%e7%94%a8%e5%ae%8f%e4%b9%8b%e5%89%8d%ef%bc%8c%e5%bf%85%e9%a1%bb%e8%a6%81%e5%85%88%e5%88%86%e6%9e%90%e6%b8%85%e6%a5%9a%e8%bf%99%e4%ba%9b%e5%85%83%e5%ae%8f%e7%9a%84%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0%e3%80%82%0a1.%20metamacro_stringify%28VALUE%29%20%23define%20metamacro_stringify%28VALUE%29%20%5c%20metamacro_stringify_%28VALUE%29%20%20%23define%20metamacro_stringify_%28VALUE%29%20%23%20VALUE%20%20metamacro_stringify%28%20%29%e8%bf%99%e4%b8%aa%e5%ae%8f%e7%94%a8%e5%88%b0%e4%ba%86%23%e7%9a%84%e7%94%a8%e6%b3%95%e3%80%82%23%e5%9c%a8%e5%ae%8f%e4%b8%ad%e4%bb%a3%e8%a1%a8%e6%8a%8a%e5%ae%8f%e7%9a%84%e5%8f%82%e6%95%b0%e5%8f%98%e4%b8%ba%e4%b8%80%e4%b8%aa%e5%ad%97%e7%ac%a6%e4%b8%b2%e3%80%82%e8%bf%99%e4%b8%aa%e5%ae%8f%e7%9a%84%e7%9b%ae%e7%9a%84%e5%92%8c%e5%ae%83%e7%9a%84%e5%90%8d%e5%ad%97%e4%b8%80%e6%a0%b7%e6%98%8e%e6%98%be%ef%bc%8c%e6%8a%8a%e5%85%a5%e5%8f%82VALUE%e8%bd%ac%e6%8d%a2%e6%88%90%e4%b8%80%e4%b8%aa%e5%ad%97%e7%ac%a6%e4%b8%b2%e8%bf%94%e5%9b%9e%e3%80%82%0a%e8%bf%99%e9%87%8c%e5%8f%af%e8%83%bd%e5%b0%b1%e6%9c%89%e4%ba%ba%e6%9c%89%e7%96%91%e9%97%ae%ef%bc%8c%e4%b8%ba%e5%95%a5%e8%a6%81%e5%8c%85%e8%a3%85%e4%b8%80%e5%b1%82%ef%bc%8c%e4%b8%8d%e8%83%bd%e7%9b%b4%e6%8e%a5%e5%86%99%e6%88%90%e4%b8%8b%e9%9d%a2%e8%bf%99%e6%a0%b7%ef%bc%9a%0a%23define%20metamacro_stringify%28VALUE%29%20%23%20VALUE%20%20%e8%af%ad%e6%84%8f%e7%a1%ae%e5%ae%9e%e4%b9%9f%e6%b2%a1%e6%9c%89%e5%8f%98%ef%bc%8c%e4%bd%86%e6%98%af%e6%9c%89%e7%a7%8d%e7%89%b9%e6%ae%8a%e6%83%85%e5%86%b5%e4%b8%8b%e5%b0%b1%e4%bc%9a%e5%87%ba%e7%8e%b0%e9%97%ae%e9%a2%98%e3%80%82%0a%e4%b8%be%e4%b8%aa%e4%be%8b%e5%ad%90%ef%bc%9a%0a%23define%20NUMBER%2010%20%23define%20ADD%28a%2cb%29%20%28a%2bb%29%20NSLog%28%40%26%2334%3b%25d%2b%25d%3d%25d%26%2334%3b%2cNUMBER%2c%20NUMBER%2c%20ADD%28NUMBER%2cNUMBER%29%29%3b%20%e8%be%93%e5%87%ba%e5%a6%82%e4%b8%8b%ef%bc%9a%0a10%2b10%3d20%e8%bf%99%e6%a0%b7%e5%ad%90%e7%a1%ae%e5%ae%9e%e6%98%af%e6%b2%a1%e6%9c%89%e9%97%ae%e9%a2%98%ef%bc%8c%e4%bd%86%e6%98%af%e7%a8%8d%e4%bd%9c%e4%bf%ae%e6%94%b9%e5%b0%b1%e4%bc%9a%e6%9c%89%e9%97%ae%e9%a2%98%e3%80%82"><i class="fab fa-tumblr fa-lg" aria-hidden=true></i></a></li><li><a class=icon href="https://news.ycombinator.com/submitlink?u=https%3a%2f%2fnew.halfrost.com%2freactivecocoa_macro%2f&t=ReactiveCocoa%20%e4%b8%ad%20%e5%a5%87%e5%a6%99%e6%97%a0%e6%af%94%e7%9a%84%e2%80%9c%e5%ae%8f%e2%80%9d%e9%ad%94%e6%b3%95"><i class="fab fa-hacker-news fa-lg" aria-hidden=true></i></a></li></ul></div><div id=actions-footer><a id=menu class=icon href=# onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden=true></i>Menu</a>
+<a id=toc class=icon href=# onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden=true></i>TOC</a>
+<a id=share class=icon href=# onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden=true></i>share</a>
+<a id=top style=display:none class=icon href=# onclick="$('html, body').animate({scrollTop:0},'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden=true></i>Top</a></div></div></div><footer id=footer><div class=footer-left><p class=copyright style=float:left;margin-bottom:0><a href=https://github.com/halfrost/Halfrost-Field class=github-repo style=height:18px><span class=gadget-github></span>Star</a>
+Copyright &copy;halfrost 2016 - 2021
+<a href=http://www.miit.gov.cn/>鄂ICP备16014744号</a></p><br><p class="copyright statistics" style=margin-bottom:20px><span id=busuanzi_container_site_pv>Cumulative Page Views <span id=busuanzi_value_site_pv></span>| Unique Visitors <span id=busuanzi_value_site_uv></span></span></p></div></footer></div></body><link rel=stylesheet href=/lib/font-awesome/css/all.min.css><script src=/lib/jquery/jquery.min.js></script><script src=/main.min.f870a4d110314b9e50e65f8ac982dc1c9c376c8f1a5083d39c62cfc49073f011.js></script><script async src=/prism.js></script><script async src=//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js></script><script>MathJax={tex:{inlineMath:[['$','$'],['\\(','\\)']]},svg:{fontCache:'global'}};</script><script type=text/javascript id=MathJax-script async src=https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js></script></html>
